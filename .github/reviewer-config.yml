@@ -1,0 +1,5 @@
+addReviewers: true
+addAssignees: false
+reviewers:
+  - Dario213987
+numberOfReviewers: 2
