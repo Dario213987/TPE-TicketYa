@@ -2,4 +2,5 @@ addReviewers: true
 addAssignees: false
 reviewers:
   - Dario213987
+  - SurkanA
 numberOfReviewers: 2
