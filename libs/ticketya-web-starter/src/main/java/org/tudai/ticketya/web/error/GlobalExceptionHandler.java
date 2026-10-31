@@ -14,10 +14,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.springframework.web.context.request.WebRequest;
 import org.springframework.web.servlet.mvc.method.annotation.ResponseEntityExceptionHandler;
 import org.tudai.ticketya.core.MdcKeys;
-import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.core.exception.ConflictException;
-import org.tudai.ticketya.core.exception.ForbiddenException;
-import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.*;
 
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -75,6 +72,13 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         problem.setTitle("Validación fallida");
         problem.setProperty("errors", errors);
         return handleExceptionInternal(ex, problem, headers, status, request);
+    }
+
+    @ExceptionHandler(RemoteServiceException.class)
+    ResponseEntity<Object> handleRemote(RemoteServiceException ex, WebRequest request) {
+        log.error("Error en servicio remoto (status {}): {}", ex.getRemoteStatus(), ex.getMessage());
+        return respond(ex, HttpStatus.BAD_GATEWAY, "Error en servicio dependiente",
+                "Un servicio del que depende esta operación respondió con error.", request);
     }
 
     @Override
