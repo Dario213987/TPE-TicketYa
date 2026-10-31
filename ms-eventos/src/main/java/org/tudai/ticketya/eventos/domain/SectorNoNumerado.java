@@ -5,13 +5,12 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@DiscriminatorValue("NO_NUMERADO") // Valor que tomará el discriminador en la BD
+@DiscriminatorValue(TipoSector.NO_NUMERADO)
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @SuperBuilder
 public class SectorNoNumerado extends Sector {
-
     private Integer capacidadMaxima;
 }

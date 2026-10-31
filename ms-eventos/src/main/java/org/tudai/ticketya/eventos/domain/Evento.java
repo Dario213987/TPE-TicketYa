@@ -27,9 +27,8 @@ public class Evento {
 	@JoinColumn(name = "lugar_id")
 	private Lugar lugar;
 	private Long organizadorId;
-	@Enumerated(EnumType.STRING)
-	private Enum<Estado> estado;
-	private String Nombre;
+	private EstadoEvento estado;
+	private String nombre;
 	private String descripcion;
 	@ManyToMany
 	@JoinTable(

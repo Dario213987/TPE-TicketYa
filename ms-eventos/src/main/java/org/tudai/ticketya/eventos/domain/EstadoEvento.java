@@ -1,6 +1,6 @@
 package org.tudai.ticketya.eventos.domain;
 
-public enum Estado {
+public enum EstadoEvento {
     BORRADOR,
     CONFIRMADO,
     CANCELADO,
