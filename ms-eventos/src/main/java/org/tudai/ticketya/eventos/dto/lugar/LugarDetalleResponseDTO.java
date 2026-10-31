@@ -17,6 +17,5 @@ public class LugarDetalleResponseDTO {
     private String ciudad;
     private Double latitud;
     private Double longitud;
-    private Integer capacidad;
     private List<SectorResponseDTO> sectores;
 }

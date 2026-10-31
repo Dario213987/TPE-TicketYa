@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
@@ -23,7 +24,7 @@ public class SectorService {
     @Transactional
     public SectorResponseDTO crearSectorNoNumerado(Long lugarId, SectorNoNumeradoRequestDTO dto) {
         Lugar lugar = lugarRepository.findById(lugarId)
-                .orElseThrow(() -> new EntityNotFoundException("Lugar no encontrado con id: " + lugarId));
+                .orElseThrow(() -> new NotFoundException("Lugar no encontrado con id: " + lugarId));
 
         SectorNoNumerado sector = modelMapper.map(dto, SectorNoNumerado.class);
 
@@ -36,7 +37,7 @@ public class SectorService {
     @Transactional
     public SectorResponseDTO crearSectorNumerado(Long lugarId, SectorNumeradoRequestDTO dto) {
         Lugar lugar = lugarRepository.findById(lugarId)
-                .orElseThrow(() -> new EntityNotFoundException("Lugar no encontrado con id: " + lugarId));
+                .orElseThrow(() -> new NotFoundException("Lugar no encontrado con id: " + lugarId));
 
         SectorNumerado sector = modelMapper.map(dto, SectorNumerado.class);
         sector.generarAsientos(dto.getFilas(), dto.getAsientosPorFila());

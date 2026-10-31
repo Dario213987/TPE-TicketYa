@@ -14,5 +14,4 @@ public class LugarResponseDTO {
     private String ciudad;
     private Double latitud;
     private Double longitud;
-    private Integer capacidad;
 }

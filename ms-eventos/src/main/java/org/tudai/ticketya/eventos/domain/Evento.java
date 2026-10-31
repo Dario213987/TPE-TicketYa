@@ -13,8 +13,6 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@EqualsAndHashCode
-@ToString
 @Table(name="eventos")
 @Entity
 public class Evento {
@@ -37,6 +35,26 @@ public class Evento {
 			inverseJoinColumns = @JoinColumn(name = "participante_id")
 	)
 	@Builder.Default
+	@Setter(AccessLevel.NONE)
 	private Set<Participante> artistas = new HashSet<>();
+
+	public void addArtista(Participante part) {
+		this.artistas.add(part);
+	}
+
+	public void removeArtista(Participante part) {this.artistas.remove(part);
+	}
+
+	@Override
+	public boolean equals(Object o) {
+		if (this == o) return true;
+		if (!(o instanceof Participante other)) return false;
+		return id != null && id.equals(other.getId());
+	}
+
+	@Override
+	public int hashCode() {
+		return getClass().hashCode();
+	}
 
 }

@@ -14,7 +14,6 @@ import org.tudai.ticketya.eventos.domain.TipoSector;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
 import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarPageResponseDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
 import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
@@ -94,26 +93,7 @@ public class ModelMapperConfig {
                     return destination;
                 });
 
-        configurarMapeoPagina(modelMapper);
-
         return modelMapper;
-    }
-
-    @SuppressWarnings({"rawtypes", "unchecked"})
-    private static void configurarMapeoPagina(ModelMapper modelMapper) {
-        modelMapper.createTypeMap(Page.class, LugarPageResponseDTO.class)
-                .setConverter(context -> {
-                    Page<Lugar> source = (Page<Lugar>) context.getSource();
-                    return LugarPageResponseDTO.builder()
-                            .content(source.getContent().stream()
-                                    .map(lugar -> modelMapper.map(lugar, LugarResponseDTO.class))
-                                    .toList())
-                            .page(source.getNumber())
-                            .size(source.getSize())
-                            .totalElements(source.getTotalElements())
-                            .totalPages(source.getTotalPages())
-                            .build();
-                });
     }
 
     private static Integer cantidadDeFilas(SectorNumerado sector) {
