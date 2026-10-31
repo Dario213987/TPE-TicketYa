@@ -16,5 +16,6 @@
     <modules>
         <module>ticketya-core</module>
         <module>ticketya-web-starter</module>
+        <module>ticketya-persistence</module>
     </modules>
 </project>
