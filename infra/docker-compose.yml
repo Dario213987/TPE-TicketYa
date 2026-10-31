@@ -1,0 +1,102 @@
+name: ticketya-infra
+
+# Una instancia de base de datos por microservicio, cada una con su volumen y su puerto.
+# Cada servicio elige PostgreSQL (por defecto) o MySQL. Para cambiar uno a MySQL ver
+# la plantilla "MySQL" al final de los servicios.
+# Para un servicio nuevo con base propia: copiar un bloque db-*, cambiar nombre,
+# usuario, contraseña (${X_DB_PASSWORD}), puerto del host y volumen.
+x-postgres: &postgres
+  image: postgres:18
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+    interval: 5s
+    timeout: 3s
+    retries: 10
+
+x-mysql: &mysql
+  image: mysql:8.0
+  restart: unless-stopped
+  healthcheck:
+    test: ["CMD-SHELL", "mysqladmin ping -h 127.0.0.1 -u$$MYSQL_USER -p$$MYSQL_PASSWORD --silent"]
+    interval: 5s
+    timeout: 3s
+    retries: 20
+
+services:
+  db-eventos:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: eventos
+      POSTGRES_USER: eventos
+      POSTGRES_PASSWORD: ${EVENTOS_DB_PASSWORD}
+    ports: ["127.0.0.1:5433:5432"]
+    volumes: [eventos-data:/var/lib/postgresql]
+
+  db-tickets:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: tickets
+      POSTGRES_USER: tickets
+      POSTGRES_PASSWORD: ${TICKETS_DB_PASSWORD}
+    ports: ["127.0.0.1:5434:5432"]
+    volumes: [tickets-data:/var/lib/postgresql]
+
+  db-transacciones:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: transacciones
+      POSTGRES_USER: transacciones
+      POSTGRES_PASSWORD: ${TRANSACCIONES_DB_PASSWORD}
+    ports: ["127.0.0.1:5435:5432"]
+    volumes: [transacciones-data:/var/lib/postgresql]
+
+  db-devoluciones:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: devoluciones
+      POSTGRES_USER: devoluciones
+      POSTGRES_PASSWORD: ${DEVOLUCIONES_DB_PASSWORD}
+    ports: ["127.0.0.1:5436:5432"]
+    volumes: [devoluciones-data:/var/lib/postgresql]
+
+  # MySQL (plantilla). Para pasar un servicio a MySQL:
+  #   1. Comentar su bloque db-* de PostgreSQL y descomentar este, cambiando
+  #      nombre, base, usuario y contraseña. Mantener el MISMO puerto del host y
+  #      el mismo volumen, así solo hay una base activa por servicio.
+  #   2. En el pom del servicio, reemplazar org.postgresql:postgresql por
+  #      com.mysql:mysql-connector-j (scope runtime).
+  #   3. En su application.properties, cambiar el default de DB_URL a
+  #      jdbc:mysql://localhost:<puerto>/<base>.
+  # Ojo que el índice único parcial de D5 no existe
+  # en MySQL, ese servicio debería quedarse en PostgreSQL.
+  #
+  # db-eventos:
+  #   <<: *mysql
+  #   environment:
+  #     MYSQL_DATABASE: eventos
+  #     MYSQL_USER: eventos
+  #     MYSQL_PASSWORD: ${EVENTOS_DB_PASSWORD}
+  #     MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+  #   ports: ["127.0.0.1:5433:3306"]
+  #   volumes: [eventos-data:/var/lib/mysql]
+
+  # Redis: por ahora desactivado. Cuando se necesite, copiar este bloque UNA VEZ
+  # POR SERVICIO que lo use, con su propio nombre y puerto (redis-tickets,
+  # redis-eventos, ...), igual que las bases de datos.
+  #
+  # redis-tickets:
+  #   image: redis:7-alpine
+  #   restart: unless-stopped
+  #   ports: ["127.0.0.1:6380:6379"]
+  #   healthcheck:
+  #     test: ["CMD", "redis-cli", "ping"]
+  #     interval: 5s
+  #     timeout: 3s
+  #     retries: 10
+
+volumes:
+  eventos-data:
+  tickets-data:
+  transacciones-data:
+  devoluciones-data:
