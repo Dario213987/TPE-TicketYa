@@ -53,4 +53,12 @@ class TicketyaWebAutoConfigurationTest {
                     assertThat(ctx.containsBean("scopedTarget.userContext")).isFalse();
                 });
     }
+
+    @Test
+    void registraElInterceptorDeAutorizacion() {
+        runner.run(ctx -> {
+            assertThat(ctx).hasSingleBean(org.tudai.ticketya.web.security.AuthorizeInterceptor.class);
+            assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
+        });
+    }
 }

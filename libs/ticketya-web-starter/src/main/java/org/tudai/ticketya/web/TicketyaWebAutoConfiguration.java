@@ -14,10 +14,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.web.context.annotation.RequestScope;
+import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
+import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
+import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import org.tudai.ticketya.web.user.HeaderUserContext;
 
 import java.util.concurrent.TimeUnit;
@@ -61,6 +64,22 @@ public class TicketyaWebAutoConfiguration {
         @Bean
         public UserHeadersFeignInterceptor userHeadersFeignInterceptor() {
             return new UserHeadersFeignInterceptor();
+        }
+
+        @Bean
+        @ConditionalOnMissingBean(AuthorizeInterceptor.class)
+        public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
+            return new AuthorizeInterceptor(userContext);
+        }
+
+        @Bean
+        public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
+            return new WebMvcConfigurer() {
+                @Override
+                public void addInterceptors(InterceptorRegistry registry) {
+                    registry.addInterceptor(interceptor);
+                }
+            };
         }
     }
 }
