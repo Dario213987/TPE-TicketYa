@@ -1,0 +1,27 @@
+# Maven
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# IntelliJ
+.idea/
+*.iml
+*.iws
+out/
+
+# VS Code / Eclipse
+.vscode/
+.classpath
+.project
+.settings/
+
+logs/
+*.log
+
+# Entorno y secretos
+.env
+*.env
+!.env.example
+
+# SO
+.DS_Store
+Thumbs.db
