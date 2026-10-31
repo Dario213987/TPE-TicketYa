@@ -20,12 +20,12 @@
   <modules>
     <module>libs</module>
     <!-- <module>contracts</module> -->
-    <!-- <module>eureka-server</module> -->
-    <!-- <module>api-gateway</module> -->
-    <!-- <module>ms-eventos</module> -->
-    <!-- <module>ms-tickets</module> -->
-    <!-- <module>ms-transacciones</module> -->
-    <!-- <module>ms-devoluciones</module> -->
+    <module>eureka-server</module>
+    <module>api-gateway</module>
+    <module>ms-eventos</module>
+    <module>ms-tickets</module>
+    <module>ms-transacciones</module>
+    <module>ms-devoluciones</module>
   </modules>
 
   <properties>
