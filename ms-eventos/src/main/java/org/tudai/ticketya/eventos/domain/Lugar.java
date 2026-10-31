@@ -26,6 +26,6 @@ public class Lugar {
     private Ubicacion ubicacion;
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "lugar_id")
-    @Default
+    @Builder.Default
     private Set<Sector> sectores = new HashSet<>();
 }
