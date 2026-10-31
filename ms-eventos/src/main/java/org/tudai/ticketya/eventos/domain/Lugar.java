@@ -22,6 +22,7 @@ public class Lugar {
     private TipoLugar tipo;
     private Integer capacidad;
     private String direccion;
+    private String ciudad;
     @Embedded
     private Ubicacion ubicacion;
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
