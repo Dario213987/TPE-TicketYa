@@ -19,7 +19,7 @@
 
   <modules>
     <module>libs</module>
-    <!-- <module>contracts</module> -->
+    <module>contracts</module>
     <module>eureka-server</module>
     <module>api-gateway</module>
     <module>ms-eventos</module>
