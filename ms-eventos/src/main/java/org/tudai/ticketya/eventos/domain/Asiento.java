@@ -9,7 +9,6 @@ import lombok.*;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-@Table(name = "asientos", uniqueConstraints = {@UniqueConstraint(columnNames = {"fila", "numero"})})
 public class Asiento {
     private Integer fila;
     private Integer numero;

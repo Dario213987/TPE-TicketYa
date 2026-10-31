@@ -2,7 +2,6 @@ package org.tudai.ticketya.eventos.dto.lugar;
 
 import jakarta.validation.constraints.*;
 import lombok.*;
-import org.tudai.ticketya.eventos.domain.TipoLugar;
 
 @Data
 @NoArgsConstructor
@@ -14,7 +13,7 @@ public class LugarCreateDTO {
     private String nombre;
 
     @NotNull(message = "El tipo de lugar es obligatorio")
-    private TipoLugar tipo;
+    private String tipo;
 
     @NotBlank(message = "La dirección es obligatoria")
     private String direccion;
