@@ -1,7 +1,6 @@
 package org.tudai.ticketya.eventos.dto.lugar;
 
 import lombok.*;
-import org.tudai.ticketya.eventos.domain.TipoLugar;
 
 @Data
 @NoArgsConstructor
@@ -10,7 +9,7 @@ import org.tudai.ticketya.eventos.domain.TipoLugar;
 public class LugarResponseDTO {
     private Long id;
     private String nombre;
-    private TipoLugar tipo;
+    private String tipo;
     private String direccion;
     private String ciudad;
     private Double latitud;

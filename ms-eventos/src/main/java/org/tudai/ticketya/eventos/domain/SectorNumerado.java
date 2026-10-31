@@ -16,9 +16,20 @@ import java.util.Set;
 public class SectorNumerado extends Sector {
 
     @ElementCollection
-    @CollectionTable(name = "sector_asientos", joinColumns = @JoinColumn(name = "sector_id"))
+    @CollectionTable(
+            name = "sector_asientos",
+            joinColumns = @JoinColumn(name = "sector_id"),
+            uniqueConstraints = @UniqueConstraint(columnNames = {"sector_id", "fila", "numero"}))
     @Builder.Default
     private Set<Asiento> asientos = new HashSet<>();
+
+    public void generarAsientos(Integer filas, Integer asientosPorFila) {
+        for (int fila = 1; fila <= filas; fila++) {
+            for (int numero = 1; numero <= asientosPorFila; numero++) {
+                this.addAsiento(Asiento.builder().fila(fila).numero(numero).build());
+            }
+        }
+    }
 
     public void addAsiento(Asiento asiento) {
         this.asientos.add(asiento);
