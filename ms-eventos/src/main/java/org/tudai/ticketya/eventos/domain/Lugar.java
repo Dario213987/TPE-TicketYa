@@ -19,13 +19,13 @@ public class Lugar {
     private Long id;
     private String nombre;
     @Enumerated(EnumType.STRING)
-    private TipoLugar tipo;
+    private String tipo;
     private Integer capacidad;
     private String direccion;
     @Embedded
     private Ubicacion ubicacion;
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "lugar_id")
-    @Builder.Default
+    @Default
     private Set<Sector> sectores = new HashSet<>();
 }
