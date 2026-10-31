@@ -1,0 +1,60 @@
+openapi: 3.0.3
+# PLantilla maso de como tiene dque declarar los contratos
+info:
+  title: ms-transacciones
+  version: 1.0.0
+  description: Pasarela de pagos simulada y registro de transacciones.
+paths:
+  /api/transacciones/{id}:
+    get:
+      tags: [transacciones]
+      operationId: obtenerTransaccion
+      summary: Obtiene una transacciÃ³n por id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: La transacciÃ³n
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Transaccion'
+        '404':
+          description: La transacciÃ³n no existe
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problema'
+components:
+  schemas:
+    Transaccion:
+      type: object
+      required: [id, tipo, monto, estado]
+      properties:
+        id:
+          type: integer
+          format: int64
+        tipo:
+          type: string
+          enum: [ENTRADA, SALIDA]
+        monto:
+          type: number
+        estado:
+          type: string
+          enum: [PENDIENTE, COMPLETA, FALLIDA]
+    Problema:
+      type: object
+      properties:
+        title:
+          type: string
+        status:
+          type: integer
+        detail:
+          type: string
+        correlationId:
+          type: string
