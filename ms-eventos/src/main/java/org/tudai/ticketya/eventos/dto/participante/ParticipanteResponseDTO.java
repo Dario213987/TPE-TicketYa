@@ -1,4 +1,4 @@
-package org.tudai.ticketya.eventos.dto.response;
+package org.tudai.ticketya.eventos.dto.participante;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,7 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ParticipanteResponse {
+public class ParticipanteResponseDTO {
 
     private Long id;
     private String nombre;

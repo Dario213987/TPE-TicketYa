@@ -1,4 +1,4 @@
-package org.tudai.ticketya.eventos.dto.request;
+package org.tudai.ticketya.eventos.dto.participante;
 
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
@@ -13,7 +13,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ParticipanteRequest {
+public class ParticipanteRequestDTO {
     @Positive(message = "El id del participante es inválido")
     private Long id;
 

@@ -1,4 +1,4 @@
-package org.tudai.ticketya.eventos.dto.request;
+package org.tudai.ticketya.eventos.dto.participante;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
@@ -15,7 +15,7 @@ import org.tudai.ticketya.eventos.domain.TipoParticipante;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CrearParticipanteRequest {
+public class CrearParticipanteRequestDTO {
 
     @NotBlank(message = "El nombre es obligatorio")
     @Size(max = 150, message = "El nombre no puede superar los 150 caracteres")

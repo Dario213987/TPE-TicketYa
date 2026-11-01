@@ -7,11 +7,11 @@ import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
-import org.tudai.ticketya.eventos.dto.request.CrearEventoRequest;
-import org.tudai.ticketya.eventos.dto.request.CrearParticipanteRequest;
-import org.tudai.ticketya.eventos.dto.request.ParticipanteRequest;
-import org.tudai.ticketya.eventos.dto.response.EventoResponse;
-import org.tudai.ticketya.eventos.dto.response.ParticipanteResponse;
+import org.tudai.ticketya.eventos.dto.evento.CrearEventoRequestDTO;
+import org.tudai.ticketya.eventos.dto.participante.CrearParticipanteRequestDTO;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
@@ -32,7 +32,7 @@ public class EventoService {
     }
 
     @Transactional
-    public EventoResponse crearEvento(CrearEventoRequest request, Long organizadorId) {
+    public EventoResponseDTO crearEvento(CrearEventoRequestDTO request, Long organizadorId) {
         Lugar lugar = new Lugar();
         lugar.setId(request.getLugarId());
 
@@ -49,7 +49,7 @@ public class EventoService {
                 .build();
 
         if (request.getParticipantes() != null) {
-            for (ParticipanteRequest participanteRequest : request.getParticipantes()) {
+            for (ParticipanteRequestDTO participanteRequest : request.getParticipantes()) {
                 evento.getParticipantes().add(resolverParticipante(participanteRequest));
             }
         }
@@ -59,14 +59,14 @@ public class EventoService {
     }
 
     @Transactional
-    public ParticipanteResponse crearParticipante(CrearParticipanteRequest request) {
+    public ParticipanteResponseDTO crearParticipante(CrearParticipanteRequestDTO request) {
         Participante participante = participanteRepository.save(Participante.builder()
                 .nombre(request.getNombre())
                 .build());
         return toParticipanteResponse(participante);
     }
 
-    private Participante resolverParticipante(ParticipanteRequest request) {
+    private Participante resolverParticipante(ParticipanteRequestDTO request) {
         if (request.getId() != null) {
             return participanteRepository.findById(request.getId())
                     .orElseThrow(() -> new NotFoundException(
@@ -77,8 +77,8 @@ public class EventoService {
                 .build());
     }
 
-    private EventoResponse toResponse(Evento evento) {
-        return EventoResponse.builder()
+    private EventoResponseDTO toResponse(Evento evento) {
+        return EventoResponseDTO.builder()
                 .nombre(evento.getNombre())
                 .descripcion(evento.getDescripcion())
                 .tipo(evento.getTipo())
@@ -92,15 +92,15 @@ public class EventoService {
                 .build();
     }
 
-    private List<ParticipanteResponse> toParticipanteResponses(Set<Participante> participantes) {
+    private List<ParticipanteResponseDTO> toParticipanteResponses(Set<Participante> participantes) {
         return participantes.stream()
                 .sorted(Comparator.comparing(Participante::getId))
                 .map(this::toParticipanteResponse)
                 .toList();
     }
 
-    private ParticipanteResponse toParticipanteResponse(Participante participante) {
-        return ParticipanteResponse.builder()
+    private ParticipanteResponseDTO toParticipanteResponse(Participante participante) {
+        return ParticipanteResponseDTO.builder()
                 .id(participante.getId())
                 .nombre(participante.getNombre())
                 .build();

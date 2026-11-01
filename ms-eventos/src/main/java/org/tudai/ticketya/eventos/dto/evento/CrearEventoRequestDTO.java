@@ -1,4 +1,4 @@
-package org.tudai.ticketya.eventos.dto.request;
+package org.tudai.ticketya.eventos.dto.evento;
 
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Future;
@@ -12,6 +12,7 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.tudai.ticketya.eventos.domain.TipoEvento;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -21,7 +22,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class CrearEventoRequest {
+public class CrearEventoRequestDTO {
 
     @NotBlank(message = "El nombre es obligatorio")
     @Size(max = 150, message = "El nombre no puede superar los 150 caracteres")
@@ -52,5 +53,5 @@ public class CrearEventoRequest {
 
     @NotNull(message = "Los participantes son obligatorios")
     @Valid
-    private List<ParticipanteRequest> participantes;
+    private List<ParticipanteRequestDTO> participantes;
 }

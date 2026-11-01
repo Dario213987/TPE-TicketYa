@@ -8,8 +8,8 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.core.Authorize;
-import org.tudai.ticketya.eventos.dto.request.CrearParticipanteRequest;
-import org.tudai.ticketya.eventos.dto.response.ParticipanteResponse;
+import org.tudai.ticketya.eventos.dto.participante.CrearParticipanteRequestDTO;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 @RestController
@@ -25,7 +25,7 @@ public class ParticipanteController {
     @PostMapping
     @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
     @ResponseStatus(HttpStatus.CREATED)
-    public ParticipanteResponse crear(@Valid @RequestBody CrearParticipanteRequest request) {
+    public ParticipanteResponseDTO crear(@Valid @RequestBody CrearParticipanteRequestDTO request) {
         return eventoService.crearParticipante(request);
     }
 }

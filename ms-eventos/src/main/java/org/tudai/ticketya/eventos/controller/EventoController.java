@@ -10,8 +10,8 @@ import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.eventos.dto.request.CrearEventoRequest;
-import org.tudai.ticketya.eventos.dto.response.EventoResponse;
+import org.tudai.ticketya.eventos.dto.evento.CrearEventoRequestDTO;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 @RestController
@@ -29,7 +29,7 @@ public class EventoController {
     @PostMapping
     @Authorize("hasRole('ORGANIZADOR')")
     @ResponseStatus(HttpStatus.CREATED)
-    public EventoResponse crear(@Valid @RequestBody CrearEventoRequest request) {
+    public EventoResponseDTO crear(@Valid @RequestBody CrearEventoRequestDTO request) {
         return eventoService.crearEvento(request, organizadorIdActual());
     }
 

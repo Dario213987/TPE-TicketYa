@@ -1,4 +1,4 @@
-package org.tudai.ticketya.eventos.dto.response;
+package org.tudai.ticketya.eventos.dto.evento;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -7,6 +7,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.TipoEvento;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 
 import java.time.LocalDate;
 import java.util.List;
@@ -16,7 +17,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class EventoResponse {
+public class EventoResponseDTO {
 
     private String nombre;
     private String descripcion;
@@ -27,5 +28,5 @@ public class EventoResponse {
     private LocalDate fecha;
     private LocalDate hora;
     private int limiteEntradasPorCliente;
-    private List<ParticipanteResponse> participantes;
+    private List<ParticipanteResponseDTO> participantes;
 }
