@@ -1,37 +1,34 @@
 package org.tudai.ticketya.eventos.domain;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.Entity;
-import jakarta.persistence.EnumType;
-import jakarta.persistence.Enumerated;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
-import jakarta.persistence.Table;
-import lombok.AllArgsConstructor;
-import lombok.Builder;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
-import lombok.Setter;
+import jakarta.persistence.*;
+import lombok.*;
 
-@Entity
-@Table(name = "participantes")
+import java.util.HashSet;
+import java.util.Set;
+
 @Getter
 @Setter
-@NoArgsConstructor
 @AllArgsConstructor
-@Builder // Generar participantes para tests
+@NoArgsConstructor
+@Builder
+@EqualsAndHashCode(onlyExplicitlyIncluded = true)
+@ToString
+@Table(name="participantes")
+@Entity
 public class Participante {
-
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-
-    @Column(nullable = false, length = 150)
     private String nombre;
+    @ManyToMany(mappedBy = "participantes")
+    @Builder.Default
+    private Set<Evento> eventos = new HashSet<>();
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false, length = 20)
-    private TipoParticipante tipo;
+    public void addEvento(Evento evento) {
+        this.eventos.add(evento);
+    }
 
+    public void removeEvento(Evento evento) {
+        this.eventos.remove(evento);
+    }
 }
