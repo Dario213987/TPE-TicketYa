@@ -26,6 +26,7 @@
     <module>ms-tickets</module>
     <module>ms-transacciones</module>
     <module>ms-devoluciones</module>
+    <module>pasarela-mock</module>
   </modules>
 
   <properties>
