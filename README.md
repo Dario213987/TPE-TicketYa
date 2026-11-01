@@ -86,3 +86,11 @@ También sirve con el jar:
 ### Desde IntelliJ
 
 Para dos instancias, en la configuración de ejecución del servicio activá **Modify options → Allow multiple instances** y ejecutala dos veces. Cargá `DB_PASSWORD` en *Environment variables*.
+
+## Logging
+
+Todos los servicios dependen de `ticketya-logging`, que define el formato: consola en texto plano y archivo JSON en `logs/<servicio>/<servicio>.json.log`, con rotación por tamaño y fecha. No se define un `logback` propio en los servicios.
+
+Para loguear se usa `@Slf4j` (Lombok) o `LoggerFactory.getLogger(...)`.
+
+Propiedades opcionales: `ticketya.logging.dir` (`logs`), `ticketya.logging.max-file-size` (`10MB`), `ticketya.logging.max-history` (`7` días) y `ticketya.logging.total-size-cap` (`500MB`).
