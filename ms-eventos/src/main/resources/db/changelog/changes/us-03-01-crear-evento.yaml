@@ -1,0 +1,144 @@
+databaseChangeLog:
+
+  - changeSet:
+      id: us-03-01-01-eventos
+      author: ticketya
+      changes:
+        - createTable:
+            tableName: eventos
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: nombre
+                  type: varchar(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: descripcion
+                  type: varchar(2000)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tipo
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: organizador_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: lugar_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fecha_hora
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: estado
+                  type: varchar(20)
+                  defaultValue: BORRADOR
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: "0"
+                  constraints:
+                    nullable: false
+              - column:
+                  name: creado_el
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+              - column:
+                  name: actualizado_el
+                  type: timestamp with time zone
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: "ALTER TABLE eventos ADD CONSTRAINT ck_eventos_tipo CHECK (tipo IN ('RECITAL', 'FESTIVAL', 'TEATRO', 'DEPORTE', 'CONFERENCIA', 'OTRO'))"
+        - sql:
+            sql: "ALTER TABLE eventos ADD CONSTRAINT ck_eventos_estado CHECK (estado IN ('BORRADOR', 'PUBLICADO', 'SUSPENDIDO', 'AGOTADO', 'CANCELADO', 'FINALIZADO'))"
+        - createIndex:
+            tableName: eventos
+            indexName: idx_eventos_organizador
+            columns:
+              - column:
+                  name: organizador_id
+
+  - changeSet:
+      id: us-03-01-01-participantes
+      author: ticketya
+      changes:
+        - createTable:
+            tableName: participantes
+            columns:
+              - column:
+                  name: id
+                  type: bigint
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: nombre
+                  type: varchar(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: tipo
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+        - sql:
+            sql: "ALTER TABLE participantes ADD CONSTRAINT ck_participantes_tipo CHECK (tipo IN ('ARTISTA', 'EQUIPO', 'DISERTANTE', 'OTRO'))"
+        - createIndex:
+            tableName: participantes
+            indexName: idx_participantes_nombre
+            columns:
+              - column:
+                  name: nombre
+
+  - changeSet:
+      id: us-03-01-01-evento-participante
+      author: ticketya
+      changes:
+        - createTable:
+            tableName: evento_participante
+            columns:
+              - column:
+                  name: evento_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_evento_participante_evento
+                    references: eventos(id)
+                    deleteCascade: true
+              - column:
+                  name: participante_id
+                  type: bigint
+                  constraints:
+                    nullable: false
+                    foreignKeyName: fk_evento_participante_participante
+                    references: participantes(id)
+        - addPrimaryKey:
+            tableName: evento_participante
+            columnNames: evento_id, participante_id
+            constraintName: pk_evento_participante
+        - createIndex:
+            tableName: evento_participante
+            indexName: idx_evento_participante_participante
+            columns:
+              - column:
+                  name: participante_id
