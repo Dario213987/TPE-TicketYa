@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 @Getter
@@ -21,15 +19,21 @@ public class Evento {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String tipo;
-	private LocalDate fecha;
+
+	private String nombre;
+	private String descripcion;
+	private TipoEvento tipo;
+	private Long organizadorId;
+
 	@ManyToOne
 	@JoinColumn(name = "lugar_id")
 	private Lugar lugar;
-	private Long organizadorId;
+
+	private LocalDate fecha;
+	private LocalDate hora;
 	private EstadoEvento estado;
-	private String nombre;
-	private String descripcion;
+	private int limiteEntradasPorCliente;
+
 	@ManyToMany
 	@JoinTable(
 			name = "evento_participante",
@@ -37,6 +41,6 @@ public class Evento {
 			inverseJoinColumns = @JoinColumn(name = "participante_id")
 	)
 	@Builder.Default
-	private Set<Participante> artistas = new HashSet<>();
+	private Set<Participante> participantes = new HashSet<>();
 
 }

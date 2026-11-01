@@ -5,7 +5,6 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
-import org.tudai.ticketya.eventos.domain.TipoParticipante;
 
 @Getter
 @Setter
@@ -16,5 +15,4 @@ public class ParticipanteResponse {
 
     private Long id;
     private String nombre;
-    private TipoParticipante tipo;
 }

@@ -13,7 +13,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.tudai.ticketya.eventos.domain.TipoEvento;
 
-import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 @Getter
@@ -38,9 +38,17 @@ public class CrearEventoRequest {
     @Positive(message = "El lugar es inválido")
     private Long lugarId;
 
-    @NotNull(message = "La fecha y hora son obligatorias")
-    @Future(message = "La fecha y hora deben ser futuras")
-    private Instant fechaHora;
+    @NotNull(message = "La fecha es obligatoria")
+    @Future(message = "La fecha debe ser futura")
+    private LocalDate fecha;
+
+    @NotNull(message = "La hora es obligatoria")
+    @Future(message = "La hora debe ser futura")
+    private LocalDate hora;
+
+    @NotNull(message = "El límite de entradas por cliente es obligatorio")
+    @Positive(message = "El límite de entradas por cliente es inválido")
+    private int limiteEntradasPorCliente;
 
     @NotNull(message = "Los participantes son obligatorios")
     @Valid

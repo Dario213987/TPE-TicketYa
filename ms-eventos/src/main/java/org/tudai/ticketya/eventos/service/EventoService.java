@@ -5,6 +5,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.dto.request.CrearEventoRequest;
 import org.tudai.ticketya.eventos.dto.request.CrearParticipanteRequest;
@@ -32,13 +33,18 @@ public class EventoService {
 
     @Transactional
     public EventoResponse crearEvento(CrearEventoRequest request, Long organizadorId) {
+        Lugar lugar = new Lugar();
+        lugar.setId(request.getLugarId());
+
         Evento evento = Evento.builder()
                 .nombre(request.getNombre())
                 .descripcion(request.getDescripcion())
                 .tipo(request.getTipo())
                 .organizadorId(organizadorId)
-                .lugarId(request.getLugarId())
-                .fechaHora(request.getFechaHora())
+                .lugar(lugar)
+                .fecha(request.getFecha())
+                .hora(request.getHora())
+                .limiteEntradasPorCliente(request.getLimiteEntradasPorCliente())
                 .estado(EstadoEvento.BORRADOR)
                 .build();
 
@@ -56,7 +62,6 @@ public class EventoService {
     public ParticipanteResponse crearParticipante(CrearParticipanteRequest request) {
         Participante participante = participanteRepository.save(Participante.builder()
                 .nombre(request.getNombre())
-                .tipo(request.getTipo())
                 .build());
         return toParticipanteResponse(participante);
     }
@@ -69,21 +74,20 @@ public class EventoService {
         }
         return participanteRepository.save(Participante.builder()
                 .nombre(request.getNombre())
-                .tipo(request.getTipo())
                 .build());
     }
 
     private EventoResponse toResponse(Evento evento) {
         return EventoResponse.builder()
-                .id(evento.getId())
                 .nombre(evento.getNombre())
                 .descripcion(evento.getDescripcion())
                 .tipo(evento.getTipo())
                 .estado(evento.getEstado())
                 .organizadorId(evento.getOrganizadorId())
-                .lugarId(evento.getLugarId())
-                .fechaHora(evento.getFechaHora())
-                .limiteEntradasPorCliente(null)
+                .nombreLugar(evento.getLugar().getNombre())
+                .fecha(evento.getFecha())
+                .hora(evento.getHora())
+                .limiteEntradasPorCliente(evento.getLimiteEntradasPorCliente())
                 .participantes(toParticipanteResponses(evento.getParticipantes()))
                 .build();
     }
@@ -99,7 +103,6 @@ public class EventoService {
         return ParticipanteResponse.builder()
                 .id(participante.getId())
                 .nombre(participante.getNombre())
-                .tipo(participante.getTipo())
                 .build();
     }
 }
