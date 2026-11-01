@@ -5,9 +5,11 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.*;
 import org.tudai.ticketya.tickets.dto.*;
 import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoBatchRepository;
+import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 
@@ -23,6 +25,7 @@ public class DisponibilidadService {
 
     private final DisponibilidadEventoRepository eventoRepository;
     private final DisponibilidadSectorRepository sectorRepository;
+    private final DisponibilidadAsientoRepository asientoRepository;
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
@@ -103,6 +106,54 @@ public class DisponibilidadService {
                 .asientosInsertados(asientosInsertados)
                 .asientosOmitidos(asientosOmitidos)
                 .creadoEl(ahora)
+                .build();
+    }
+
+    @Transactional(readOnly = true)
+    public DisponibilidadEventoResponseDTO consultar(Long eventoId) {
+        List<DisponibilidadSector> sectores = sectorRepository.findByEvento_EventoIdOrderByIdAsc(eventoId);
+
+        if (sectores.isEmpty()) {
+            throw new NotFoundException("No hay disponibilidad para el evento " + eventoId);
+        }
+
+        List<SectorDisponibilidadResponseDTO> respuesta = sectores.stream()
+                .map(this::mapearSector)
+                .toList();
+
+        return DisponibilidadEventoResponseDTO.builder()
+                .eventoId(eventoId)
+                .sectores(respuesta)
+                .build();
+    }
+
+    private SectorDisponibilidadResponseDTO mapearSector(DisponibilidadSector sector) {
+        List<AsientoDisponibilidadDTO> asientos = null;
+        int disponibles = sector.getDisponibles();
+
+        if (sector.getTipo() == TipoSector.NUMERADO) {
+            List<DisponibilidadAsiento> entidades =
+                    asientoRepository.findBySector_IdOrderByFilaAscNumeroAsc(sector.getId());
+
+            asientos = entidades.stream()
+                    .map(asiento -> AsientoDisponibilidadDTO.builder()
+                            .fila(asiento.getFila())
+                            .numero(asiento.getNumero())
+                            .estado(asiento.getEstado())
+                            .build())
+                    .toList();
+
+            disponibles = (int) entidades.stream()
+                    .filter(asiento -> asiento.getEstado() == EstadoDisponibilidad.LIBRE)
+                    .count();
+        }
+
+        return SectorDisponibilidadResponseDTO.builder()
+                .sectorId(sector.getSectorIdExterno())
+                .tipoSector(sector.getTipo())
+                .capacidadTotal(sector.getCapacidadTotal())
+                .disponibles(disponibles)
+                .asientos(asientos)
                 .build();
     }
 

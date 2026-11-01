@@ -6,6 +6,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.tudai.ticketya.core.exception.BadRequestException;
+import org.tudai.ticketya.tickets.dto.DisponibilidadEventoResponseDTO;
 import org.tudai.ticketya.tickets.dto.DisponibilidadResponseDTO;
 import org.tudai.ticketya.tickets.dto.PublicarEventoRequestDTO;
 import org.tudai.ticketya.tickets.service.DisponibilidadService;
@@ -29,5 +30,11 @@ public class DisponibilidadController {
         DisponibilidadResponseDTO resultado = disponibilidadService.publicar(dto);
         HttpStatus estado = resultado.isYaExistia() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(estado).body(resultado);
+    }
+
+    @GetMapping("/{eventoId}/disponibilidad")
+    public ResponseEntity<DisponibilidadEventoResponseDTO> consultarDisponibilidad(
+            @PathVariable Long eventoId) {
+        return ResponseEntity.ok(disponibilidadService.consultar(eventoId));
     }
 }
