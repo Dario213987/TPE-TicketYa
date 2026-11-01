@@ -21,18 +21,18 @@ public class Ticket {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-   // @Column(name = "codigo_qr", nullable = false)
+    @Column(name = "codigo_qr", nullable = false)
     private String codigo_qr;
 
     @Enumerated(EnumType.STRING)
-   // @Column(name = "estado_ticket", nullable = false)
+    @Column(name = "estado_ticket", nullable = false)
     @Builder.Default
     private EstadoTicket estadoTicket = EstadoTicket.EMITIDO;
 
-  //  @Column(name = "precio", nullable = false)
+    @Column(name = "precio", nullable = false)
     private Double precio;
 
-   // @Column(name = "fecha_emision", nullable = false, updatable = false)
+    @Column(name = "fecha_emision", nullable = false, updatable = false)
     private Instant fechaEmision;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
