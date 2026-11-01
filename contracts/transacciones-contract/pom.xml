@@ -13,62 +13,16 @@
     <artifactId>transacciones-contract</artifactId>
     <name>TicketYa Contract - transacciones</name>
 
-    <dependencies>
-        <dependency>
-            <groupId>org.springframework.cloud</groupId>
-            <artifactId>spring-cloud-starter-openfeign</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>org.springframework</groupId>
-            <artifactId>spring-web</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>com.fasterxml.jackson.core</groupId>
-            <artifactId>jackson-databind</artifactId>
-        </dependency>
-        <dependency>
-            <groupId>jakarta.validation</groupId>
-            <artifactId>jakarta.validation-api</artifactId>
-        </dependency>
-    </dependencies>
+    <properties>
+        <contract.name>transacciones</contract.name>
+        <contract.title>ms-transacciones</contract.title>
+    </properties>
 
     <build>
         <plugins>
             <plugin>
                 <groupId>org.openapitools</groupId>
                 <artifactId>openapi-generator-maven-plugin</artifactId>
-                <version>${openapi-generator.version}</version>
-                <executions>
-                    <execution>
-                        <goals>
-                            <goal>generate</goal>
-                        </goals>
-                        <configuration>
-                            <inputSpec>${project.basedir}/src/main/resources/openapi.yaml</inputSpec>
-                            <generatorName>spring</generatorName>
-                            <library>spring-cloud</library>
-                            <apiPackage>org.tudai.ticketya.contract.transacciones.api</apiPackage>
-                            <modelPackage>org.tudai.ticketya.contract.transacciones.model</modelPackage>
-                            <generateSupportingFiles>true</generateSupportingFiles>
-                            <supportingFilesToGenerate>ClientConfiguration.java</supportingFilesToGenerate>
-                            <generateApiTests>false</generateApiTests>
-                            <generateModelTests>false</generateModelTests>
-                            <configOptions>
-                                <title>ms-transacciones</title>
-                                <configPackage>org.tudai.ticketya.contract.transacciones.configuration</configPackage>
-                                <useSpringBoot3>true</useSpringBoot3>
-                                <useJakartaEe>true</useJakartaEe>
-                                <useTags>true</useTags>
-                                <useResponseEntity>false</useResponseEntity>
-                                <useFeignClientUrl>false</useFeignClientUrl>
-                                <openApiNullable>false</openApiNullable>
-                                <documentationProvider>none</documentationProvider>
-                                <annotationLibrary>none</annotationLibrary>
-                                <hideGenerationTimestamp>true</hideGenerationTimestamp>
-                            </configOptions>
-                        </configuration>
-                    </execution>
-                </executions>
             </plugin>
         </plugins>
     </build>

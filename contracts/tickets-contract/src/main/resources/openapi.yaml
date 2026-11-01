@@ -1,0 +1,59 @@
+openapi: 3.0.3
+info:
+  title: ms-tickets
+  version: 1.0.0
+  description: Contrato de ms-tickets. Por ahora solo incluye el callback con el que ms-transacciones ca a informar los resultados.
+tags:
+  - name: transacciones-callback
+paths:
+  /internal/tickets/transacciones-resultados:
+    post:
+      tags: [transacciones-callback]
+      operationId: recibirResultados
+      summary: Recibe el resultado de transacciones procesadas
+      description: |
+        Interno: está fuera de /api, así que el gateway no lo enruta. Lo invoca ms-transacciones al terminar de
+        procesar reintegros pedidos por este servicio. La entrega es "al menos una vez": recibir dos veces el mismo
+        resultado no debe tener efecto adicional.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ResultadosTransaccionesRequest'
+      responses:
+        '204':
+          description: Recibido
+components:
+  schemas:
+    TipoMovimiento:
+      type: string
+      enum: [ENTRADA, SALIDA]
+    EstadoResultado:
+      type: string
+      enum: [COMPLETA, FALLIDA]
+    ResultadoTransaccion:
+      type: object
+      required: [transaccionId, ticketId, tipo, estado]
+      properties:
+        transaccionId:
+          type: integer
+          format: int64
+        ticketId:
+          type: string
+        tipo:
+          $ref: '#/components/schemas/TipoMovimiento'
+        estado:
+          $ref: '#/components/schemas/EstadoResultado'
+        motivoFallo:
+          type: string
+    ResultadosTransaccionesRequest:
+      type: object
+      required: [resultados]
+      properties:
+        resultados:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            $ref: '#/components/schemas/ResultadoTransaccion'

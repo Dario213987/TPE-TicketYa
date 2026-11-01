@@ -1,0 +1,71 @@
+openapi: 3.0.3
+info:
+  title: pasarela-mock
+  version: 1.0.0
+  description: Pasarela de pagos externa (mock).
+tags:
+  - name: pasarela
+paths:
+  /api/pasarela/debitos:
+    post:
+      tags: [pasarela]
+      operationId: debitar
+      summary: Cobra un monto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdenPasarela'
+      responses:
+        '200':
+          description: Resultado de la operación (aprobada o rechazada)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoPasarela'
+  /api/pasarela/creditos:
+    post:
+      tags: [pasarela]
+      operationId: acreditar
+      summary: Reintegra un monto
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/OrdenPasarela'
+      responses:
+        '200':
+          description: Resultado de la operación (aprobada o rechazada)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoPasarela'
+components:
+  schemas:
+    OrdenPasarela:
+      type: object
+      required: [referencia, monto, medioPago]
+      properties:
+        referencia:
+          type: string
+          description: Id de la transacción en ms-transacciones. Una pasarela real lo usa para deduplicar.
+        ticketId:
+          type: string
+        clienteId:
+          type: string
+        monto:
+          type: number
+        medioPago:
+          type: string
+    ResultadoPasarela:
+      type: object
+      required: [aprobada]
+      properties:
+        aprobada:
+          type: boolean
+        motivo:
+          type: string
+        codigoAutorizacion:
+          type: string
