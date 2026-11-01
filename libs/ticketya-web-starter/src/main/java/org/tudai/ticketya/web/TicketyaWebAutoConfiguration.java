@@ -9,17 +9,23 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ScopedProxyMode;
+import org.springframework.core.Ordered;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.web.correlation.CorrelationIdFilter;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
+import org.tudai.ticketya.web.logging.RequestLoggingFilter;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import org.tudai.ticketya.web.user.HeaderUserContext;
 
@@ -28,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class TicketyaWebAutoConfiguration {
+
+    private static final int REQUEST_LOGGING_ORDER = -100;
 
     @Bean
     @ConditionalOnMissingBean(GlobalExceptionHandler.class)
@@ -40,6 +48,29 @@ public class TicketyaWebAutoConfiguration {
     @ConditionalOnMissingBean(UserContext.class)
     public UserContext userContext(HttpServletRequest request) {
         return new HeaderUserContext(request);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "correlationIdFilterRegistration")
+    public FilterRegistrationBean<CorrelationIdFilter> correlationIdFilterRegistration() {
+        FilterRegistrationBean<CorrelationIdFilter> registration =
+                new FilterRegistrationBean<>(new CorrelationIdFilter());
+        registration.setName("correlationIdFilter");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "ticketya.logging.requests.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "requestLoggingFilterRegistration")
+    public FilterRegistrationBean<RequestLoggingFilter> requestLoggingFilterRegistration(
+            UserContext userContext,
+            @Value("${ticketya.logging.requests.exclude-paths:/actuator/**}") String[] excludePaths) {
+        FilterRegistrationBean<RequestLoggingFilter> registration =
+                new FilterRegistrationBean<>(new RequestLoggingFilter(userContext, excludePaths));
+        registration.setName("requestLoggingFilter");
+        registration.setOrder(REQUEST_LOGGING_ORDER);
+        return registration;
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -80,6 +111,11 @@ public class TicketyaWebAutoConfiguration {
                     registry.addInterceptor(interceptor);
                 }
             };
+        }
+
+        @Bean
+        public CorrelationIdFeignInterceptor correlationIdFeignInterceptor() {
+            return new CorrelationIdFeignInterceptor();
         }
     }
 }

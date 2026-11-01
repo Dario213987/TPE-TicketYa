@@ -7,6 +7,7 @@ import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
 import org.springframework.mock.http.server.reactive.MockServerHttpRequest;
 import org.springframework.mock.web.server.MockServerWebExchange;
 import org.springframework.web.server.ResponseStatusException;
+import org.tudai.ticketya.gateway.filter.CorrelationIdWebFilter;
 
 import java.net.ConnectException;
 
@@ -71,6 +72,16 @@ class GatewayErrorHandlerTest {
         assertThat(exchange.getResponse().getBodyAsString().block())
                 .doesNotContain("secreto")
                 .doesNotContain("IllegalStateException");
+    }
+
+    @Test
+    void conCorrelationIdEnElExchange_loIncluyeEnElCuerpo() {
+        MockServerWebExchange exchange = exchange();
+        exchange.getAttributes().put(CorrelationIdWebFilter.ATTRIBUTE, "abc-123");
+
+        handler.handle(exchange, new ResponseStatusException(HttpStatus.NOT_FOUND)).block();
+
+        assertThat(exchange.getResponse().getBodyAsString().block()).contains("\"correlationId\":\"abc-123\"");
     }
 
     private static MockServerWebExchange exchange() {
