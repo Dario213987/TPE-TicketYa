@@ -73,7 +73,7 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
     }
 
-    private static HttpStatus resolveStatus(Throwable ex) {
+    public static HttpStatus resolveStatus(Throwable ex) {
         for (Throwable t = ex; t != null; t = t.getCause()) {
             if (t instanceof ResponseStatusException rse) {
                 HttpStatus status = HttpStatus.resolve(rse.getStatusCode().value());

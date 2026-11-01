@@ -74,4 +74,20 @@ class TicketyaWebAutoConfigurationTest {
             assertThat(ctx).hasSingleBean(CorrelationIdFeignInterceptor.class);
         });
     }
+
+    @Test
+    void registraElFiltroDeLogDeRequestsDespuesDelCorrelationIdYDentroDelContextoDeSpring() {
+        runner.run(ctx -> {
+            FilterRegistrationBean<?> registration =
+                    ctx.getBean("requestLoggingFilterRegistration", FilterRegistrationBean.class);
+            assertThat(registration.getOrder()).isGreaterThan(Ordered.HIGHEST_PRECEDENCE + 10);
+            assertThat(registration.getOrder()).isGreaterThan(-105);   // orden del RequestContextFilter de Spring
+        });
+    }
+
+    @Test
+    void elLogDeRequestsSePuedeDesactivar() {
+        runner.withPropertyValues("ticketya.logging.requests.enabled=false")
+                .run(ctx -> assertThat(ctx).doesNotHaveBean("requestLoggingFilterRegistration"));
+    }
 }

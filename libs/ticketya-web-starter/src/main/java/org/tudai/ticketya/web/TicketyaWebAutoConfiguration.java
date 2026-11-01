@@ -9,6 +9,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
@@ -24,6 +25,7 @@ import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
+import org.tudai.ticketya.web.logging.RequestLoggingFilter;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import org.tudai.ticketya.web.user.HeaderUserContext;
 
@@ -32,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class TicketyaWebAutoConfiguration {
+
+    private static final int REQUEST_LOGGING_ORDER = -100;
 
     @Bean
     @ConditionalOnMissingBean(GlobalExceptionHandler.class)
@@ -53,6 +57,19 @@ public class TicketyaWebAutoConfiguration {
                 new FilterRegistrationBean<>(new CorrelationIdFilter());
         registration.setName("correlationIdFilter");
         registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        return registration;
+    }
+
+    @Bean
+    @ConditionalOnProperty(name = "ticketya.logging.requests.enabled", havingValue = "true", matchIfMissing = true)
+    @ConditionalOnMissingBean(name = "requestLoggingFilterRegistration")
+    public FilterRegistrationBean<RequestLoggingFilter> requestLoggingFilterRegistration(
+            UserContext userContext,
+            @Value("${ticketya.logging.requests.exclude-paths:/actuator/**}") String[] excludePaths) {
+        FilterRegistrationBean<RequestLoggingFilter> registration =
+                new FilterRegistrationBean<>(new RequestLoggingFilter(userContext, excludePaths));
+        registration.setName("requestLoggingFilter");
+        registration.setOrder(REQUEST_LOGGING_ORDER);
         return registration;
     }
 
