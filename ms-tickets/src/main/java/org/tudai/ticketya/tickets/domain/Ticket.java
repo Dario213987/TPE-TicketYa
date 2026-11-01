@@ -29,7 +29,6 @@ public class Ticket {
     @Builder.Default
     private EstadoTicket estadoTicket = EstadoTicket.EMITIDO;
 
-    @Column(name = "precio", nullable = false)
     private Double precio;
 
     @Column(name = "fecha_emision", nullable = false, updatable = false)
