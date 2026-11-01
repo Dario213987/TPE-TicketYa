@@ -10,14 +10,18 @@ import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ScopedProxyMode;
+import org.springframework.core.Ordered;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.web.correlation.CorrelationIdFilter;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -40,6 +44,16 @@ public class TicketyaWebAutoConfiguration {
     @ConditionalOnMissingBean(UserContext.class)
     public UserContext userContext(HttpServletRequest request) {
         return new HeaderUserContext(request);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(name = "correlationIdFilterRegistration")
+    public FilterRegistrationBean<CorrelationIdFilter> correlationIdFilterRegistration() {
+        FilterRegistrationBean<CorrelationIdFilter> registration =
+                new FilterRegistrationBean<>(new CorrelationIdFilter());
+        registration.setName("correlationIdFilter");
+        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
+        return registration;
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -80,6 +94,11 @@ public class TicketyaWebAutoConfiguration {
                     registry.addInterceptor(interceptor);
                 }
             };
+        }
+
+        @Bean
+        public CorrelationIdFeignInterceptor correlationIdFeignInterceptor() {
+            return new CorrelationIdFeignInterceptor();
         }
     }
 }

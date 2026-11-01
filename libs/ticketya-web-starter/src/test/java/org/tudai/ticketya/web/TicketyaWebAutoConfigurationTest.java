@@ -5,8 +5,11 @@ import feign.codec.ErrorDecoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
+import org.springframework.core.Ordered;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -59,6 +62,16 @@ class TicketyaWebAutoConfigurationTest {
         runner.run(ctx -> {
             assertThat(ctx).hasSingleBean(org.tudai.ticketya.web.security.AuthorizeInterceptor.class);
             assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
+        });
+    }
+
+    @Test
+    void registraElFiltroDeCorrelationIdPrimeroYSuInterceptorFeign() {
+        runner.run(ctx -> {
+            FilterRegistrationBean<?> registration =
+                    ctx.getBean("correlationIdFilterRegistration", FilterRegistrationBean.class);
+            assertThat(registration.getOrder()).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 10);
+            assertThat(ctx).hasSingleBean(CorrelationIdFeignInterceptor.class);
         });
     }
 }
