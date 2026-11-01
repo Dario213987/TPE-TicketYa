@@ -1,7 +1,5 @@
 package org.tudai.ticketya.eventos.dto.request;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
-import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Positive;
 import jakarta.validation.constraints.Size;
 import lombok.AllArgsConstructor;
@@ -21,6 +19,6 @@ public class ParticipanteRequest {
 
     @Size(max = 200, message = "El nombre del participante no puede superar los 200 caracteres")
     private String nombre;
-    
+
 
 }
