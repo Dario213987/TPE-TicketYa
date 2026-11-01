@@ -1,1 +1,4 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: changes/us-03-01-crear-evento.yaml
+      relativeToChangelogFile: true
