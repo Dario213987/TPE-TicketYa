@@ -21,6 +21,7 @@ public class SectorNumerado extends Sector {
             joinColumns = @JoinColumn(name = "sector_id"),
             uniqueConstraints = @UniqueConstraint(columnNames = {"sector_id", "fila", "numero"}))
     @Builder.Default
+    @Setter(AccessLevel.NONE)
     private Set<Asiento> asientos = new HashSet<>();
 
     public void generarAsientos(Integer filas, Integer asientosPorFila) {
