@@ -3,7 +3,6 @@ package org.tudai.ticketya.eventos.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.eventos.dto.sector.SectorNoNumeradoRequestDTO;
@@ -19,22 +18,22 @@ public class SectorController {
     private final SectorService sectorService;
 
     @PostMapping("/numerados")
+    @ResponseStatus(HttpStatus.CREATED)
     @Authorize("hasAnyRole('ADMINISTRADOR')")
-    public ResponseEntity<?> crearSectorNumerado(
+    public SectorResponseDTO crearSectorNumerado(
             @RequestHeader(value = "Rol del Usuario", required = false) String userRole,
             @PathVariable Long lugarId,
             @Valid @RequestBody SectorNumeradoRequestDTO dto) {
-        SectorResponseDTO sectorCreado = sectorService.crearSectorNumerado(lugarId, dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(sectorCreado);
+        return sectorService.crearSectorNumerado(lugarId, dto);
     }
 
     @PostMapping("/no-numerados")
+    @ResponseStatus(HttpStatus.CREATED)
     @Authorize("hasAnyRole('ADMINISTRADOR')")
-    public ResponseEntity<?> crearSectorNoNumerado(
+    public SectorResponseDTO crearSectorNoNumerado(
             @RequestHeader(value = "Rol del Usuario", required = false) String userRole,
             @PathVariable Long lugarId,
             @Valid @RequestBody SectorNoNumeradoRequestDTO dto) {
-        SectorResponseDTO sectorCreado = sectorService.crearSectorNoNumerado(lugarId, dto);
-        return ResponseEntity.status(HttpStatus.CREATED).body(sectorCreado);
+        return sectorService.crearSectorNoNumerado(lugarId, dto);
     }
 }
