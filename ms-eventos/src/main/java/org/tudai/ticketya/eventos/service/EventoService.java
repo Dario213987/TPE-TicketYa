@@ -91,7 +91,7 @@ public class EventoService {
         try {
             ticketsClient.crearDisponibilidad(evento.getId(), buildInventarioRequest(evento, sectores));
         } catch (RetryableException e) {
-            throw new RemoteServiceException(503, "ms-tickets no disponible");
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
         }
 
         evento.setEstado(estadoPublicado);
