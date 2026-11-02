@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00001-crear-tabla-transacciones" author="Darío José Carsaniga">
+
+        <createTable tableName="transacciones">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tipo" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="estado" type="varchar(10)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="monto" type="double">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cliente_id"  type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="organizador_id"  type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ticket_id"  type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="motivo_fallo" type="varchar(255)"/>
+            <column name="creado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actualizado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint
+                tableName="transacciones"
+                columnNames="ticket_id, cliente_id, organizador_id, estado"
+                constraintName="uk_transacciones_ticket_cliente_organizador_estado"/>
+
+        <createIndex tableName="transacciones" indexName="idx_transacciones_organizador">
+            <column name="organizador_id"/>
+        </createIndex>
+
+        <sql dbms="mysql">
+            ALTER TABLE transacciones
+                ADD CONSTRAINT ck_transacciones_monto_positivo CHECK (monto > 0)
+        </sql>
+
+    </changeSet>
+
+</databaseChangeLog>
