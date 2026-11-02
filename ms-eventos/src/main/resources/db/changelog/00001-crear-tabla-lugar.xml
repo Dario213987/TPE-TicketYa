@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00001-crear-tabla-lugar" author="maxi">
+        <createTable tableName="lugares">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="nombre" type="varchar(255)"/>
+            <column name="tipo" type="varchar(255)"/>
+            <column name="capacidad" type="integer"/>
+            <column name="direccion" type="varchar(255)"/>
+            <column name="ciudad" type="varchar(255)"/>
+            <column name="latitud" type="double"/>
+            <column name="longitud" type="double"/>
+        </createTable>
+    </changeSet>
+</databaseChangeLog>
