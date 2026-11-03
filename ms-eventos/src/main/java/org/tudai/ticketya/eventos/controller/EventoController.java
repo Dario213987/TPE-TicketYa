@@ -42,4 +42,14 @@ public class EventoController {
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.cancelarEvento(id, esAdmin);
     }
+
+    @PutMapping("/internal/{id}/estado/agotado")
+    public EventoResponseDTO marcarAgotado(@PathVariable Long id){
+        return eventoService.marcarAgotado(id);
+    }
+
+    @PutMapping("/internal/{id}/estado/publicar")
+    public EventoResponseDTO marcarPublicado(@PathVariable Long id){
+        return eventoService.marcarPublicado(id);
+    }
 }

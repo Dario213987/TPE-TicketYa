@@ -2,8 +2,9 @@ package org.tudai.ticketya.eventos.service;
 
 import feign.FeignException;
 import feign.RetryableException;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
+import org.springframework.scheduling.annotation.EnableScheduling;
+import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -32,6 +33,7 @@ import java.util.List;
 import java.util.Objects;
 import java.util.Set;
 
+@EnableScheduling
 @Service
 @RequiredArgsConstructor
 public class EventoService {
@@ -52,35 +54,34 @@ public class EventoService {
      * Es idempotente: si el evento ya estaba publicado, devuelve su información sin volver
      * a llamar a ms-tickets.
      *
-     * @param idEvento       id del evento a publicar
-     * @param organizadorId  id del usuario que realiza la solicitud
-     * @param esAdmin        {@code true} si el usuario es administrador (puede publicar cualquier evento)
+     * @param id id del evento a publicar
+     * @param organizadorId id del usuario que realiza la solicitud
+     * @param esAdmin {@code true} si el usuario es administrador (puede publicar cualquier evento)
      *
      * @return DTO con la información del evento publicado
      *
-     * @throws NotFoundException           si el evento no existe
-     * @throws ForbiddenException          si el usuario no es admin y el evento no le pertenece
-     * @throws ConflictException           si el evento no está en estado BORRADOR
-     * @throws BadRequestException         si la fecha no es posterior a hoy, o si el evento no tiene
+     * @throws NotFoundException si el evento no existe
+     * @throws ForbiddenException si el usuario no es admin y el evento no le pertenece
+     * @throws ConflictException si el evento no está en estado BORRADOR
+     * @throws BadRequestException si la fecha no es posterior a hoy, o si el evento no tiene
      *                                     lugar o el lugar no tiene sectores
-     * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
-     * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
+     * @throws SectoresSinPrecioException si algún sector no tiene precio asignado
+     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
-    public EventoResponseDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
-        Evento evento = eventoRepository.findById(idEvento)
-                .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
+    public EventoResponseDTO publicarEvento(Long id, Long organizadorId, boolean esAdmin) {
+
+        Evento evento = buscarEvento(id);
 
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
             throw new ForbiddenException("No podés publicar un evento que no te pertenece");
         }
 
-        EstadoEvento estadoPublicado = estadoPublicado();
-        if (evento.getEstado() == estadoPublicado) {
+        if(estaEn(evento, EstadoEvento.PUBLICADO)){
             return toResponseDTO(evento);
         }
 
-        if (evento.getEstado() != EstadoEvento.BORRADOR) {
+        if (!estaEn(evento, EstadoEvento.BORRADOR)) {
             throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
         }
 
@@ -133,14 +134,14 @@ public class EventoService {
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
      *
-     * @param id      id del evento a cancelar
+     * @param id  id del evento a cancelar
      * @param esAdmin {@code true} si el usuario es administrador
      *
      * @return DTO con la información del evento cancelado
      *
-     * @throws ForbiddenException     si el usuario no es administrador
-     * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws ForbiddenException si el usuario no es administrador
+     * @throws NotFoundException si el evento no existe
+     * @throws ConflictException si el evento no está en estado PUBLICADO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
@@ -150,16 +151,13 @@ public class EventoService {
             throw new ForbiddenException("Solo administradores pueden cancelar un evento");
         }
 
-        Evento evento = eventoRepository.findById(id).orElseThrow(
-                () -> {
-                   return new NotFoundException("No se encontró el evento solicitado");
-                });
+        Evento evento = buscarEvento(id);
 
-        if (evento.getEstado() == EstadoEvento.CANCELADO) {
+        if (estaEn(evento, EstadoEvento.CANCELADO)){
             return toResponseDTO(evento);
         }
 
-        if(evento.getEstado() != EstadoEvento.PUBLICADO){
+        if(!estaEn(evento, EstadoEvento.PUBLICADO)){
             throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
         }
 
@@ -179,23 +177,130 @@ public class EventoService {
         //TO DO : REINTEGRO MASIVO
 
         return toResponseDTO(evento);
+    }
 
+    /**
+     * Finaliza los eventos cuya fecha ya pasó. Se ejecuta de forma programada.
+     * <p>
+     * Pasa a FINALIZADO todos los eventos con fecha anterior a hoy, excepto los que están
+     * en BORRADOR, CANCELADO o FINALIZADO. En la práctica, finaliza los eventos PUBLICADO
+     * y AGOTADO vencidos. Un evento se finaliza al día siguiente de su fecha.
+     * <p>
+     * La frecuencia se configura con la propiedad {@code ticketya.eventos.finalizacion.cron};
+     * si no está definida, se ejecuta una vez por hora, en punto.
+     * <p>
+     * Es idempotente: si se ejecuta dos veces seguidas, la segunda no modifica nada.
+     */
+    @Scheduled(cron = "${ticketya.eventos.finalizacion.cron:0 0 * * * *}")
+    @Transactional
+    public void finalizarEventosVencidos() {
+        eventoRepository.finalizarEventosVencidos(
+                LocalDate.now(),
+                EstadoEvento.FINALIZADO,
+                List.of(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO, EstadoEvento.FINALIZADO));
+    }
+
+    /**
+     * Marca un evento publicado como AGOTADO.
+     * <p>
+     * Valida que el evento exista y que esté en estado PUBLICADO. Si las validaciones pasan,
+     * cambia el estado a AGOTADO.
+     * <p>
+     * Es idempotente: si el evento ya estaba agotado, devuelve su información
+     * sin volver a modificarlo.
+     *
+     * @param id id del evento a marcar como agotado
+     *
+     * @return DTO con la información del evento agotado
+     *
+     * @throws NotFoundException si el evento no existe
+     * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
+     */
+    @Transactional
+    public EventoResponseDTO marcarAgotado(Long id){
+
+        Evento evento = buscarEvento(id);
+
+        //Nuevamente sucede el error de que el ENUM no considera el estado agotado.
+        if(estaEn(evento, EstadoEvento.AGOTADO)){
+            return toResponseDTO(evento);
+        }
+
+        if (!estaEn(evento, EstadoEvento.PUBLICADO)) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+
+        evento.setEstado(EstadoEvento.AGOTADO);
+        evento = eventoRepository.save(evento);
+
+        return toResponseDTO(evento);
+    }
+
+    /**
+     * Vuelve a poner en venta un evento que estaba AGOTADO, pasándolo a PUBLICADO.
+     * <p>
+     * Valida que el evento exista y que esté en estado AGOTADO. No vuelve a crear el inventario
+     * en ms-tickets, porque ya fue creado cuando el evento se publicó por primera vez.
+     * <p>
+     * Es idempotente: si el evento ya estaba publicado, devuelve su información
+     * sin volver a modificarlo.
+     *
+     * @param id id del evento a reabrir
+     *
+     * @return DTO con la información del evento publicado
+     *
+     * @throws NotFoundException si el evento no existe
+     * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
+     */
+    @Transactional
+    public EventoResponseDTO marcarPublicado(Long id){
+
+        Evento evento = buscarEvento(id);
+
+        if(estaEn(evento, EstadoEvento.PUBLICADO)){
+            return toResponseDTO(evento);
+        }
+
+        if (!estaEn(evento, EstadoEvento.AGOTADO)) {
+            throw new ConflictException("Solo un evento agotado puede pasar a publicado");
+        }
+
+        evento.setEstado(EstadoEvento.PUBLICADO);
+        evento = eventoRepository.save(evento);
+
+        return toResponseDTO(evento);
     }
 
 
-    /***
-     * Metodo auxiliar.
-     * PUBLICADO actualmente no esta soportado en el enum, es para que compile. A eliminar en
-     * proximos task.
+    /**
+     * Busca un evento en el repository por su id.
      *
+     * @param id id del evento
+     *
+     * @return evento encontrado
+     *
+     * @throws NotFoundException en caso de que no exista el evento
+     * */
+    private Evento buscarEvento(Long id){
+
+        return eventoRepository.findById(id).orElseThrow(
+                () -> {
+                    return new NotFoundException("No se encontro el evento");
+                });
+    }
+
+
+    /**
+     * Verifica si un evento se encuentra en un estado determinado.
+     *
+     * @param evento evento a analizar
+     * @param estado estado contra el que se compara
+     *
+     * @return {@code true} si el estado actual del evento es el indicado
      */
-    private EstadoEvento estadoPublicado() {
-        try {
-            return EstadoEvento.valueOf("PUBLICADO");
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(
-                    "El enum EstadoEvento no tiene PUBLICADO", e);
-        }
+    private boolean estaEn(Evento evento, EstadoEvento estado) {
+        return evento.getEstado() == estado;
     }
 
     /**
