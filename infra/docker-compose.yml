@@ -43,13 +43,14 @@ services:
     volumes: [tickets-data:/var/lib/postgresql]
 
   db-transacciones:
-    <<: *postgres
+    <<: *mysql
     environment:
-      POSTGRES_DB: transacciones
-      POSTGRES_USER: transacciones
-      POSTGRES_PASSWORD: ${TRANSACCIONES_DB_PASSWORD}
-    ports: ["127.0.0.1:5435:5432"]
-    volumes: [transacciones-data:/var/lib/postgresql]
+      MYSQL_DATABASE: transacciones
+      MYSQL_USER: transacciones
+      MYSQL_PASSWORD: ${TRANSACCIONES_DB_PASSWORD}
+      MYSQL_RANDOM_ROOT_PASSWORD: "yes"
+    ports: ["127.0.0.1:5435:3306"]
+    volumes: [transacciones-data:/var/lib/mysql]
 
   db-devoluciones:
     <<: *postgres
