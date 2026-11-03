@@ -23,7 +23,11 @@ import lombok.*;
 public class DisponibilidadAsiento {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
+    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "disponibilidad_asiento_seq")
+    @SequenceGenerator(
+            name = "disponibilidad_asiento_seq",
+            sequenceName = "disponibilidad_asiento_seq",
+            allocationSize = 1000)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -32,7 +36,7 @@ public class DisponibilidadAsiento {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "sector_id", nullable = false)
-    private DisponibilidadSector sector;
+    private DisponibilidadNumerada disponibilidad;
 
     @Column(name = "fila", nullable = false)
     private Integer fila;

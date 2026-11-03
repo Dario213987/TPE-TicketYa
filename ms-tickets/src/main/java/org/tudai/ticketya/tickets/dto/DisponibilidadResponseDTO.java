@@ -15,6 +15,5 @@ public class DisponibilidadResponseDTO {
     private boolean yaExistia;
     private int sectoresProcesados;
     private int asientosInsertados;
-    private int asientosOmitidos;
     private Instant creadoEl;
 }

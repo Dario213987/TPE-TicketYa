@@ -8,7 +8,8 @@ import java.util.Optional;
 
 public interface DisponibilidadAsientoRepository extends JpaRepository<DisponibilidadAsiento, Long> {
 
-    Optional<DisponibilidadAsiento> findBySector_IdAndFilaAndNumero(Long sectorId, Integer fila, Integer numero);
+    Optional<DisponibilidadAsiento> findByDisponibilidad_IdAndFilaAndNumero(
+            Long disponibilidadId, Integer fila, Integer numero);
 
-    long countBySector_IdAndEstado(Long sectorId, EstadoDisponibilidad estado);
+    long countByDisponibilidad_IdAndEstado(Long disponibilidadId, EstadoDisponibilidad estado);
 }

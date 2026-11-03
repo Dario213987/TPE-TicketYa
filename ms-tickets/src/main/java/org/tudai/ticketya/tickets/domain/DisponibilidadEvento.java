@@ -25,14 +25,14 @@ public class DisponibilidadEvento {
 
     @OneToMany(mappedBy = "evento", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<DisponibilidadSector> sectores = new HashSet<>();
+    private Set<Disponibilidad> sectores = new HashSet<>();
 
-    public void addSector(DisponibilidadSector sector) {
+    public void addSector(Disponibilidad sector) {
         sector.setEvento(this);
         this.sectores.add(sector);
     }
 
-    public void removeSector(DisponibilidadSector sector) {
+    public void removeSector(Disponibilidad sector) {
         sector.setEvento(null);
         this.sectores.remove(sector);
     }
