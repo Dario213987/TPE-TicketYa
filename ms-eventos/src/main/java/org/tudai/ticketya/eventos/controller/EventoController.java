@@ -38,7 +38,7 @@ public class EventoController {
 
     @Authorize("hasRole('ADMINISTRADOR')")
     @PutMapping("/{id}/cancelar")
-    public EventoResponseDTO suspenderEvento(@PathVariable long id){
+    public EventoResponseDTO suspenderEvento(@PathVariable Long id){
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.cancelarEvento(id, esAdmin);
     }

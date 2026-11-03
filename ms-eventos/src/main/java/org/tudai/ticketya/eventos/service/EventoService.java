@@ -1,5 +1,6 @@
 package org.tudai.ticketya.eventos.service;
 
+import feign.FeignException;
 import feign.RetryableException;
 import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
@@ -63,7 +64,7 @@ public class EventoService {
      * @throws BadRequestException         si la fecha no es posterior a hoy, o si el evento no tiene
      *                                     lugar o el lugar no tiene sectores
      * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
-     * @throws RemoteServiceException      si ms-tickets no está disponible
+     * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
     @Transactional
     public EventoResponseDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
@@ -109,8 +110,12 @@ public class EventoService {
 
         try {
             ticketsClient.crearDisponibilidad(evento.getId(), buildInventarioRequest(evento, sectores));
-        } catch (RetryableException e) {
+
+        }  catch (RetryableException e) {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
+
+        } catch (FeignException e) {
+            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
         }
 
         evento.setEstado(estadoPublicado);
@@ -122,22 +127,24 @@ public class EventoService {
      * Cancela un evento publicado. Solo puede ser realizado por un administrador.
      * <p>
      * Valida que el usuario sea administrador, que el evento exista y que esté en estado
-     * PUBLICADO. Si las validaciones pasan, cambia el estado a CANCELADO.
+     * PUBLICADO. Si las validaciones pasan, avisa a ms-tickets para que bloquee nuevas
+     * reservas y compras, y recién después cambia el estado a CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo.
+     * sin volver a modificarlo ni a llamar a ms-tickets.
      *
      * @param id      id del evento a cancelar
      * @param esAdmin {@code true} si el usuario es administrador
      *
      * @return DTO con la información del evento cancelado
      *
-     * @throws ForbiddenException si el usuario no es administrador
-     * @throws NotFoundException  si el evento no existe
-     * @throws ConflictException  si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws ForbiddenException     si el usuario no es administrador
+     * @throws NotFoundException      si el evento no existe
+     * @throws ConflictException      si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
-    public EventoResponseDTO cancelarEvento(long id, boolean esAdmin) {
+    public EventoResponseDTO cancelarEvento(Long id, boolean esAdmin) {
 
         if (!esAdmin) {
             throw new ForbiddenException("Solo administradores pueden cancelar un evento");
@@ -158,6 +165,16 @@ public class EventoService {
 
         evento.setEstado(EstadoEvento.CANCELADO);
         evento = eventoRepository.save(evento);
+
+        try {
+            ticketsClient.cancelarEvento(evento.getId());
+
+        }  catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
+
+        } catch (FeignException e) {
+            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
+        }
 
         //TO DO : REINTEGRO MASIVO
 
