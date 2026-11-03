@@ -26,8 +26,6 @@ public class EventoResponseDTO {
     private Long organizadorId;
     private LugarResponseDTO lugar;
     private LocalDate fecha;
-    private Boolean altaDemanda;
-    private Integer limiteEntradasPorCliente;
     private List<ParticipanteResponseDTO> participantes;
     private List<SectorResponseDTO> sectores;
 }
