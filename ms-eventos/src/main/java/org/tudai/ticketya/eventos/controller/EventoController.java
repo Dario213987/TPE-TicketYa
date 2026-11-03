@@ -27,9 +27,9 @@ public class EventoController {
     }
 
     private Long organizadorIdActual() {
-        String raw = userContext.userId();
+
         try {
-            return Long.valueOf(raw);
+            return userContext.userId();
         } catch (NumberFormatException e) {
             throw new BadRequestException("El header X-User-Id debe ser un número");
         }
