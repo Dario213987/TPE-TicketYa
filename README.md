@@ -95,6 +95,16 @@ Para loguear se usa `@Slf4j` (Lombok) o `LoggerFactory.getLogger(...)`.
 
 Propiedades opcionales: `ticketya.logging.dir` (`logs`), `ticketya.logging.max-file-size` (`10MB`), `ticketya.logging.max-history` (`7` días) y `ticketya.logging.total-size-cap` (`500MB`).
 
+### Logs centralizados (Loki + Alloy + Grafana)
+
+El compose de `infra/` también levanta Loki, Alloy y Grafana. Alloy lee los `*.json.log` de `logs/` y de `<módulo>/logs/` (según desde dónde se lanzó el servicio), etiqueta cada línea con `service` y la manda a Loki.
+
+En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargado. En **Explore** se consulta por servicio:
+
+    {service="ms-eventos"}
+
+Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
+
 ## Correlation id
 
 Cada operación lleva un id (`X-Correlation-Id`) que viaja por todos los servicios: el gateway lo genera si el cliente no lo manda (solo acepta `A-Z a-z 0-9 . _ -`, hasta 64 caracteres), lo devuelve en la respuesta y los servicios lo propagan en las llamadas Feign. Aparece en todas las líneas de log y en el campo `correlationId` de los errores.
