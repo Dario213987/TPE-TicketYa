@@ -36,16 +36,16 @@ class UserContextMvcTest {
     }
 
     @Test
-    void sinHeaders_responde400ConMensajeClaro() throws Exception {
+    void sinHeaders_responde401ConMensajeClaro() throws Exception {
         mvc.perform(get("/test/yo"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Falta el header obligatorio X-User-Id"));
     }
 
     @Test
-    void rolInvalido_responde400() throws Exception {
+    void rolInvalido_responde403() throws Exception {
         mvc.perform(get("/test/yo").header("X-User-Id", "42").header("X-User-Role", "superman"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("Valores permitidos")));
     }
 
