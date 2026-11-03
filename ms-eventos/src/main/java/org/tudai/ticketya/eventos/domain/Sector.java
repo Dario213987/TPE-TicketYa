@@ -23,12 +23,12 @@ public abstract class Sector {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Participante other)) return false;
+        if (!(o instanceof Sector other)) return false;
         return id != null && id.equals(other.getId());
     }
 
     @Override
     public int hashCode() {
-        return getClass().hashCode();
+        return Sector.class.hashCode();
     }
 }

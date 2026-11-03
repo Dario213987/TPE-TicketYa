@@ -1,7 +1,6 @@
 package org.tudai.ticketya.eventos.domain;
 
 import jakarta.persistence.*;
-import jakarta.validation.groups.Default;
 import lombok.*;
 import java.util.HashSet;
 import java.util.Set;
@@ -42,7 +41,7 @@ public class Lugar {
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
-        if (!(o instanceof Participante other)) return false;
+        if (!(o instanceof Lugar other)) return false;
         return id != null && id.equals(other.getId());
     }
 

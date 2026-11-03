@@ -42,6 +42,22 @@ public class TicketyaWebAutoConfiguration {
         return new HeaderUserContext(request);
     }
 
+    @Bean
+    @ConditionalOnMissingBean(AuthorizeInterceptor.class)
+    public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
+        return new AuthorizeInterceptor(userContext);
+    }
+
+    @Bean
+    public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(interceptor);
+            }
+        };
+    }
+
     @Configuration(proxyBeanMethods = false)
     @ConditionalOnClass(ErrorDecoder.class)
     static class FeignDefaultsConfiguration {
@@ -64,22 +80,6 @@ public class TicketyaWebAutoConfiguration {
         @Bean
         public UserHeadersFeignInterceptor userHeadersFeignInterceptor() {
             return new UserHeadersFeignInterceptor();
-        }
-
-        @Bean
-        @ConditionalOnMissingBean(AuthorizeInterceptor.class)
-        public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
-            return new AuthorizeInterceptor(userContext);
-        }
-
-        @Bean
-        public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
-            return new WebMvcConfigurer() {
-                @Override
-                public void addInterceptors(InterceptorRegistry registry) {
-                    registry.addInterceptor(interceptor);
-                }
-            };
         }
     }
 }

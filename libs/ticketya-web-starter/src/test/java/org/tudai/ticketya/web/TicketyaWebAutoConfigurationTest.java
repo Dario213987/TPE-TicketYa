@@ -4,9 +4,11 @@ import feign.Request;
 import feign.codec.ErrorDecoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -57,8 +59,17 @@ class TicketyaWebAutoConfigurationTest {
     @Test
     void registraElInterceptorDeAutorizacion() {
         runner.run(ctx -> {
-            assertThat(ctx).hasSingleBean(org.tudai.ticketya.web.security.AuthorizeInterceptor.class);
+            assertThat(ctx).hasSingleBean(AuthorizeInterceptor.class);
             assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
         });
+    }
+
+    @Test
+    void registraElInterceptorAunqueNoHayaFeign() {
+        runner.withClassLoader(new FilteredClassLoader(ErrorDecoder.class))
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(AuthorizeInterceptor.class);
+                    assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
+                });
     }
 }

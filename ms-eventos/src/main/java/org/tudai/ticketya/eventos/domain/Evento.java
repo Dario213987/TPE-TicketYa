@@ -4,8 +4,6 @@ import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
 import java.util.HashSet;
-import java.util.List;
-import java.util.Objects;
 import java.util.Set;
 
 @Getter
@@ -24,9 +22,11 @@ public class Evento {
 	@ManyToOne
 	@JoinColumn(name = "lugar_id")
 	private Lugar lugar;
-	private Long organizadorId;
-	private EstadoEvento estado;
-	private String nombre;
+    private Long organizadorId;
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    private EstadoEvento estado = EstadoEvento.BORRADOR;
+    private String nombre;
 	private String descripcion;
 	@ManyToMany
 	@JoinTable(
@@ -45,12 +45,12 @@ public class Evento {
 	public void removeArtista(Participante part) {this.artistas.remove(part);
 	}
 
-	@Override
-	public boolean equals(Object o) {
-		if (this == o) return true;
-		if (!(o instanceof Participante other)) return false;
-		return id != null && id.equals(other.getId());
-	}
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Evento other)) return false;
+        return id != null && id.equals(other.getId());
+    }
 
 	@Override
 	public int hashCode() {

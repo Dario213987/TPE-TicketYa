@@ -44,9 +44,18 @@ public class ModelMapperConfig {
                 });
 
         modelMapper.createTypeMap(Lugar.class, LugarResponseDTO.class)
-                .addMappings(mappings -> {
-                    mappings.map(source -> source.getUbicacion().getLatitud(), LugarResponseDTO::setLatitud);
-                    mappings.map(source -> source.getUbicacion().getLongitud(), LugarResponseDTO::setLongitud);
+                .setConverter(context -> {
+                    Lugar source = context.getSource();
+                    LugarResponseDTO destination = new LugarResponseDTO();
+                    destination.setId(source.getId());
+                    destination.setNombre(source.getNombre());
+                    destination.setTipo(source.getTipo());
+                    destination.setDireccion(source.getDireccion());
+                    destination.setCiudad(source.getCiudad());
+                    destination.setCapacidad(source.getCapacidad());
+                    destination.setLatitud(latitud(source));
+                    destination.setLongitud(longitud(source));
+                    return destination;
                 });
 
         modelMapper.createTypeMap(SectorNoNumerado.class, SectorResponseDTO.class)
@@ -77,15 +86,18 @@ public class ModelMapperConfig {
                 });
 
         modelMapper.createTypeMap(Lugar.class, LugarDetalleResponseDTO.class)
-                .addMappings(mappings -> {
-                    mappings.map(source -> source.getUbicacion().getLatitud(), LugarDetalleResponseDTO::setLatitud);
-                    mappings.map(source -> source.getUbicacion().getLongitud(), LugarDetalleResponseDTO::setLongitud);
-                    mappings.skip(LugarDetalleResponseDTO::setSectores);
-                })
-                .setPostConverter(context -> {
+                .setConverter(context -> {
                     Lugar source = context.getSource();
-                    LugarDetalleResponseDTO destination = context.getDestination();
-                    destination.setSectores(source.getSectores().stream()
+                    LugarDetalleResponseDTO destination = new LugarDetalleResponseDTO();
+                    destination.setId(source.getId());
+                    destination.setNombre(source.getNombre());
+                    destination.setTipo(source.getTipo());
+                    destination.setDireccion(source.getDireccion());
+                    destination.setCiudad(source.getCiudad());
+                    destination.setCapacidad(source.getCapacidad());
+                    destination.setLatitud(latitud(source));
+                    destination.setLongitud(longitud(source));
+                    destination.setSectores(sectoresDe(source).stream()
                             .sorted(Comparator.comparing(Sector::getNombre,
                                     Comparator.nullsLast(Comparator.naturalOrder())))
                             .map(sector -> modelMapper.map(sector, SectorResponseDTO.class))
@@ -94,6 +106,18 @@ public class ModelMapperConfig {
                 });
 
         return modelMapper;
+    }
+
+    private static Double latitud(Lugar lugar) {
+        return lugar.getUbicacion() == null ? null : lugar.getUbicacion().getLatitud();
+    }
+
+    private static Double longitud(Lugar lugar) {
+        return lugar.getUbicacion() == null ? null : lugar.getUbicacion().getLongitud();
+    }
+
+    private static java.util.Set<Sector> sectoresDe(Lugar lugar) {
+        return lugar.getSectores() == null ? java.util.Set.of() : lugar.getSectores();
     }
 
     private static Integer cantidadDeFilas(SectorNumerado sector) {

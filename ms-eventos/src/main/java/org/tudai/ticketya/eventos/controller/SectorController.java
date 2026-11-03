@@ -21,7 +21,6 @@ public class SectorController {
     @ResponseStatus(HttpStatus.CREATED)
     @Authorize("hasAnyRole('ADMINISTRADOR')")
     public SectorResponseDTO crearSectorNumerado(
-            @RequestHeader(value = "Rol del Usuario", required = false) String userRole,
             @PathVariable Long lugarId,
             @Valid @RequestBody SectorNumeradoRequestDTO dto) {
         return sectorService.crearSectorNumerado(lugarId, dto);
@@ -31,7 +30,6 @@ public class SectorController {
     @ResponseStatus(HttpStatus.CREATED)
     @Authorize("hasAnyRole('ADMINISTRADOR')")
     public SectorResponseDTO crearSectorNoNumerado(
-            @RequestHeader(value = "Rol del Usuario", required = false) String userRole,
             @PathVariable Long lugarId,
             @Valid @RequestBody SectorNoNumeradoRequestDTO dto) {
         return sectorService.crearSectorNoNumerado(lugarId, dto);

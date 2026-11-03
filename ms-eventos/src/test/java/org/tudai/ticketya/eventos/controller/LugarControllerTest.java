@@ -1,17 +1,11 @@
 package org.tudai.ticketya.eventos.controller;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
-import org.springframework.data.web.config.EnableSpringDataWebSupport.PageSerializationMode;
-import org.springframework.data.web.config.SpringDataJacksonConfiguration.PageModule;
-import org.springframework.data.web.config.SpringDataWebSettings;
 import org.springframework.http.MediaType;
-import org.springframework.http.converter.json.Jackson2ObjectMapperBuilder;
-import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.tudai.ticketya.core.exception.NotFoundException;
@@ -43,13 +37,9 @@ class LugarControllerTest {
     void setUp() {
         lugarService = mock(LugarService.class);
 
-        ObjectMapper objectMapper = Jackson2ObjectMapperBuilder.json().build();
-        objectMapper.registerModule(new PageModule(new SpringDataWebSettings(PageSerializationMode.VIA_DTO)));
-
         mvc = MockMvcBuilders.standaloneSetup(new LugarController(lugarService))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
-                .setMessageConverters(new MappingJackson2HttpMessageConverter(objectMapper))
                 .build();
     }
 
@@ -107,6 +97,33 @@ class LugarControllerTest {
     }
 
     @Test
+    void crearLugar_conTipoEnBlancoYCapacidadNegativa_devuelve400() throws Exception {
+        mvc.perform(post("/api/lugares")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Estadio Municipal",
+                                  "tipo": " ",
+                                  "direccion": "Av. Siempre Viva 742",
+                                  "ciudad": "Rosario",
+                                  "latitud": -32.95,
+                                  "longitud": -60.64,
+                                  "capacidad": -1
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.errors[?(@.field=='tipo')]").exists())
+                .andExpect(jsonPath("$.errors[?(@.field=='capacidad')]").exists());
+    }
+
+    @Test
+    void listarLugares_conSortInvalido_devuelve400() throws Exception {
+        mvc.perform(get("/api/lugares").param("sort", "precio,asc"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Solicitud inválida"));
+    }
+
+    @Test
     void listarLugares_devuelveLaPaginaDelServicio() throws Exception {
         LugarDetalleResponseDTO lugar = LugarDetalleResponseDTO.builder()
                 .id(1L)
@@ -123,7 +140,9 @@ class LugarControllerTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].nombre").value("Estadio Municipal"))
-                .andExpect(jsonPath("$.content[0].ciudad").value("Rosario"));
+                .andExpect(jsonPath("$.content[0].ciudad").value("Rosario"))
+                .andExpect(jsonPath("$.page.number").value(0))
+                .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 
     @Test

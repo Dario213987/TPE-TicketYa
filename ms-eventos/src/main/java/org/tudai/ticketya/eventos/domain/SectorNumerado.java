@@ -25,6 +25,7 @@ public class SectorNumerado extends Sector {
     private Set<Asiento> asientos = new HashSet<>();
 
     public void generarAsientos(Integer filas, Integer asientosPorFila) {
+        this.asientos.clear();
         for (int fila = 1; fila <= filas; fila++) {
             for (int numero = 1; numero <= asientosPorFila; numero++) {
                 this.addAsiento(Asiento.builder().fila(fila).numero(numero).build());
@@ -36,7 +37,7 @@ public class SectorNumerado extends Sector {
         this.asientos.add(asiento);
     }
 
-    public void removeEvento(Asiento asiento) {
+    public void removeAsiento(Asiento asiento) {
         this.asientos.remove(asiento);
     }
 }
