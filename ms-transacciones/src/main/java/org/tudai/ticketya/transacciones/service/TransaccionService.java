@@ -1,10 +1,12 @@
 package org.tudai.ticketya.transacciones.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Example;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
@@ -16,6 +18,8 @@ import org.tudai.ticketya.transacciones.domain.Transaccion;
 import org.tudai.ticketya.transacciones.repository.TransaccionRepository;
 import org.tudai.ticketya.transacciones.service.temp_mock_gateway.PaymentGateway;
 
+import java.util.Optional;
+
 @Service
 @RequiredArgsConstructor
 @Transactional
@@ -25,28 +29,42 @@ public class TransaccionService {
     private final PaymentGateway gateway;
     private final UserContext user;
 
+    @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Transaccion crear(Transaccion pedido) {
+        Long organizadorId = user.userId();
 
-        var existente = repository.findFirstByTicketIdAndClienteIdAndOrganizadorIdOrderById(
-                pedido.getTicketId(), pedido.getClienteId(), user.userId());
+        var existente = find(pedido, organizadorId);
         if (existente.isPresent()) {
-            if (existente.get().getTipo() != pedido.getTipo()) {
-                throw new ConflictException("El ticket " + pedido.getTicketId()
-                        + " ya tiene una transacción de tipo " + existente.get().getTipo());
-            }
             return existente.get();
         }
 
-        pedido.setOrganizadorId(user.userId());
+        pedido.setOrganizadorId(organizadorId);
         pedido.setEstado(EstadoTransaccion.PENDIENTE);
-        repository.saveAndFlush(pedido);
+        try {
+            repository.saveAndFlush(pedido);
+        } catch (DataIntegrityViolationException e) {
+            return find(pedido, organizadorId).orElseThrow();
+        }
 
-        var orden = new PaymentGateway.Orden(pedido.getId(), pedido.getTicketId(), pedido.getClienteId(),
-                pedido.getMonto());
-        var resultado = pedido.getTipo() == TipoTransaccion.DEBITO ? gateway.debitar(orden) : gateway.acreditar(orden);
+        var orden = new PaymentGateway.Orden(pedido.getId(), pedido.getTicketId(),
+                pedido.getClienteId(), pedido.getMonto());
+        PaymentGateway.Resultado resultado;
+        try {
+            resultado = pedido.getTipo() == TipoTransaccion.DEBITO
+                    ? gateway.debitar(orden) : gateway.acreditar(orden);
+        } catch (RuntimeException e) {
+            repository.deleteById(pedido.getId());
+            throw e;
+        }
+
         pedido.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
         pedido.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());
         return repository.saveAndFlush(pedido);
+    }
+
+    private Optional<Transaccion> find(Transaccion p, Long organizadorId) {
+        return repository.findFirstByTicketIdAndClienteIdAndOrganizadorIdAndTipo(
+                p.getTicketId(), p.getClienteId(), organizadorId, p.getTipo());
     }
 
     @Transactional(readOnly = true)
