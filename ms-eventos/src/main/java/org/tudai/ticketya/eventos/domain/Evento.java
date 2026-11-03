@@ -3,7 +3,9 @@ package org.tudai.ticketya.eventos.domain;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.HashSet;
+import java.util.Map;
 import java.util.Set;
 
 @Getter
@@ -37,6 +39,20 @@ public class Evento {
 	@Builder.Default
 	@Setter(AccessLevel.NONE)
 	private Set<Participante> artistas = new HashSet<>();
+
+	@ElementCollection
+	@CollectionTable(
+			name = "evento_sector_precios",
+			joinColumns = @JoinColumn(name = "evento_id")
+	)
+	@MapKeyColumn(name = "sector_id")
+	@Column(name = "precio", nullable = false)
+	@Builder.Default
+	private Map<Long, Double> preciosSectores = new HashMap<>();
+
+	public void definirPrecioSector(Long sectorId, Double precio) {
+		this.preciosSectores.put(sectorId, precio);
+	}
 
 	public void addArtista(Participante part) {
 		this.artistas.add(part);

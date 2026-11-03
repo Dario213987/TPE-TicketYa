@@ -8,10 +8,17 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.tudai.ticketya.core.Role;
+import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.core.exception.BadRequestException;
+import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 
@@ -19,22 +26,27 @@ import java.time.LocalDate;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class EventoControllerTest {
 
     private EventoService eventoService;
+    private UserContext userContext;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         eventoService = mock(EventoService.class);
+        userContext = mock(UserContext.class);
 
-        mvc = MockMvcBuilders.standaloneSetup(new EventoController(eventoService, new ModelMapper()))
+        mvc = MockMvcBuilders.standaloneSetup(new EventoController(eventoService, new ModelMapper(), userContext))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .build();
@@ -67,5 +79,99 @@ class EventoControllerTest {
         mvc.perform(get("/api/eventos").param("sort", "precio,asc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Solicitud inválida"));
+    }
+
+    @Test
+    void definirPrecioSector_devuelve200() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.definirPrecioSector(eq(1L), eq(2L), eq(15000.0), eq(7L), eq(false)))
+                .thenReturn(PrecioEventoSectorResponseDTO.builder()
+                        .eventoId(1L)
+                        .sectorId(2L)
+                        .precio(15000.0)
+                        .build());
+
+        mvc.perform(put("/api/eventos/1/sectores/2/precio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "precio": 15000.0
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventoId").value(1))
+                .andExpect(jsonPath("$.sectorId").value(2))
+                .andExpect(jsonPath("$.precio").value(15000.0));
+    }
+
+    @Test
+    void definirPrecioSector_conPrecioNoPositivo_devuelve400() throws Exception {
+        mvc.perform(put("/api/eventos/1/sectores/2/precio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "precio": 0
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Validación fallida"))
+                .andExpect(jsonPath("$.errors[?(@.field=='precio')]").exists());
+    }
+
+    @Test
+    void definirPrecioSector_conSectorAjenoAlLugar_devuelve400() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.definirPrecioSector(eq(1L), eq(2L), any(Double.class), eq(7L), eq(false)))
+                .thenThrow(new BadRequestException("El sector 2 no pertenece al lugar del evento"));
+
+        mvc.perform(put("/api/eventos/1/sectores/2/precio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "precio": 15000.0
+                                }
+                                """))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El sector 2 no pertenece al lugar del evento"));
+    }
+
+    @Test
+    void definirPrecioSector_enEventoPublicado_devuelve409() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.definirPrecioSector(eq(1L), eq(2L), any(Double.class), eq(7L), eq(false)))
+                .thenThrow(new ConflictException("Solo se pueden definir precios en eventos en estado BORRADOR"));
+
+        mvc.perform(put("/api/eventos/1/sectores/2/precio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "precio": 15000.0
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("Solo se pueden definir precios en eventos en estado BORRADOR"));
+    }
+
+    @Test
+    void definirPrecioSector_enEventoDeOtroOrganizador_devuelve403() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.definirPrecioSector(eq(1L), eq(2L), any(Double.class), eq(7L), eq(false)))
+                .thenThrow(new ForbiddenException("No podés definir precios en un evento que no te pertenece"));
+
+        mvc.perform(put("/api/eventos/1/sectores/2/precio")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "precio": 15000.0
+                                }
+                                """))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.detail")
+                        .value("No podés definir precios en un evento que no te pertenece"));
     }
 }

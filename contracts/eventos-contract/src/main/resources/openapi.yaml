@@ -154,6 +154,45 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/sectores/{sectorId}/precio:
+    put:
+      tags: [eventos]
+      operationId: definirPrecioSector
+      summary: Define el precio de un sector para un evento
+      description: |
+        Solo se pueden definir precios en eventos en estado BORRADOR y sobre sectores
+        que pertenezcan al lugar del evento. El organizador debe ser dueño del evento.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: sectorId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrecioEventoSectorRequest'
+      responses:
+        '200':
+          description: El precio guardado para el evento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrecioEventoSectorResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 components:
   parameters:
     Page:
@@ -288,6 +327,22 @@ components:
         capacidadMaxima: { type: integer }
         filas: { type: integer }
         asientosPorFila: { type: integer }
+    PrecioEventoSectorRequest:
+      type: object
+      required: [precio]
+      properties:
+        precio:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+    PrecioEventoSectorResponse:
+      type: object
+      required: [eventoId, sectorId, precio]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        sectorId: { type: integer, format: int64 }
+        precio: { type: number, format: double }
     PagedLugares:
       type: object
       description: Página en el formato de Spring Data (Page serializada como DTO)
