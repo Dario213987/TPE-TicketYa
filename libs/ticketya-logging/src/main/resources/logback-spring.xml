@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+
+    <springProperty scope="context" name="SERVICE" source="spring.application.name" defaultValue="app"/>
+    <springProperty scope="context" name="TICKETYA_LOG_DIR" source="ticketya.logging.dir" defaultValue="logs"/>
+    <springProperty scope="context" name="TICKETYA_LOG_MAX_FILE_SIZE" source="ticketya.logging.max-file-size" defaultValue="10MB"/>
+    <springProperty scope="context" name="TICKETYA_LOG_MAX_HISTORY" source="ticketya.logging.max-history" defaultValue="7"/>
+    <springProperty scope="context" name="TICKETYA_LOG_TOTAL_SIZE_CAP" source="ticketya.logging.total-size-cap" defaultValue="500MB"/>
+
+    <appender name="CONSOLE" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%-5level) %clr([${SERVICE}]){cyan} %clr([%X{correlationId:-}]){yellow} %clr(%logger{36}){blue} %clr(-){faint} %m%n%wEx</pattern>            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <appender name="JSON_FILE" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${TICKETYA_LOG_DIR}/${SERVICE}/${SERVICE}.json.log</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${TICKETYA_LOG_DIR}/${SERVICE}/${SERVICE}.json.log.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>${TICKETYA_LOG_MAX_FILE_SIZE}</maxFileSize>
+            <maxHistory>${TICKETYA_LOG_MAX_HISTORY}</maxHistory>
+            <totalSizeCap>${TICKETYA_LOG_TOTAL_SIZE_CAP}</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <timeZone>UTC</timeZone>
+            <fieldNames>
+                <timestamp>timestamp</timestamp>
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+                <logger>logger</logger>
+                <thread>thread</thread>
+            </fieldNames>
+            <customFields>{"service":"${SERVICE}"}</customFields>
+        </encoder>
+    </appender>
+
+    <root level="INFO">
+        <appender-ref ref="CONSOLE"/>
+        <appender-ref ref="JSON_FILE"/>
+    </root>
+</configuration>

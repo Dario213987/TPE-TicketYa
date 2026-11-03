@@ -13,6 +13,11 @@
     <name>TicketYa API Gateway</name>
     <dependencies>
         <dependency>
+            <groupId>org.tudai</groupId>
+            <artifactId>ticketya-logging</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.springframework.cloud</groupId>
             <artifactId>spring-cloud-starter-gateway-server-webflux</artifactId>
         </dependency>
@@ -28,6 +33,11 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
             <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>org.tudai</groupId>
+            <artifactId>ticketya-core</artifactId>
+            <version>${project.version}</version>
         </dependency>
     </dependencies>
     <build>

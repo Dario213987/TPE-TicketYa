@@ -14,6 +14,11 @@
     <dependencies>
         <dependency>
             <groupId>org.tudai</groupId>
+            <artifactId>ticketya-logging</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tudai</groupId>
             <artifactId>ticketya-web-starter</artifactId>
             <version>${project.version}</version>
         </dependency>
