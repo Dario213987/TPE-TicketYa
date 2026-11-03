@@ -8,7 +8,7 @@ public interface UserContext {
     boolean isPresent();
 
     /** @throws InvalidUserContextException si falta el usuario */
-    String userId();
+    Long userId();
 
     /** @throws InvalidUserContextException si falta el rol o no es válido */
     Role role();

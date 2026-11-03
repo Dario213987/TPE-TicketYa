@@ -38,7 +38,7 @@ class AuthorizeInterceptorTest {
         }
 
         @Override
-        public String userId() {
+        public Long userId() {
             return delegate().userId();
         }
 

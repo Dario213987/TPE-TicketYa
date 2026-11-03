@@ -55,7 +55,7 @@ class UserContextMvcTest {
         @GetMapping("/test/yo")
         Map<String, String> yo(HttpServletRequest request) {
             UserContext user = new HeaderUserContext(request);
-            return Map.of("userId", user.userId(), "role", user.role().name());
+            return Map.of("userId", user.userId().toString(), "role", user.role().name());
         }
     }
 }
