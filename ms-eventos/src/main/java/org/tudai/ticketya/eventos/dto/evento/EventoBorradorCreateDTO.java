@@ -8,7 +8,7 @@ import lombok.Data;
 import lombok.NoArgsConstructor;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
 
-import java.time.LocalDateTime;
+import java.time.LocalDate;
 import java.util.Set;
 
 @Data
@@ -22,7 +22,7 @@ public class EventoBorradorCreateDTO {
     private String nombre;
 
     @NotBlank(message = "La descripción del evento es obligatoria")
-    @Size(max = 500, message = "La descripción del evento no puede tener más de 500 caracteres")
+    @Size(max = 255, message = "La descripción del evento no puede tener más de 255 caracteres")
     private String descripcion;
 
     @NotNull(message = "El tipo del evento es obligatorio")
@@ -30,16 +30,13 @@ public class EventoBorradorCreateDTO {
 
     @NotNull(message = "La fecha del evento es obligatoria")
     @Future(message = "La fecha del evento debe ser una fecha futura")
-    private LocalDateTime fechaHora;
+    private LocalDate fecha;
 
     @NotNull(message = "El lugar del evento es obligatorio")
     private Long lugarId;
 
-    @NotEmpty(message = "Los participantes son obligatorios")
     @Valid
     private Set<ParticipanteRequestDTO> participantes;
 
-    @NotNull(message = "Debe indicar si es alta demanda")
-    private Boolean altaDemanda;
 }
 

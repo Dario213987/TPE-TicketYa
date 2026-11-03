@@ -1,47 +1,42 @@
-package org.tudai.ticketya.eventos.service;
+package org.tudai.ticketya.eventos.service; // (Ajustá el package si es distinto)
 
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.eventos.domain.*;
+import org.tudai.ticketya.eventos.domain.EstadoEvento;
+import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.domain.Lugar;
+import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.dto.evento.EventoBorradorCreateDTO;
 import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
+import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
-import org.tudai.ticketya.eventos.repository.LugarRepository;
-import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
 import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.LocalTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
 public class EventoService {
 
     private final EventoRepository eventoRepository;
-    private final LugarRepository lugarRepository;
-    private final ParticipanteRepository participanteRepository;
+
+    private final LugarService lugarService;
+    private final ParticipanteService participanteService;
+    private final ModelMapper modelMapper;
 
     @Transactional
     public EventoResponseDTO crearEventoBorrador(EventoBorradorCreateDTO request, Long organizadorId) {
 
-        if (request.getFechaHora().isBefore(LocalDateTime.now())) {
-            throw new BadRequestException("La fecha y hora del evento deben ser en el futuro");
-        }
+        Lugar lugar = lugarService.obtenerPorId(request.getLugarId());
 
-        Lugar lugar = lugarRepository.findById(request.getLugarId())
-                .orElseThrow(() -> new NotFoundException("LUGAR_NO_ENCONTRADO"));
-
-        // SEPARO LA FECHA DE LA HORA PORQUE LA ENTIDAD NO TIENE HORA COMO ATRIBUTO
-        LocalDate fecha = request.getFechaHora().toLocalDate();
-        LocalTime hora = request.getFechaHora().toLocalTime();
+        LocalDate fecha = request.getFecha();
 
         Evento evento = Evento.builder()
                 .nombre(request.getNombre())
@@ -53,10 +48,11 @@ public class EventoService {
                 .estado(EstadoEvento.BORRADOR)
                 .build();
 
-        if (request.getParticipantes() != null) {
-            for (ParticipanteRequestDTO pReq : request.getParticipantes()) {
-                evento.getArtistas().add(resolverParticipante(pReq));
-            }
+        if (request.getParticipantes() != null && !request.getParticipantes().isEmpty()) {
+            Set<Participante> participantesResueltos = request.getParticipantes().stream()
+                    .map(this::resolverParticipante)
+                    .collect(Collectors.toSet());
+            evento.getArtistas().addAll(participantesResueltos);
         }
 
         Evento guardado = eventoRepository.save(evento);
@@ -64,18 +60,12 @@ public class EventoService {
     }
 
     private Participante resolverParticipante(ParticipanteRequestDTO request) {
+
         if (request.getId() != null) {
-            return participanteRepository.findById(request.getId())
-                    .orElseThrow(() -> new NotFoundException("No existe el participante con id " + request.getId()));
+            return participanteService.obtenerPorId(request.getId());
         }
 
-        if (request.getNombre() != null) {
-            return participanteRepository.save(Participante.builder()
-                    .nombre(request.getNombre())
-                    .build());
-        }
-
-        throw new BadRequestException("El participante debe tener un id existente o un nombre nuevo");
+        return participanteService.crearParticipante(request);
     }
 
     private EventoResponseDTO toResponse(Evento evento) {
@@ -84,12 +74,16 @@ public class EventoService {
                 .nombre(evento.getNombre())
                 .descripcion(evento.getDescripcion())
                 .tipo(evento.getTipo())
-                .estado(evento.getEstado().name())
+                .estado(evento.getEstado())
                 .organizadorId(evento.getOrganizadorId())
-                .lugarId(evento.getLugar().getId())
+                .lugar(mapearLugar(evento.getLugar()))
                 .fecha(evento.getFecha())
                 .participantes(toParticipanteResponses(evento.getArtistas()))
                 .build();
+    }
+
+    public LugarResponseDTO mapearLugar(Lugar lugar) {
+        return modelMapper.map(lugar, LugarResponseDTO.class);
     }
 
     private List<ParticipanteResponseDTO> toParticipanteResponses(Set<Participante> participantes) {

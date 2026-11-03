@@ -1,6 +1,8 @@
 package org.tudai.ticketya.eventos.dto.participante;
 
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import jakarta.validation.constraints.AssertTrue;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -14,9 +16,17 @@ import lombok.Setter;
 @Builder
 public class ParticipanteRequestDTO {
 
-    // Se usa si el participante ya existe en la base de datos
     private Long id;
-
-    // Se usa si es un participante nuevo que hay que crear
     private String nombre;
+
+    @JsonIgnore
+    @AssertTrue(message = "Debe enviar el ID (participante existente) o el nombre (participante nuevo)")
+    public boolean isValido() {
+
+        if (this.id != null) {
+            return true;
+        }
+
+        return this.nombre != null && !this.nombre.trim().isEmpty();
+    }
 }

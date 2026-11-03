@@ -4,6 +4,7 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
@@ -21,5 +22,11 @@ public class LugarService {
         Lugar lugar = modelMapper.map(dto, Lugar.class);
         Lugar guardado = lugarRepository.save(lugar);
         return modelMapper.map(guardado, LugarResponseDTO.class);
+    }
+
+    @Transactional(readOnly = true)
+    public Lugar obtenerPorId(Long id) {
+        return lugarRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("No existe un lugar con el id " + id));
     }
 }

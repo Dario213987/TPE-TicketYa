@@ -4,6 +4,8 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import org.tudai.ticketya.eventos.domain.EstadoEvento;
+import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
@@ -20,9 +22,9 @@ public class EventoResponseDTO {
     private String nombre;
     private String descripcion;
     private String tipo;
-    private String estado;
+    private EstadoEvento estado;
     private Long organizadorId;
-    private Long lugarId;
+    private LugarResponseDTO lugar;
     private LocalDate fecha;
     private Boolean altaDemanda;
     private Integer limiteEntradasPorCliente;
