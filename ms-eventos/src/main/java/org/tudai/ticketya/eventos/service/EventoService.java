@@ -1,6 +1,7 @@
 package org.tudai.ticketya.eventos.service;
 
 import feign.RetryableException;
+import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -20,7 +21,7 @@ import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
-import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 
@@ -37,25 +38,47 @@ public class EventoService {
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
 
-    @Transactional
-    public EventoPublicadoDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
 
-        //Busco el evento existente como borrador
+    /**
+     * Publica un evento que está en estado BORRADOR.
+     * <p>
+     * Valida que el evento exista, que el usuario tenga permiso (organizador dueño o administrador),
+     * que la fecha sea posterior a hoy(momento en que se solicita el cambio),
+     * que tenga un lugar con sectores y que todos los sectores
+     * tengan precio. Si las validaciones pasan, crea el inventario en ms-tickets y recién después
+     * cambia el estado a PUBLICADO.
+     * <p>
+     * Es idempotente: si el evento ya estaba publicado, devuelve su información sin volver
+     * a llamar a ms-tickets.
+     *
+     * @param idEvento       id del evento a publicar
+     * @param organizadorId  id del usuario que realiza la solicitud
+     * @param esAdmin        {@code true} si el usuario es administrador (puede publicar cualquier evento)
+     *
+     * @return DTO con la información del evento publicado
+     *
+     * @throws NotFoundException           si el evento no existe
+     * @throws ForbiddenException          si el usuario no es admin y el evento no le pertenece
+     * @throws ConflictException           si el evento no está en estado BORRADOR
+     * @throws BadRequestException         si la fecha no es posterior a hoy, o si el evento no tiene
+     *                                     lugar o el lugar no tiene sectores
+     * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
+     * @throws RemoteServiceException      si ms-tickets no está disponible
+     */
+    @Transactional
+    public EventoResponseDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
         Evento evento = eventoRepository.findById(idEvento)
                 .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
 
-        //Verifico que tenga el permiso para publicar evento
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
             throw new ForbiddenException("No podés publicar un evento que no te pertenece");
         }
 
-        //Si el evento ya esta publicado, lo retorno (no lo creo de nuevo)
         EstadoEvento estadoPublicado = estadoPublicado();
         if (evento.getEstado() == estadoPublicado) {
-            return toPublicadoDTO(evento);
+            return toResponseDTO(evento);
         }
 
-        //Verifico que si este en borrador
         if (evento.getEstado() != EstadoEvento.BORRADOR) {
             throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
         }
@@ -67,9 +90,6 @@ public class EventoService {
         if (evento.getLugar() == null) {
             throw new BadRequestException("El evento no tiene un lugar asociado");
         }
-
-        //Verificacion de errores de sector. Si algun sector no tiene un precio, se crea dentro de una exception
-        //especifica.
 
         Set<Sector> sectores = evento.getLugar().getSectores();
         if (sectores == null || sectores.isEmpty()) {
@@ -83,7 +103,6 @@ public class EventoService {
                         sector.getId(), sector.getNombre()))
                 .toList();
 
-        //Si la lista de los sectores con error no esta vacia, tira la exepcion.
         if (!faltantes.isEmpty()) {
             throw new SectoresSinPrecioException(faltantes);
         }
@@ -96,9 +115,63 @@ public class EventoService {
 
         evento.setEstado(estadoPublicado);
         Evento guardado = eventoRepository.save(evento);
-        return toPublicadoDTO(guardado);
+        return toResponseDTO(guardado);
     }
 
+    /**
+     * Cancela un evento publicado. Solo puede ser realizado por un administrador.
+     * <p>
+     * Valida que el usuario sea administrador, que el evento exista y que esté en estado
+     * PUBLICADO. Si las validaciones pasan, cambia el estado a CANCELADO.
+     * <p>
+     * Es idempotente: si el evento ya estaba cancelado, devuelve su información
+     * sin volver a modificarlo.
+     *
+     * @param id      id del evento a cancelar
+     * @param esAdmin {@code true} si el usuario es administrador
+     *
+     * @return DTO con la información del evento cancelado
+     *
+     * @throws ForbiddenException si el usuario no es administrador
+     * @throws NotFoundException  si el evento no existe
+     * @throws ConflictException  si el evento no está en estado PUBLICADO ni CANCELADO
+     */
+    @Transactional
+    public EventoResponseDTO cancelarEvento(long id, boolean esAdmin) {
+
+        if (!esAdmin) {
+            throw new ForbiddenException("Solo administradores pueden cancelar un evento");
+        }
+
+        Evento evento = eventoRepository.findById(id).orElseThrow(
+                () -> {
+                   return new NotFoundException("No se encontró el evento solicitado");
+                });
+
+        if (evento.getEstado() == EstadoEvento.CANCELADO) {
+            return toResponseDTO(evento);
+        }
+
+        if(evento.getEstado() != EstadoEvento.PUBLICADO){
+            throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
+        }
+
+        evento.setEstado(EstadoEvento.CANCELADO);
+        evento = eventoRepository.save(evento);
+
+        //TO DO : REINTEGRO MASIVO
+
+        return toResponseDTO(evento);
+
+    }
+
+
+    /***
+     * Metodo auxiliar.
+     * PUBLICADO actualmente no esta soportado en el enum, es para que compile. A eliminar en
+     * proximos task.
+     *
+     */
     private EstadoEvento estadoPublicado() {
         try {
             return EstadoEvento.valueOf("PUBLICADO");
@@ -108,6 +181,15 @@ public class EventoService {
         }
     }
 
+    /**
+     * Arma el request de inventario para ms-tickets a partir de los sectores del evento.
+     * Los sectores se ordenan por id para que el payload sea determinista.
+     *
+     * @param evento   evento que se está publicando
+     * @param sectores sectores del lugar del evento
+     *
+     * @return request listo para enviar a ms-tickets
+     */
     private PublicarEventoRequest buildInventarioRequest(Evento evento, Set<Sector> sectores) {
         List<SectorDisponibilidadRequest> items = sectores.stream()
                 .sorted(Comparator.comparing(Sector::getId))
@@ -120,6 +202,17 @@ public class EventoService {
                 .build();
     }
 
+    /**
+     * Convierte un Sector en el request que describe su inventario.
+     * Si es numerado, incluye los asientos ordenados por fila y número;
+     * si no es numerado, incluye la capacidad máxima.
+     *
+     * @param sector sector a convertir
+     *
+     * @return request con el inventario del sector
+     *
+     * @throws IllegalStateException si el tipo de sector no está soportado
+     */
     private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector) {
         SectorDisponibilidadRequest.SectorDisponibilidadRequestBuilder builder =
                 SectorDisponibilidadRequest.builder().sectorId(sector.getId());
@@ -145,8 +238,17 @@ public class EventoService {
         return builder.build();
     }
 
-    private EventoPublicadoDTO toPublicadoDTO(Evento evento) {
-        return EventoPublicadoDTO.builder()
+
+
+    /**
+     * Convierte un Evento en el DTO de respuesta con su id, nombre y estado.
+     *
+     * @param evento evento a convertir
+     *
+     * @return DTO con la información básica del evento
+     */
+    private EventoResponseDTO toResponseDTO(Evento evento) {
+        return EventoResponseDTO.builder()
                 .id(evento.getId())
                 .nombre(evento.getNombre())
                 .estado(evento.getEstado().name())

@@ -9,7 +9,7 @@ import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 @RestController
@@ -22,7 +22,7 @@ public class EventoController {
 
     @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
     @PutMapping("/{id}/publicar")
-    public EventoPublicadoDTO publicarEvento(@PathVariable Long id) {
+    public EventoResponseDTO publicarEvento(@PathVariable Long id) {
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.publicarEvento(id, organizadorIdActual(), esAdmin);
     }
@@ -34,5 +34,12 @@ public class EventoController {
         } catch (NumberFormatException e) {
             throw new BadRequestException("El header X-User-Id debe ser un número");
         }
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/cancelar")
+    public EventoResponseDTO suspenderEvento(@PathVariable long id){
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.cancelarEvento(id, esAdmin);
     }
 }
