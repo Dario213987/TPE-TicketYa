@@ -66,7 +66,7 @@ public class EventoService {
         }
 
         //Por defencto siempre ordena por fecha
-        return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable, orden));
+        return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
     }
 
 
@@ -99,19 +99,13 @@ public class EventoService {
 
     /**
      * Arma el {@code Pageable} para ordenar por fecha ascendente, con el id como desempate
-     * para que la paginación sea estable.
-     * Si no se pidió un orden explícito y el {@code Pageable} ya trae uno, lo respeta.
+     * para que la paginación sea estable. Ignora el orden que traiga el {@code Pageable}.
      *
      * @param pageable paginación recibida
-     * @param orden    orden resuelto (puede ser {@code null})
      *
-     * @return {@code Pageable} con el orden aplicado
+     * @return {@code Pageable} con orden por fecha e id
      */
-    private Pageable aplicarOrdenFecha(Pageable pageable, OrdenEvento orden) {
-        if (orden == null && pageable.getSort().isSorted()) {
-            return pageable;
-        }
-
+    private Pageable aplicarOrdenFecha(Pageable pageable) {
         Sort sort = Sort.by(Sort.Direction.ASC, "fecha")
                 .and(Sort.by(Sort.Direction.ASC, "id"));
 
