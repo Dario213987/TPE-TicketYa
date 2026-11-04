@@ -23,11 +23,7 @@ import lombok.*;
 public class DisponibilidadAsiento {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.SEQUENCE, generator = "disponibilidad_asiento_seq")
-    @SequenceGenerator(
-            name = "disponibilidad_asiento_seq",
-            sequenceName = "disponibilidad_asiento_seq",
-            allocationSize = 1000)
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
@@ -36,7 +32,7 @@ public class DisponibilidadAsiento {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "sector_id", nullable = false)
-    private DisponibilidadNumerada disponibilidad;
+    private DisponibilidadSector sector;
 
     @Column(name = "fila", nullable = false)
     private Integer fila;
@@ -45,7 +41,7 @@ public class DisponibilidadAsiento {
     private Integer numero;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "estado", nullable = false)
+    @Column(name = "estado", nullable = false, length = 20)
     @Builder.Default
     private EstadoDisponibilidad estado = EstadoDisponibilidad.LIBRE;
 }

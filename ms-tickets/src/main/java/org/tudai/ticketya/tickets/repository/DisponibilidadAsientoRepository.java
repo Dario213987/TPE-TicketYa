@@ -4,12 +4,15 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.tudai.ticketya.tickets.domain.DisponibilidadAsiento;
 import org.tudai.ticketya.tickets.domain.EstadoDisponibilidad;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface DisponibilidadAsientoRepository extends JpaRepository<DisponibilidadAsiento, Long> {
 
-    Optional<DisponibilidadAsiento> findByDisponibilidad_IdAndFilaAndNumero(
-            Long disponibilidadId, Integer fila, Integer numero);
+    Optional<DisponibilidadAsiento> findBySector_IdAndFilaAndNumero(Long sectorId, Integer fila, Integer numero);
 
-    long countByDisponibilidad_IdAndEstado(Long disponibilidadId, EstadoDisponibilidad estado);
+    long countBySector_IdAndEstado(Long sectorId, EstadoDisponibilidad estado);
+    List<DisponibilidadAsiento> findBySector_IdOrderByFilaAscNumeroAsc(Long sectorId);
+    List<DisponibilidadAsiento> findBySector_IdAndEstadoOrderByFilaAscNumeroAsc(
+            Long sectorId, EstadoDisponibilidad estado);
 }

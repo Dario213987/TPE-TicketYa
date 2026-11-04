@@ -2,20 +2,23 @@ package org.tudai.ticketya.tickets.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
-import org.tudai.ticketya.persistence.Auditable;
+import java.time.Instant;
 
 
 @Entity
 @Table(
         name = "tickets",
-        uniqueConstraints = @UniqueConstraint(name = "uq_tickets_codigo_qr", columnNames = "codigo_qr")
+        uniqueConstraints = @UniqueConstraint(name = "uq_tickets_codigo_qr", columnNames = "codigo_qr"),
+        indexes = @Index(
+                name = "idx_tickets_evento_cliente_estado",
+                columnList = "evento_id, cliente_id, estado_ticket")
 )
 @Getter
 @Setter
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class Ticket extends Auditable {
+public class Ticket {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -25,11 +28,20 @@ public class Ticket extends Auditable {
     private String codigo_qr;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "estado_ticket", nullable = false)
+    @Column(name = "estado_ticket", nullable = false, length = 20)
     @Builder.Default
     private EstadoTicket estadoTicket = EstadoTicket.EMITIDO;
 
     private Double precio;
+
+    @Column(name = "fecha_emision", nullable = false, updatable = false)
+    private Instant fechaEmision;
+
+    @Column(name = "cliente_id")
+    private Long clienteId;
+
+    @Column(name = "expira_el")
+    private Instant expiraEl;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "evento_id", nullable = false)
@@ -37,9 +49,19 @@ public class Ticket extends Auditable {
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "sector_id", nullable = false)
-    private Disponibilidad disponibilidad;
+    private DisponibilidadSector sector;
 
     @OneToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "asiento_id", unique = true)
     private DisponibilidadAsiento asiento;
+
+    @PrePersist
+    void prePersist() {
+        if (this.fechaEmision == null) {
+            this.fechaEmision = Instant.now();
+        }
+        if (this.estadoTicket == null) {
+            this.estadoTicket = EstadoTicket.EMITIDO;
+        }
+    }
 }

@@ -6,7 +6,9 @@ import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.DisponibilidadAsiento;
+import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoDisponibilidad;
 import org.tudai.ticketya.tickets.domain.TipoSector;
@@ -18,7 +20,9 @@ import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 
+import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -48,7 +52,8 @@ class DisponibilidadServiceTest {
     @BeforeEach
     void setUp() {
         service = new DisponibilidadService(
-                eventoRepository, sectorRepository, asientoRepository, asientoBatchRepository);
+                eventoRepository, sectorRepository, asientoRepository, asientoBatchRepository,
+                new ReservaProperties());
     }
 
     @Test
@@ -137,6 +142,21 @@ class DisponibilidadServiceTest {
 
         verify(asientoRepository).findBySector_IdOrderByFilaAscNumeroAsc(10L);
         verify(asientoRepository, never()).findBySector_IdOrderByFilaAscNumeroAsc(11L);
+    }
+
+    @Test
+    void consultar_sinLimiteConfigurado_devuelveElValorPorDefecto() {
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 500, 320);
+        when(sectorRepository.findByEvento_EventoIdOrderByIdAsc(7L)).thenReturn(List.of(sector));
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(
+                DisponibilidadEvento.builder()
+                        .eventoId(7L)
+                        .creadoEl(Instant.now())
+                        .build()));
+
+        DisponibilidadEventoResponseDTO respuesta = service.consultar(7L);
+
+        assertThat(respuesta.getLimiteEntradasPorCliente()).isEqualTo(4);
     }
 
     private DisponibilidadSector sector(Long id, Long sectorIdExterno, TipoSector tipo,

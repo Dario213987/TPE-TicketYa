@@ -23,16 +23,19 @@ public class DisponibilidadEvento {
     @Column(name = "creado_el", nullable = false, updatable = false)
     private Instant creadoEl;
 
+    @Column(name = "limite_entradas_por_cliente")
+    private Integer limiteEntradasPorCliente;
+
     @OneToMany(mappedBy = "evento", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
-    private Set<Disponibilidad> sectores = new HashSet<>();
+    private Set<DisponibilidadSector> sectores = new HashSet<>();
 
-    public void addSector(Disponibilidad sector) {
+    public void addSector(DisponibilidadSector sector) {
         sector.setEvento(this);
         this.sectores.add(sector);
     }
 
-    public void removeSector(Disponibilidad sector) {
+    public void removeSector(DisponibilidadSector sector) {
         sector.setEvento(null);
         this.sectores.remove(sector);
     }
