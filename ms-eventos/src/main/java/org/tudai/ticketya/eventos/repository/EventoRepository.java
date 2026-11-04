@@ -11,7 +11,7 @@ import org.tudai.ticketya.eventos.domain.Evento;
 import java.util.Collection;
 
 @Repository
-public interface EventoRepository extends JpaRepository<Evento, Long>, JpaSpecificationExecutor<Evento> {
+public interface EventoRepository extends JpaRepository<Evento, Long>, JpaSpecificationExecutor<Evento>, EventoRepositoryCustom {
 
     Page<Evento> findByEstadoIn(Collection<EstadoEvento> estados, Pageable pageable);
 }
