@@ -23,6 +23,10 @@
             <artifactId>spring-web</artifactId>
         </dependency>
         <dependency>
+            <groupId>org.springframework.data</groupId>
+            <artifactId>spring-data-commons</artifactId>
+        </dependency>
+        <dependency>
             <groupId>com.fasterxml.jackson.core</groupId>
             <artifactId>jackson-databind</artifactId>
         </dependency>
@@ -40,9 +44,7 @@
                 <version>${openapi-generator.version}</version>
                 <executions>
                     <execution>
-                        <goals>
-                            <goal>generate</goal>
-                        </goals>
+                        <goals><goal>generate</goal></goals>
                         <configuration>
                             <inputSpec>${project.basedir}/src/main/resources/openapi.yaml</inputSpec>
                             <generatorName>spring</generatorName>
@@ -53,6 +55,9 @@
                             <supportingFilesToGenerate>ClientConfiguration.java</supportingFilesToGenerate>
                             <generateApiTests>false</generateApiTests>
                             <generateModelTests>false</generateModelTests>
+                            <importMappings>
+                                <importMapping>PagedModel=org.springframework.data.web.PagedModel</importMapping>
+                            </importMappings>
                             <configOptions>
                                 <title>ms-transacciones</title>
                                 <configPackage>org.tudai.ticketya.contract.transacciones.configuration</configPackage>
