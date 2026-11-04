@@ -20,5 +20,6 @@
 
     <modules>
         <module>transacciones-contract</module>
+        <module>devoluciones-contract</module>
     </modules>
 </project>
