@@ -1,9 +1,11 @@
 package org.tudai.ticketya.eventos.service;
 
+import feign.FeignException;
 import feign.RetryableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
+import org.mockito.InOrder;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.Spy;
@@ -47,6 +49,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -643,6 +647,115 @@ class EventoServiceTest {
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.BORRADOR);
         verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void cancelarEvento_publicadoComoAdmin_loCancelaYBloqueaTickets() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        EventoPublicadoDTO response = eventoService.cancelarEvento(1L, true);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Festival");
+        assertThat(response.getEstado()).isEqualTo("CANCELADO");
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
+
+        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        orden.verify(eventoRepository).save(evento);
+        orden.verify(ticketsClient).cancelarEvento(1L);
+    }
+
+    @Test
+    void cancelarEvento_sinSerAdmin_lanzaForbiddenYNoTocaNada() {
+        assertThatThrownBy(() -> eventoService.cancelarEvento(1L, false))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessage("Solo administradores pueden cancelar un evento");
+        verifyNoInteractions(eventoRepository, ticketsClient);
+    }
+
+    @Test
+    void cancelarEvento_conEventoInexistente_lanzaNotFoundYNoAvisaATickets() {
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(99L, true))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("No se encontró el evento solicitado");
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void cancelarEvento_yaCancelado_esIdempotenteYNoAvisaATickets() {
+        Evento evento = eventoCancelable(EstadoEvento.CANCELADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        EventoPublicadoDTO response = eventoService.cancelarEvento(1L, true);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getEstado()).isEqualTo("CANCELADO");
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void cancelarEvento_enEstadoNoCancelable_lanzaConflictYNoAvisaATickets() {
+        for (EstadoEvento estado : List.of(
+                EstadoEvento.BORRADOR,
+                EstadoEvento.CONFIRMADO,
+                EstadoEvento.FINALIZADO,
+                EstadoEvento.AGOTADO)) {
+            Evento evento = eventoCancelable(estado);
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+            assertThatThrownBy(() -> eventoService.cancelarEvento(1L, true))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("El evento debe ser publicado para poder ser cancelado");
+        }
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void cancelarEvento_conMsTicketsNoDisponible_lanzaRemoteServiceException() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+        doThrow(mock(RetryableException.class)).when(ticketsClient).cancelarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(1L, true))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-tickets no disponible")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
+
+        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        orden.verify(eventoRepository).save(evento);
+        orden.verify(ticketsClient).cancelarEvento(1L);
+    }
+
+    @Test
+    void cancelarEvento_cuandoMsTicketsRespondeConError_propagaElStatus() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+        FeignException error = mock(FeignException.class);
+        when(error.status()).thenReturn(409);
+        doThrow(error).when(ticketsClient).cancelarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(1L, true))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-tickets respondió con error")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(409));
+    }
+
+    private Evento eventoCancelable(EstadoEvento estado) {
+        return Evento.builder()
+                .id(1L)
+                .nombre("Festival")
+                .estado(estado)
+                .organizadorId(7L)
+                .build();
     }
 
     private Evento eventoPublicable() {
