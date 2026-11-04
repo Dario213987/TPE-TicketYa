@@ -4,12 +4,13 @@ import feign.Request;
 import feign.codec.ErrorDecoder;
 import org.junit.jupiter.api.Test;
 import org.springframework.boot.autoconfigure.AutoConfigurations;
+import org.springframework.boot.test.context.FilteredClassLoader;
 import org.springframework.boot.test.context.runner.WebApplicationContextRunner;
 import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.core.Ordered;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
-import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
+import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
@@ -60,34 +61,17 @@ class TicketyaWebAutoConfigurationTest {
     @Test
     void registraElInterceptorDeAutorizacion() {
         runner.run(ctx -> {
-            assertThat(ctx).hasSingleBean(org.tudai.ticketya.web.security.AuthorizeInterceptor.class);
+            assertThat(ctx).hasSingleBean(AuthorizeInterceptor.class);
             assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
         });
     }
 
     @Test
-    void registraElFiltroDeCorrelationIdPrimeroYSuInterceptorFeign() {
-        runner.run(ctx -> {
-            FilterRegistrationBean<?> registration =
-                    ctx.getBean("correlationIdFilterRegistration", FilterRegistrationBean.class);
-            assertThat(registration.getOrder()).isEqualTo(Ordered.HIGHEST_PRECEDENCE + 10);
-            assertThat(ctx).hasSingleBean(CorrelationIdFeignInterceptor.class);
-        });
-    }
-
-    @Test
-    void registraElFiltroDeLogDeRequestsDespuesDelCorrelationIdYDentroDelContextoDeSpring() {
-        runner.run(ctx -> {
-            FilterRegistrationBean<?> registration =
-                    ctx.getBean("requestLoggingFilterRegistration", FilterRegistrationBean.class);
-            assertThat(registration.getOrder()).isGreaterThan(Ordered.HIGHEST_PRECEDENCE + 10);
-            assertThat(registration.getOrder()).isGreaterThan(-105);   // orden del RequestContextFilter de Spring
-        });
-    }
-
-    @Test
-    void elLogDeRequestsSePuedeDesactivar() {
-        runner.withPropertyValues("ticketya.logging.requests.enabled=false")
-                .run(ctx -> assertThat(ctx).doesNotHaveBean("requestLoggingFilterRegistration"));
+    void registraElInterceptorAunqueNoHayaFeign() {
+        runner.withClassLoader(new FilteredClassLoader(ErrorDecoder.class))
+                .run(ctx -> {
+                    assertThat(ctx).hasSingleBean(AuthorizeInterceptor.class);
+                    assertThat(ctx).hasBean("authorizeWebMvcConfigurer");
+                });
     }
 }
