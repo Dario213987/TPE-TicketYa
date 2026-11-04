@@ -23,7 +23,7 @@ public class EventoController {
 
     @GetMapping
     public PagedModel<EventoResumenDTO> listarPublicados(
-            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado
+            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado y ordenamiento
             @ModelAttribute EventoFiltroRequestDTO filtro,
             @PageableDefault(size = 20) Pageable pageable) {
         return new PagedModel<>(eventoService.listarPublicados(filtro, pageable)
