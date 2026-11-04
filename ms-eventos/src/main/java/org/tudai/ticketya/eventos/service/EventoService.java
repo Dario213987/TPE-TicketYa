@@ -3,6 +3,9 @@ package org.tudai.ticketya.eventos.service;
 import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -20,18 +23,25 @@ import org.tudai.ticketya.eventos.client.dto.TipoSectorRequest;
 import org.tudai.ticketya.eventos.domain.Asiento;
 import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
+import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
 import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
+import org.tudai.ticketya.eventos.dto.evento.EventoUpdateDTO;
+import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
+import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @EnableScheduling
 @Service
@@ -40,6 +50,13 @@ public class EventoService {
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
+    private final LugarRepository lugarRepository;
+    private final ModelMapper modelMapper;
+
+    @Transactional(readOnly = true)
+    public Page<Evento> listarPublicados(Pageable pageable) {
+        return eventoRepository.findByEstadoIn(EstadoEvento.VISIBLES, pageable);
+    }
 
 
     /**
@@ -54,34 +71,35 @@ public class EventoService {
      * Es idempotente: si el evento ya estaba publicado, devuelve su información sin volver
      * a llamar a ms-tickets.
      *
-     * @param id id del evento a publicar
-     * @param organizadorId id del usuario que realiza la solicitud
-     * @param esAdmin {@code true} si el usuario es administrador (puede publicar cualquier evento)
+     * @param idEvento       id del evento a publicar
+     * @param organizadorId  id del usuario que realiza la solicitud
+     * @param esAdmin        {@code true} si el usuario es administrador (puede publicar cualquier evento)
      *
      * @return DTO con la información del evento publicado
      *
-     * @throws NotFoundException si el evento no existe
-     * @throws ForbiddenException si el usuario no es admin y el evento no le pertenece
-     * @throws ConflictException si el evento no está en estado BORRADOR
-     * @throws BadRequestException si la fecha no es posterior a hoy, o si el evento no tiene
+     * @throws NotFoundException           si el evento no existe
+     * @throws ForbiddenException          si el usuario no es admin y el evento no le pertenece
+     * @throws ConflictException           si el evento no está en estado BORRADOR
+     * @throws BadRequestException         si la fecha no es posterior a hoy, o si el evento no tiene
      *                                     lugar o el lugar no tiene sectores
-     * @throws SectoresSinPrecioException si algún sector no tiene precio asignado
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
+     * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
     @Transactional
-    public EventoResponseDTO publicarEvento(Long id, Long organizadorId, boolean esAdmin) {
-
-        Evento evento = buscarEvento(id);
+    public EventoPublicadoDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
+        Evento evento = eventoRepository.findById(idEvento)
+                .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
 
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
             throw new ForbiddenException("No podés publicar un evento que no te pertenece");
         }
 
-        if(estaEn(evento, EstadoEvento.PUBLICADO)){
-            return toResponseDTO(evento);
+        EstadoEvento estadoPublicado = estadoPublicado();
+        if (evento.getEstado() == estadoPublicado) {
+            return toPublicadoDTO(evento);
         }
 
-        if (!estaEn(evento, EstadoEvento.BORRADOR)) {
+        if (evento.getEstado() != EstadoEvento.BORRADOR) {
             throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
         }
 
@@ -98,8 +116,9 @@ public class EventoService {
             throw new BadRequestException("El lugar del evento no tiene sectores");
         }
 
+        Map<Long, Double> preciosSectores = evento.getPreciosSectores();
         List<SectoresSinPrecioException.SectorFaltante> faltantes = sectores.stream()
-                .filter(sector -> sector.getPrecio() == null)
+                .filter(sector -> preciosSectores.get(sector.getId()) == null)
                 .sorted(Comparator.comparing(Sector::getId))
                 .map(sector -> new SectoresSinPrecioException.SectorFaltante(
                         sector.getId(), sector.getNombre()))
@@ -121,7 +140,7 @@ public class EventoService {
 
         evento.setEstado(estadoPublicado);
         Evento guardado = eventoRepository.save(evento);
-        return toResponseDTO(guardado);
+        return toPublicadoDTO(guardado);
     }
 
     /**
@@ -134,30 +153,33 @@ public class EventoService {
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
      *
-     * @param id  id del evento a cancelar
+     * @param id      id del evento a cancelar
      * @param esAdmin {@code true} si el usuario es administrador
      *
      * @return DTO con la información del evento cancelado
      *
-     * @throws ForbiddenException si el usuario no es administrador
-     * @throws NotFoundException si el evento no existe
-     * @throws ConflictException si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws ForbiddenException     si el usuario no es administrador
+     * @throws NotFoundException      si el evento no existe
+     * @throws ConflictException      si el evento no está en estado PUBLICADO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
-    public EventoResponseDTO cancelarEvento(Long id, boolean esAdmin) {
+    public EventoPublicadoDTO cancelarEvento(Long id, boolean esAdmin) {
 
         if (!esAdmin) {
             throw new ForbiddenException("Solo administradores pueden cancelar un evento");
         }
 
-        Evento evento = buscarEvento(id);
+        Evento evento = eventoRepository.findById(id).orElseThrow(
+                () -> {
+                   return new NotFoundException("No se encontró el evento solicitado");
+                });
 
-        if (estaEn(evento, EstadoEvento.CANCELADO)){
-            return toResponseDTO(evento);
+        if (evento.getEstado() == EstadoEvento.CANCELADO) {
+            return toPublicadoDTO(evento);
         }
 
-        if(!estaEn(evento, EstadoEvento.PUBLICADO)){
+        if(evento.getEstado() != EstadoEvento.PUBLICADO){
             throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
         }
 
@@ -176,7 +198,8 @@ public class EventoService {
 
         //TO DO : REINTEGRO MASIVO
 
-        return toResponseDTO(evento);
+        return toPublicadoDTO(evento);
+
     }
 
     /**
@@ -272,24 +295,161 @@ public class EventoService {
         return toResponseDTO(evento);
     }
 
+    @Transactional
+    public EventoResponseDTO actualizarEvento(Long eventoId, EventoUpdateDTO dto, Long organizadorId,
+                                              boolean esAdmin) {
+        Evento evento = buscarEvento(eventoId);
+        verificarPropiedad(evento, organizadorId, esAdmin, "modificar");
 
-    /**
-     * Busca un evento en el repository por su id.
-     *
-     * @param id id del evento
-     *
-     * @return evento encontrado
-     *
-     * @throws NotFoundException en caso de que no exista el evento
-     * */
-    private Evento buscarEvento(Long id){
+        validarCamposEstructurales(evento, dto);
+        aplicarCambios(evento, dto);
 
-        return eventoRepository.findById(id).orElseThrow(
-                () -> {
-                    return new NotFoundException("No se encontro el evento");
-                });
+        return toResponse(eventoRepository.save(evento));
     }
 
+    @Transactional
+    public void eliminarEvento(Long eventoId, Long organizadorId, boolean esAdmin) {
+        Evento evento = buscarEvento(eventoId);
+        verificarPropiedad(evento, organizadorId, esAdmin, "eliminar");
+
+        if (evento.getEstado() != EstadoEvento.BORRADOR) {
+            throw new ConflictException("Solo se pueden eliminar eventos en estado BORRADOR");
+        }
+
+        eventoRepository.delete(evento);
+    }
+
+    private Evento buscarEvento(Long eventoId) {
+        return eventoRepository.findById(eventoId)
+                .orElseThrow(() -> new NotFoundException("Evento no encontrado con id: " + eventoId));
+    }
+
+    private void verificarPropiedad(Evento evento, Long organizadorId, boolean esAdmin, String accion) {
+        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
+            throw new ForbiddenException("No podés " + accion + " un evento que no te pertenece");
+        }
+    }
+
+    private void validarCamposEstructurales(Evento evento, EventoUpdateDTO dto) {
+        boolean esBorrador = evento.getEstado() == EstadoEvento.BORRADOR;
+
+        if (dto.getFecha() != null && !Objects.equals(dto.getFecha(), evento.getFecha())) {
+            if (!esBorrador) {
+                throw new ConflictException(
+                        "No se puede modificar la fecha de un evento ya publicado. Cancelalo o reprogramalo.");
+            }
+            if (!dto.getFecha().isAfter(LocalDate.now())) {
+                throw new BadRequestException("La fecha del evento debe ser posterior a hoy");
+            }
+        }
+
+        if (dto.getLugarId() != null && (evento.getLugar() == null
+                || !Objects.equals(dto.getLugarId(), evento.getLugar().getId()))) {
+            if (!esBorrador) {
+                throw new ConflictException(
+                        "No se puede modificar el lugar de un evento ya publicado. Cancelalo o reprogramalo.");
+            }
+        }
+
+        if (dto.getSectores() != null && !Objects.equals(dto.getSectores(), sectoresDelEvento(evento))) {
+            if (!esBorrador) {
+                throw new ConflictException(
+                        "No se pueden modificar los sectores de un evento ya publicado. Cancelalo o reprogramalo.");
+            }
+            throw new BadRequestException(
+                    "Los sectores de un evento se administran desde el lugar asociado");
+        }
+    }
+
+    private void aplicarCambios(Evento evento, EventoUpdateDTO dto) {
+        if (dto.getNombre() != null) {
+            if (dto.getNombre().isBlank()) {
+                throw new BadRequestException("El nombre del evento no puede estar vacío");
+            }
+            evento.setNombre(dto.getNombre().trim());
+        }
+
+        if (dto.getDescripcion() != null) {
+            if (dto.getDescripcion().isBlank()) {
+                throw new BadRequestException("La descripción del evento no puede estar vacía");
+            }
+            evento.setDescripcion(dto.getDescripcion().trim());
+        }
+
+        if (dto.getTipo() != null) {
+            if (dto.getTipo().isBlank()) {
+                throw new BadRequestException("El tipo del evento no puede estar vacío");
+            }
+            evento.setTipo(dto.getTipo().trim());
+        }
+
+        if (dto.getFecha() != null) {
+            evento.setFecha(dto.getFecha());
+        }
+
+        if (dto.getLugarId() != null && (evento.getLugar() == null
+                || !Objects.equals(dto.getLugarId(), evento.getLugar().getId()))) {
+            Lugar lugar = lugarRepository.findById(dto.getLugarId())
+                    .orElseThrow(() -> new NotFoundException(
+                            "Lugar no encontrado con id: " + dto.getLugarId()));
+            evento.setLugar(lugar);
+        }
+    }
+
+    private Set<Long> sectoresDelEvento(Evento evento) {
+        Lugar lugar = evento.getLugar();
+        if (lugar == null || lugar.getSectores() == null) {
+            return Set.of();
+        }
+        return lugar.getSectores().stream()
+                .map(Sector::getId)
+                .collect(Collectors.toSet());
+    }
+
+    private EventoResponseDTO toResponse(Evento evento) {
+        return modelMapper.map(evento, EventoResponseDTO.class);
+    }
+
+    @Transactional
+    public PrecioEventoSectorResponseDTO definirPrecioSector(Long eventoId, Long sectorId, Double precio,
+                                                             Long organizadorId, boolean esAdmin) {
+        Evento evento = eventoRepository.findById(eventoId)
+                .orElseThrow(() -> new NotFoundException("Evento no encontrado con id: " + eventoId));
+
+        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
+            throw new ForbiddenException("No podés definir precios en un evento que no te pertenece");
+        }
+
+        if (evento.getEstado() != EstadoEvento.BORRADOR) {
+            throw new ConflictException("Solo se pueden definir precios en eventos en estado BORRADOR");
+        }
+
+        if (precio == null || precio <= 0) {
+            throw new BadRequestException("El precio debe ser mayor a 0");
+        }
+
+        if (!sectorPerteneceAlLugar(evento, sectorId)) {
+            throw new BadRequestException("El sector " + sectorId + " no pertenece al lugar del evento");
+        }
+
+        evento.definirPrecioSector(sectorId, precio);
+        eventoRepository.save(evento);
+
+        return PrecioEventoSectorResponseDTO.builder()
+                .eventoId(eventoId)
+                .sectorId(sectorId)
+                .precio(precio)
+                .build();
+    }
+
+    private EstadoEvento estadoPublicado() {
+        try {
+            return EstadoEvento.valueOf("PUBLICADO");
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "El enum EstadoEvento no tiene PUBLICADO", e);
+        }
+    }
 
     /**
      * Verifica si un evento se encuentra en un estado determinado.
@@ -369,11 +529,35 @@ public class EventoService {
      *
      * @return DTO con la información básica del evento
      */
-    private EventoResponseDTO toResponseDTO(Evento evento) {
-        return EventoResponseDTO.builder()
+    private EventoPublicadoDTO toPublicadoDTO(Evento evento) {
+        return EventoPublicadoDTO.builder()
                 .id(evento.getId())
                 .nombre(evento.getNombre())
                 .estado(evento.getEstado().name())
                 .build();
+    }
+
+    /**
+     * Convierte un Evento en el DTO de respuesta con su id, nombre y estado.
+     *
+     * @param evento evento a convertir
+     *
+     * @return DTO con la información básica del evento
+     */
+    private EventoResponseDTO toResponseDTO(Evento evento) {
+        return EventoResponseDTO.builder()
+                .id(evento.getId())
+                .nombre(evento.getNombre())
+                .estado(evento.getEstado())
+                .build();
+    }
+
+    private boolean sectorPerteneceAlLugar(Evento evento, Long sectorId) {
+        Lugar lugar = evento.getLugar();
+        if (lugar == null || lugar.getSectores() == null) {
+            return false;
+        }
+        return lugar.getSectores().stream()
+                .anyMatch(sector -> Objects.equals(sector.getId(), sectorId));
     }
 }

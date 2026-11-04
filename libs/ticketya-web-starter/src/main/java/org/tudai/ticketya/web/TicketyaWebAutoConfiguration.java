@@ -9,17 +9,23 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.AutoConfiguration;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnClass;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnMissingBean;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnWebApplication;
+import org.springframework.boot.web.servlet.FilterRegistrationBean;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ScopedProxyMode;
+import org.springframework.core.Ordered;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.web.correlation.CorrelationIdFilter;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
+import org.tudai.ticketya.web.logging.RequestLoggingFilter;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import org.tudai.ticketya.web.user.HeaderUserContext;
 
@@ -28,6 +34,8 @@ import java.util.concurrent.TimeUnit;
 @AutoConfiguration
 @ConditionalOnWebApplication(type = ConditionalOnWebApplication.Type.SERVLET)
 public class TicketyaWebAutoConfiguration {
+
+    private static final int REQUEST_LOGGING_ORDER = -100;
 
     @Bean
     @ConditionalOnMissingBean(GlobalExceptionHandler.class)
@@ -40,6 +48,22 @@ public class TicketyaWebAutoConfiguration {
     @ConditionalOnMissingBean(UserContext.class)
     public UserContext userContext(HttpServletRequest request) {
         return new HeaderUserContext(request);
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(AuthorizeInterceptor.class)
+    public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
+        return new AuthorizeInterceptor(userContext);
+    }
+
+    @Bean
+    public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(interceptor);
+            }
+        };
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -64,22 +88,6 @@ public class TicketyaWebAutoConfiguration {
         @Bean
         public UserHeadersFeignInterceptor userHeadersFeignInterceptor() {
             return new UserHeadersFeignInterceptor();
-        }
-
-        @Bean
-        @ConditionalOnMissingBean(AuthorizeInterceptor.class)
-        public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
-            return new AuthorizeInterceptor(userContext);
-        }
-
-        @Bean
-        public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
-            return new WebMvcConfigurer() {
-                @Override
-                public void addInterceptors(InterceptorRegistry registry) {
-                    registry.addInterceptor(interceptor);
-                }
-            };
         }
     }
 }

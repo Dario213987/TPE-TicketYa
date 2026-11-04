@@ -11,8 +11,6 @@ import java.util.Set;
 @AllArgsConstructor
 @NoArgsConstructor
 @Builder
-@EqualsAndHashCode(onlyExplicitlyIncluded = true)
-@ToString
 @Table(name="participantes")
 @Entity
 public class Participante {
@@ -20,15 +18,20 @@ public class Participante {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String nombre;
-    @ManyToMany(mappedBy = "participantes")
+    @ManyToMany(mappedBy = "artistas")
     @Builder.Default
+    @Setter(AccessLevel.NONE)
     private Set<Evento> eventos = new HashSet<>();
 
-    public void addEvento(Evento evento) {
-        this.eventos.add(evento);
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Participante other)) return false;
+        return id != null && id.equals(other.getId());
     }
 
-    public void removeEvento(Evento evento) {
-        this.eventos.remove(evento);
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }

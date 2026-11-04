@@ -46,7 +46,7 @@ public class AuthorizeInterceptor implements HandlerInterceptor {
             return true;
         }
 
-        String userId = userContext.userId();
+        Long userId = userContext.userId();
         Role role = userContext.role();
 
         if (!evaluate(authorize.value(), role)) {

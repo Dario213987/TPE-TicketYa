@@ -12,7 +12,7 @@ public class LugarCreateDTO {
     @NotBlank(message = "El nombre es obligatorio")
     private String nombre;
 
-    @NotNull(message = "El tipo de lugar es obligatorio")
+    @NotBlank(message = "El tipo de lugar es obligatorio")
     private String tipo;
 
     @NotBlank(message = "La dirección es obligatoria")
@@ -31,5 +31,6 @@ public class LugarCreateDTO {
     @Max(value = 180, message = "La longitud debe ser menor o igual a 180")
     private Double longitud;
 
+    @Min(value = 0, message = "La capacidad no puede ser negativa")
     private Integer capacidad;
 }
