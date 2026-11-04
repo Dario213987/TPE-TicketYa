@@ -2,36 +2,48 @@ package org.tudai.ticketya.tickets.controller;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.tudai.ticketya.core.Role;
+import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.EstadoDisponibilidad;
 import org.tudai.ticketya.tickets.domain.TipoSector;
 import org.tudai.ticketya.tickets.dto.AsientoDisponibilidadDTO;
 import org.tudai.ticketya.tickets.dto.DisponibilidadEventoResponseDTO;
+import org.tudai.ticketya.tickets.dto.DisponibilidadResponseDTO;
+import org.tudai.ticketya.tickets.dto.PublicarEventoRequestDTO;
 import org.tudai.ticketya.tickets.dto.SectorDisponibilidadResponseDTO;
 import org.tudai.ticketya.tickets.service.DisponibilidadService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
 import java.util.List;
 
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 class DisponibilidadControllerTest {
 
     private DisponibilidadService service;
+    private UserContext userContext;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         service = mock(DisponibilidadService.class);
+        userContext = mock(UserContext.class);
         mvc = MockMvcBuilders.standaloneSetup(new DisponibilidadController(service))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .addInterceptors(new AuthorizeInterceptor(userContext))
                 .build();
     }
 
@@ -87,5 +99,50 @@ class DisponibilidadControllerTest {
                 .andExpect(jsonPath("$.status").value(404))
                 .andExpect(jsonPath("$.title").value("Recurso no encontrado"))
                 .andExpect(jsonPath("$.detail").value("No hay disponibilidad para el evento 99"));
+    }
+
+    @Test
+    void crearDisponibilidad_conRolCliente_responde403() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.CLIENTE);
+
+        mvc.perform(post("/api/tickets/eventos/5/disponibilidad")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoPublicacion()))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Acceso denegado"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void crearDisponibilidad_conRolOrganizador_publicaLaDisponibilidad() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(service.publicar(any(PublicarEventoRequestDTO.class)))
+                .thenReturn(DisponibilidadResponseDTO.builder()
+                        .eventoId(5L)
+                        .yaExistia(false)
+                        .build());
+
+        mvc.perform(post("/api/tickets/eventos/5/disponibilidad")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoPublicacion()))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.eventoId").value(5));
+
+        verify(service).publicar(any(PublicarEventoRequestDTO.class));
+    }
+
+    private String cuerpoPublicacion() {
+        return """
+                {
+                  "eventoId": 5,
+                  "limiteEntradasPorCliente": 4,
+                  "sectores": [
+                    {"sectorId": 3, "tipo": "NO_NUMERADO", "capacidadMaxima": 100}
+                  ]
+                }
+                """;
     }
 }

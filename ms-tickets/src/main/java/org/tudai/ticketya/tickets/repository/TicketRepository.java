@@ -1,6 +1,8 @@
 package org.tudai.ticketya.tickets.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -27,6 +29,7 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                 @Param("estado") EstadoTicket estado,
                                 @Param("ahora") Instant ahora);
 
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Ticket> findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
             Long eventoId, EstadoTicket estado, Instant ahora);
 }

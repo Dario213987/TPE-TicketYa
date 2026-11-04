@@ -7,6 +7,7 @@ import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.*;
@@ -42,6 +43,9 @@ class ReservaServiceTest {
     @Mock
     private TicketRepository ticketRepository;
 
+    @Mock
+    private ReservaVencidaService reservaVencidaService;
+
     private ReservaProperties properties;
 
     private ReservaService service;
@@ -51,7 +55,8 @@ class ReservaServiceTest {
         properties = new ReservaProperties();
         properties.setLimitePorCliente(4);
         service = new ReservaService(
-                eventoRepository, sectorRepository, asientoRepository, ticketRepository, properties);
+                eventoRepository, sectorRepository, asientoRepository, ticketRepository,
+                reservaVencidaService, properties);
     }
 
     @Test
@@ -195,23 +200,10 @@ class ReservaServiceTest {
     @Test
     void reservar_liberaLasReservasVencidasAntesDeContabilizar() {
         DisponibilidadEvento evento = evento(7L, 5);
-        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NUMERADO, 3, 2);
-        DisponibilidadAsiento asiento = asiento(1, 1);
-        asiento.setEstado(EstadoDisponibilidad.RESERVADO);
-        Ticket vencida = Ticket.builder()
-                .estadoTicket(EstadoTicket.RESERVADO)
-                .expiraEl(Instant.now().minusSeconds(60))
-                .evento(evento)
-                .sector(sector)
-                .asiento(asiento)
-                .build();
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 10, 10);
         when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
-        when(ticketRepository.findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
-                eq(7L), eq(EstadoTicket.RESERVADO), any())).thenReturn(List.of(vencida));
         when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
                 .thenReturn(Optional.of(sector));
-        when(asientoRepository.findBySector_IdAndEstadoOrderByFilaAscNumeroAsc(
-                10L, EstadoDisponibilidad.LIBRE)).thenReturn(List.of(asiento));
         when(ticketRepository.countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
                 eq(7L), eq(42L), any())).thenReturn(0L);
         when(ticketRepository.contarReservasVigentes(eq(7L), eq(42L), eq(EstadoTicket.RESERVADO), any()))
@@ -219,14 +211,19 @@ class ReservaServiceTest {
 
         service.reservar(7L, 42L, reserva(3L, 1));
 
-        assertThat(vencida.getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
-        assertThat(asiento.getEstado()).isEqualTo(EstadoDisponibilidad.RESERVADO);
-        assertThat(sector.getDisponibles()).isEqualTo(2);
-        verify(ticketRepository).saveAll(argThat(tickets -> {
-            List<Ticket> lista = new java.util.ArrayList<>();
-            tickets.forEach(lista::add);
-            return lista.contains(vencida);
-        }));
+        InOrder orden = inOrder(reservaVencidaService, ticketRepository);
+        orden.verify(reservaVencidaService).liberarVencidas(eq(7L), any());
+        orden.verify(ticketRepository).countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
+                eq(7L), eq(42L), any());
+    }
+
+    @Test
+    void reservar_conCantidadInvalida_lanzaBadRequestException() {
+        assertThatThrownBy(() -> service.reservar(7L, 42L, reserva(3L, 0)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("cantidad");
+
+        verifyNoInteractions(eventoRepository, sectorRepository, asientoRepository, ticketRepository);
     }
 
     private DisponibilidadEvento evento(Long eventoId, Integer limite) {

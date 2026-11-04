@@ -29,6 +29,7 @@ public class DisponibilidadService {
     private final DisponibilidadAsientoRepository asientoRepository;
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
     private final ReservaProperties reservaProperties;
+    private final ReservaVencidaService reservaVencidaService;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
     private int batchSize;
@@ -40,25 +41,22 @@ public class DisponibilidadService {
 
         int eventoInsertado = eventoRepository.insertarSiNoExiste(
                 request.getEventoId(), ahora, limite);
-        if (eventoInsertado == 0) {
-            DisponibilidadEvento existente = eventoRepository.findById(request.getEventoId())
-                    .orElse(null);
-            Instant creadoEl = existente == null ? ahora : existente.getCreadoEl();
+        boolean yaExistia = eventoInsertado == 0;
 
-            if (existente != null && request.getLimiteEntradasPorCliente() != null
-                    && !Integer.valueOf(limite).equals(existente.getLimiteEntradasPorCliente())) {
-                existente.setLimiteEntradasPorCliente(limite);
-                eventoRepository.save(existente);
-            }
+        DisponibilidadEvento evento = yaExistia
+                ? eventoRepository.findById(request.getEventoId())
+                        .orElseGet(() -> eventoRepository.getReferenceById(request.getEventoId()))
+                : eventoRepository.getReferenceById(request.getEventoId());
 
-            return DisponibilidadResponseDTO.builder()
-                    .eventoId(request.getEventoId())
-                    .yaExistia(true)
-                    .creadoEl(creadoEl)
-                    .build();
+        Instant creadoEl = yaExistia && evento.getCreadoEl() != null
+                ? evento.getCreadoEl()
+                : ahora;
+
+        if (yaExistia && request.getLimiteEntradasPorCliente() != null
+                && !Integer.valueOf(limite).equals(evento.getLimiteEntradasPorCliente())) {
+            evento.setLimiteEntradasPorCliente(limite);
+            eventoRepository.save(evento);
         }
-
-        DisponibilidadEvento evento = eventoRepository.getReferenceById(request.getEventoId());
 
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
@@ -111,21 +109,23 @@ public class DisponibilidadService {
 
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
-                .yaExistia(false)
+                .yaExistia(yaExistia)
                 .sectoresProcesados(sectoresProcesados)
                 .asientosInsertados(asientosInsertados)
                 .asientosOmitidos(asientosOmitidos)
-                .creadoEl(ahora)
+                .creadoEl(creadoEl)
                 .build();
     }
 
-    @Transactional(readOnly = true)
+    @Transactional
     public DisponibilidadEventoResponseDTO consultar(Long eventoId) {
         List<DisponibilidadSector> sectores = sectorRepository.findByEvento_EventoIdOrderByIdAsc(eventoId);
 
         if (sectores.isEmpty()) {
             throw new NotFoundException("No hay disponibilidad para el evento " + eventoId);
         }
+
+        reservaVencidaService.liberarVencidas(eventoId, Instant.now());
 
         List<SectorDisponibilidadResponseDTO> respuesta = sectores.stream()
                 .map(this::mapearSector)

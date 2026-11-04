@@ -34,7 +34,7 @@ class ReservaControllerTest {
     void setUp() {
         reservaService = mock(ReservaService.class);
         userContext = mock(UserContext.class);
-        when(userContext.userId()).thenReturn("42");
+        when(userContext.userId()).thenReturn(42L);
         mvc = MockMvcBuilders.standaloneSetup(new ReservaController(reservaService, userContext))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .build();

@@ -14,6 +14,9 @@ import org.tudai.ticketya.tickets.domain.EstadoDisponibilidad;
 import org.tudai.ticketya.tickets.domain.TipoSector;
 import org.tudai.ticketya.tickets.dto.AsientoDisponibilidadDTO;
 import org.tudai.ticketya.tickets.dto.DisponibilidadEventoResponseDTO;
+import org.tudai.ticketya.tickets.dto.DisponibilidadResponseDTO;
+import org.tudai.ticketya.tickets.dto.PublicarEventoRequestDTO;
+import org.tudai.ticketya.tickets.dto.SectorDisponibilidadDTO;
 import org.tudai.ticketya.tickets.dto.SectorDisponibilidadResponseDTO;
 import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoBatchRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoRepository;
@@ -27,6 +30,7 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
+import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -47,13 +51,16 @@ class DisponibilidadServiceTest {
     @Mock
     private DisponibilidadAsientoBatchRepository asientoBatchRepository;
 
+    @Mock
+    private ReservaVencidaService reservaVencidaService;
+
     private DisponibilidadService service;
 
     @BeforeEach
     void setUp() {
         service = new DisponibilidadService(
                 eventoRepository, sectorRepository, asientoRepository, asientoBatchRepository,
-                new ReservaProperties());
+                new ReservaProperties(), reservaVencidaService);
     }
 
     @Test
@@ -82,7 +89,47 @@ class DisponibilidadServiceTest {
         assertThat(sectorDto.getDisponibles()).isEqualTo(320);
         assertThat(sectorDto.getAsientos()).isNull();
 
+        verify(reservaVencidaService).liberarVencidas(any(), any(Instant.class));
         verifyNoInteractions(asientoRepository);
+    }
+
+    @Test
+    void consultar_cuandoNoHaySectores_noLiberaReservas() {
+        when(sectorRepository.findByEvento_EventoIdOrderByIdAsc(99L)).thenReturn(List.of());
+
+        assertThatThrownBy(() -> service.consultar(99L))
+                .isInstanceOf(NotFoundException.class);
+
+        verifyNoInteractions(reservaVencidaService);
+    }
+
+    @Test
+    void publicar_cuandoElEventoYaExiste_procesaLosSectoresNuevos() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .build();
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any()))
+                .thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.empty());
+
+        DisponibilidadResponseDTO respuesta = service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .limiteEntradasPorCliente(4)
+                .sectores(List.of(SectorDisponibilidadDTO.builder()
+                        .sectorId(3L)
+                        .tipo(TipoSector.NO_NUMERADO)
+                        .capacidadMaxima(100)
+                        .build()))
+                .build());
+
+        assertThat(respuesta.isYaExistia()).isTrue();
+        assertThat(respuesta.getSectoresProcesados()).isEqualTo(1);
+        assertThat(respuesta.getCreadoEl()).isEqualTo(existente.getCreadoEl());
+        verify(sectorRepository).save(any(DisponibilidadSector.class));
     }
 
     @Test

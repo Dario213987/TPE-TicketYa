@@ -5,6 +5,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.tickets.dto.DisponibilidadEventoResponseDTO;
 import org.tudai.ticketya.tickets.dto.DisponibilidadResponseDTO;
@@ -19,6 +20,7 @@ public class DisponibilidadController {
     private final DisponibilidadService disponibilidadService;
 
     @PostMapping("/{eventoId}/disponibilidad")
+    @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
     public ResponseEntity<DisponibilidadResponseDTO> crearDisponibilidad(
             @PathVariable Long eventoId,
             @Valid @RequestBody PublicarEventoRequestDTO dto) {

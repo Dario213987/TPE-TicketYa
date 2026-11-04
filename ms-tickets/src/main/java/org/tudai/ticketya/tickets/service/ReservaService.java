@@ -32,12 +32,22 @@ public class ReservaService {
     private final DisponibilidadSectorRepository sectorRepository;
     private final DisponibilidadAsientoRepository asientoRepository;
     private final TicketRepository ticketRepository;
+    private final ReservaVencidaService reservaVencidaService;
     private final ReservaProperties properties;
 
     @Transactional
     public ReservaResponseDTO reservar(Long eventoId, Long clienteId, ReservaRequestDTO request) {
         if (clienteId == null) {
             throw new BadRequestException("El cliente es obligatorio");
+        }
+        if (request == null) {
+            throw new BadRequestException("La reserva es obligatoria");
+        }
+        if (request.getSectorId() == null) {
+            throw new BadRequestException("El id del sector es obligatorio");
+        }
+        if (request.getCantidad() == null || request.getCantidad() < 1) {
+            throw new BadRequestException("La cantidad de entradas debe ser mayor a 0");
         }
 
         Instant ahora = Instant.now();
@@ -46,7 +56,7 @@ public class ReservaService {
                 .orElseThrow(() -> new NotFoundException(
                         "No hay disponibilidad para el evento " + eventoId));
 
-        liberarReservasVencidas(eventoId, ahora);
+        reservaVencidaService.liberarVencidas(eventoId, ahora);
 
         DisponibilidadSector sector = sectorRepository
                 .findByEvento_EventoIdAndSectorIdExterno(eventoId, request.getSectorId())
@@ -140,28 +150,5 @@ public class ReservaService {
 
         sector.setDisponibles(sector.getDisponibles() - cantidad);
         return null;
-    }
-
-    private void liberarReservasVencidas(Long eventoId, Instant ahora) {
-        List<Ticket> vencidas = ticketRepository
-                .findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
-                        eventoId, EstadoTicket.RESERVADO, ahora);
-
-        if (vencidas.isEmpty()) {
-            return;
-        }
-
-        for (Ticket ticket : vencidas) {
-            ticket.setEstadoTicket(EstadoTicket.EXPIRADO);
-            if (ticket.getAsiento() != null) {
-                ticket.getAsiento().setEstado(EstadoDisponibilidad.LIBRE);
-            }
-            DisponibilidadSector sector = ticket.getSector();
-            if (sector.getDisponibles() < sector.getCapacidadTotal()) {
-                sector.setDisponibles(sector.getDisponibles() + 1);
-            }
-        }
-
-        ticketRepository.saveAll(vencidas);
     }
 }
