@@ -152,4 +152,5 @@ public class EventoService {
                 .nombre(participante.getNombre())
                 .build();
     }
+}
 
