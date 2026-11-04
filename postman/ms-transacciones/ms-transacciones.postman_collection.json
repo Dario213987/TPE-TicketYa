@@ -1,0 +1,901 @@
+{
+	"info": {
+		"_postman_id": "9f1690cc-6cdd-4665-9a86-e55d927679c7",
+		"name": "ms-transacciones",
+		"description": "Servicio interno. Requiere X-User-Id (numérico) y X-User-Role=ORGANIZADOR. Ejecutar en orden: la carpeta 1 guarda transaccionId.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json",
+		"_exporter_id": "37213491",
+		"_collection_link": "https://spacecraft-explorer-70284316-s-team.postman.co/workspace/Personal-Workspace~c9fa1710-97b2-47a0-862f-637d681def04/collection/37213491-9f1690cc-6cdd-4665-9a86-e55d927679c7?action=share&source=collection_link&creator=37213491"
+	},
+	"item": [
+		{
+			"name": "1. metodos",
+			"item": [
+				{
+					"name": "Generar débito",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"const j = pm.response.json();",
+									"pm.collectionVariables.set(\"transaccionId\", j.id);",
+									"pm.test(\"tipo DEBITO\", () => pm.expect(j.tipo).to.eql(\"DEBITO\"));",
+									"pm.test(\"tiene fechas\", () => { pm.expect(j.creadoEl).to.exist; pm.expect(j.actualizadoEl).to.exist; });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Generar crédito (devolución)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"pm.test(\"tipo CREDITO\", () => pm.expect(pm.response.json().tipo).to.eql(\"CREDITO\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/creditos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"creditos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Obtener transacción por id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/{{transaccionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"{{transaccionId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por ticket",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"tiene página\", () => pm.expect(pm.response.json().page.totalElements).to.be.a(\"number\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/ticket/{{ticketId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"ticket",
+								"{{ticketId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por ticket y tipo DEBITO",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/ticket/{{ticketId}}?tipo=DEBITO",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"ticket",
+								"{{ticketId}}"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "DEBITO"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por ticket paginado y ordenado",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/ticket/{{ticketId}}?page=0&size=5&sort=monto,desc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"ticket",
+								"{{ticketId}}"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								},
+								{
+									"key": "sort",
+									"value": "monto,desc"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "Listar por organizador",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/organizador/{{userId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"organizador",
+								"{{userId}}"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "2. Idempotencia",
+			"item": [
+				{
+					"name": "Débito repetido (devuelve la original)",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"pm.test(\"mismo id\", () => pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get(\"transaccionId\")));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		},
+		{
+			"name": "3. Errores",
+			"item": [
+				{
+					"name": "400 monto en cero",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "400 falta clienteId",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "400 tipo inválido",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/ticket/{{ticketId}}?tipo=OTRO",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"ticket",
+								"{{ticketId}}"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "OTRO"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "400 orden por campo no permitido",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/ticket/{{ticketId}}?sort=clienteId,asc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"ticket",
+								"{{ticketId}}"
+							],
+							"query": [
+								{
+									"key": "sort",
+									"value": "clienteId,asc"
+								}
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "401 sin X-User-Id",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "403 rol CLIENTE",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "7"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/debitos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"debitos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "403 rol ADMINISTRADOR",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "9"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "ADMINISTRADOR"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"ticketId\": {{ticketId}},\n  \"clienteId\": {{clienteId}},\n  \"monto\": 100.0\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/creditos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"creditos"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "403 listar organizador ajeno",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/organizador/999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"organizador",
+								"999"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "404 transacción de otro organizador",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "2"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/{{transaccionId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"{{transaccionId}}"
+							]
+						}
+					},
+					"response": []
+				},
+				{
+					"name": "404 id inexistente",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{userId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "{{role}}"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/transacciones/999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"transacciones",
+								"999999"
+							]
+						}
+					},
+					"response": []
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "userId",
+			"value": "1"
+		},
+		{
+			"key": "role",
+			"value": "ORGANIZADOR"
+		},
+		{
+			"key": "ticketId",
+			"value": "10"
+		},
+		{
+			"key": "clienteId",
+			"value": "7"
+		},
+		{
+			"key": "transaccionId",
+			"value": ""
+		}
+	]
+}

@@ -15,10 +15,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.core.MdcKeys;
-import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.core.exception.ConflictException;
-import org.tudai.ticketya.core.exception.ForbiddenException;
-import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.*;
 
 import static org.hamcrest.Matchers.containsString;
 import static org.hamcrest.Matchers.hasSize;
@@ -118,6 +115,14 @@ class GlobalExceptionHandlerTest {
                 .andExpect(jsonPath("$.correlationId").doesNotExist());
     }
 
+    @Test
+    void usuarioAusenteOInvalido_devuelve401() throws Exception {
+        mvc.perform(get("/test/sin-usuario"))
+                .andExpect(status().isUnauthorized())
+                .andExpect(jsonPath("$.status").value(401))
+                .andExpect(jsonPath("$.detail").value("Falta el header obligatorio X-User-Id"));
+    }
+
     @RestController
     static class TestController {
 
@@ -150,6 +155,11 @@ class GlobalExceptionHandlerTest {
         @GetMapping("/test/error")
         void error() {
             throw new IllegalStateException("detalle interno secreto");
+        }
+
+        @GetMapping("/test/sin-usuario")
+        void sinUsuario() {
+            throw new InvalidUserContextException("Falta el header obligatorio X-User-Id");
         }
     }
 }
