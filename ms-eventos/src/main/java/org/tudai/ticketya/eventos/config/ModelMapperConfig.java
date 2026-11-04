@@ -6,18 +6,22 @@ import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
 import org.springframework.data.domain.Page;
 import org.tudai.ticketya.eventos.domain.Asiento;
+import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
+import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.domain.TipoSector;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
 import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.stream.Collectors;
 
 @org.springframework.context.annotation.Configuration
@@ -40,6 +44,28 @@ public class ModelMapperConfig {
                             .latitud(source.getLatitud())
                             .longitud(source.getLongitud())
                             .build());
+                    return destination;
+                });
+
+        modelMapper.createTypeMap(Evento.class, EventoResponseDTO.class)
+                .setConverter(context -> {
+                    Evento source = context.getSource();
+                    EventoResponseDTO destination = new EventoResponseDTO();
+                    destination.setId(source.getId());
+                    destination.setNombre(source.getNombre());
+                    destination.setDescripcion(source.getDescripcion());
+                    destination.setTipo(source.getTipo());
+                    destination.setFecha(source.getFecha());
+                    destination.setEstado(source.getEstado());
+                    destination.setOrganizadorId(source.getOrganizadorId());
+                    destination.setLugar(source.getLugar() == null
+                            ? null
+                            : modelMapper.map(source.getLugar(), LugarResponseDTO.class));
+                    destination.setArtistas(source.getArtistas().stream()
+                            .map(Participante::getNombre)
+                            .sorted(Comparator.nullsLast(Comparator.naturalOrder()))
+                            .toList());
+                    destination.setPreciosSectores(new HashMap<>(source.getPreciosSectores()));
                     return destination;
                 });
 

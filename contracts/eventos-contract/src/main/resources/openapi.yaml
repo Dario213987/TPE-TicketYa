@@ -28,6 +28,49 @@ paths:
               schema:
                 $ref: '#/components/schemas/PagedEventos'
         '400': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}:
+    put:
+      tags: [eventos]
+      operationId: actualizarEvento
+      summary: Modifica un evento
+      description: |
+        Permite corregir los datos de un borrador propio (o de cualquier borrador si el usuario
+        es administrador). En eventos ya publicados solo se pueden modificar los campos no
+        estructurales; para cambiar lugar, fecha o sectores hay que cancelar o reprogramar.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoUpdateRequest'
+      responses:
+        '200':
+          description: El evento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [eventos]
+      operationId: eliminarEvento
+      summary: Elimina un borrador
+      description: Solo se pueden eliminar eventos en estado BORRADOR. Un evento publicado no se elimina.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '204':
+          description: Evento eliminado
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/lugares:
     get:
       tags: [lugares]
@@ -210,6 +253,13 @@ components:
       in: query
       description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos válidos: lugares (id, nombre, tipo, ciudad); eventos (id, nombre, fecha, tipo). Por defecto nombre,asc en lugares y fecha,asc en eventos"
       schema: { type: string }
+    EventoId:
+      name: eventoId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
   responses:
     Error:
       description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe)
@@ -235,6 +285,44 @@ components:
         fecha: { type: string, format: date }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
+    EventoUpdateRequest:
+      type: object
+      description: |
+        Todos los campos son opcionales; se aplican solo los enviados. `fecha`, `lugarId` y
+        `sectores` son estructurales y no pueden modificarse si el evento ya fue publicado.
+      properties:
+        nombre: { type: string, maxLength: 200 }
+        descripcion: { type: string, maxLength: 255 }
+        tipo: { type: string }
+        fecha: { type: string, format: date }
+        lugarId: { type: integer, format: int64 }
+        sectores:
+          type: array
+          description: "IDs de sectores. Alias aceptado: sectorIds."
+          items: { type: integer, format: int64 }
+    EventoResponse:
+      type: object
+      required: [id, nombre, tipo, fecha, estado, organizadorId]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        descripcion: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        estado:
+          $ref: '#/components/schemas/EstadoEvento'
+        organizadorId: { type: integer, format: int64 }
+        lugar:
+          $ref: '#/components/schemas/LugarResponse'
+        artistas:
+          type: array
+          items: { type: string }
+        preciosSectores:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
     TipoSector:
       type: string
       enum: [NUMERADO, NO_NUMERADO]
