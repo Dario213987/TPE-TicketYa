@@ -44,12 +44,13 @@ class LiquibaseMigrationTest {
     }
 
     @Test
-    void creaLasCuatroTablasDelServicio() throws Exception {
+    void creaLasTablasDelServicio() throws Exception {
         assertThat(tablas())
                 .contains("disponibilidad_eventos",
                         "disponibilidad_sectores",
                         "disponibilidad_asientos",
-                        "tickets");
+                        "tickets",
+                        "reservas");
     }
 
     @Test
@@ -68,7 +69,11 @@ class LiquibaseMigrationTest {
         assertThat(columnas("tickets"))
                 .containsExactlyInAnyOrder("id", "codigo_qr", "estado_ticket", "precio",
                         "fecha_emision", "cliente_id", "expira_el", "evento_id", "sector_id",
-                        "asiento_id");
+                        "asiento_id", "reserva_id");
+
+        assertThat(columnas("reservas"))
+                .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
+                        "expira_el", "creado_el");
     }
 
     @Test
@@ -79,6 +84,7 @@ class LiquibaseMigrationTest {
                         "idx_disponibilidad_asiento_sector_estado");
         assertThat(indices("tickets"))
                 .contains("idx_tickets_evento_cliente_estado");
+        assertThat(indices("reservas")).contains("idx_reservas_evento_cliente");
 
         assertThat(restricciones("disponibilidad_sectores"))
                 .contains("pk_disponibilidad_sectores",
@@ -95,15 +101,18 @@ class LiquibaseMigrationTest {
                         "uq_tickets_asiento",
                         "fk_tickets_evento",
                         "fk_tickets_sector",
-                        "fk_tickets_asiento");
+                        "fk_tickets_asiento",
+                        "fk_tickets_reserva");
+        assertThat(restricciones("reservas"))
+                .contains("pk_reservas", "fk_reservas_evento");
     }
 
     @Test
     void laMigracionEsIdempotente() throws Exception {
         liquibase.update(new Contexts());
 
-        assertThat(tablas()).contains("disponibilidad_eventos", "tickets");
-        assertThat(contarCambiosAplicados()).isEqualTo(4);
+        assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas");
+        assertThat(contarCambiosAplicados()).isEqualTo(5);
     }
 
     @Test

@@ -13,5 +13,5 @@ public class ReservaProperties {
 
     private int limitePorCliente = 4;
 
-    private Duration expiracion = Duration.ofMinutes(15);
+    private Duration expiracion = Duration.ofMinutes(10);
 }

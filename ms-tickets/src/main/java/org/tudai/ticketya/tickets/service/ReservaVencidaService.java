@@ -32,6 +32,7 @@ public class ReservaVencidaService {
             ticket.setEstadoTicket(EstadoTicket.EXPIRADO);
             if (ticket.getAsiento() != null) {
                 ticket.getAsiento().setEstado(EstadoDisponibilidad.LIBRE);
+                ticket.setAsiento(null);
             }
             DisponibilidadSector sector = ticket.getSector();
             if (sector.getDisponibles() < sector.getCapacidadTotal()) {

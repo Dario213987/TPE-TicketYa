@@ -85,6 +85,7 @@ class ReservaVencidaServiceTest {
 
         assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
         assertThat(asiento.getEstado()).isEqualTo(EstadoDisponibilidad.LIBRE);
+        assertThat(ticket.getAsiento()).isNull();
         assertThat(sector.getDisponibles()).isEqualTo(3);
 
         @SuppressWarnings("unchecked")
