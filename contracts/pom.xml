@@ -19,6 +19,7 @@
     </properties>
 
     <modules>
+        <module>eventos-contract</module>
         <module>transacciones-contract</module>
     </modules>
 </project>

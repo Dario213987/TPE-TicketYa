@@ -51,26 +51,19 @@ public class TicketyaWebAutoConfiguration {
     }
 
     @Bean
-    @ConditionalOnMissingBean(name = "correlationIdFilterRegistration")
-    public FilterRegistrationBean<CorrelationIdFilter> correlationIdFilterRegistration() {
-        FilterRegistrationBean<CorrelationIdFilter> registration =
-                new FilterRegistrationBean<>(new CorrelationIdFilter());
-        registration.setName("correlationIdFilter");
-        registration.setOrder(Ordered.HIGHEST_PRECEDENCE + 10);
-        return registration;
+    @ConditionalOnMissingBean(AuthorizeInterceptor.class)
+    public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
+        return new AuthorizeInterceptor(userContext);
     }
 
     @Bean
-    @ConditionalOnProperty(name = "ticketya.logging.requests.enabled", havingValue = "true", matchIfMissing = true)
-    @ConditionalOnMissingBean(name = "requestLoggingFilterRegistration")
-    public FilterRegistrationBean<RequestLoggingFilter> requestLoggingFilterRegistration(
-            UserContext userContext,
-            @Value("${ticketya.logging.requests.exclude-paths:/actuator/**}") String[] excludePaths) {
-        FilterRegistrationBean<RequestLoggingFilter> registration =
-                new FilterRegistrationBean<>(new RequestLoggingFilter(userContext, excludePaths));
-        registration.setName("requestLoggingFilter");
-        registration.setOrder(REQUEST_LOGGING_ORDER);
-        return registration;
+    public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
+        return new WebMvcConfigurer() {
+            @Override
+            public void addInterceptors(InterceptorRegistry registry) {
+                registry.addInterceptor(interceptor);
+            }
+        };
     }
 
     @Configuration(proxyBeanMethods = false)
@@ -95,27 +88,6 @@ public class TicketyaWebAutoConfiguration {
         @Bean
         public UserHeadersFeignInterceptor userHeadersFeignInterceptor() {
             return new UserHeadersFeignInterceptor();
-        }
-
-        @Bean
-        @ConditionalOnMissingBean(AuthorizeInterceptor.class)
-        public AuthorizeInterceptor authorizeInterceptor(UserContext userContext) {
-            return new AuthorizeInterceptor(userContext);
-        }
-
-        @Bean
-        public WebMvcConfigurer authorizeWebMvcConfigurer(AuthorizeInterceptor interceptor) {
-            return new WebMvcConfigurer() {
-                @Override
-                public void addInterceptors(InterceptorRegistry registry) {
-                    registry.addInterceptor(interceptor);
-                }
-            };
-        }
-
-        @Bean
-        public CorrelationIdFeignInterceptor correlationIdFeignInterceptor() {
-            return new CorrelationIdFeignInterceptor();
         }
     }
 }

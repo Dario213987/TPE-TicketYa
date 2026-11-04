@@ -1,0 +1,53 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00002-crear-tabla-sector" author="maxi">
+        <createTable tableName="sectores">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="tipo_sector" type="varchar(31)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nombre" type="varchar(255)"/>
+            <column name="precio" type="double"/>
+            <column name="capacidad_maxima" type="integer"/>
+            <column name="lugar_id" type="bigint"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="sectores"
+                                 baseColumnNames="lugar_id"
+                                 constraintName="fk_sectores_lugar"
+                                 referencedTableName="lugares"
+                                 referencedColumnNames="id"/>
+
+        <createIndex tableName="sectores" indexName="idx_sectores_lugar">
+            <column name="lugar_id"/>
+        </createIndex>
+
+        <createTable tableName="sector_asientos">
+            <column name="sector_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fila" type="integer">
+                <constraints nullable="false"/>
+            </column>
+            <column name="numero" type="integer">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="sector_asientos"
+                                 baseColumnNames="sector_id"
+                                 constraintName="fk_sector_asientos_sector"
+                                 referencedTableName="sectores"
+                                 referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="sector_asientos"
+                             columnNames="sector_id, fila, numero"
+                             constraintName="uk_sector_asientos_sector_fila_numero"/>
+    </changeSet>
+</databaseChangeLog>

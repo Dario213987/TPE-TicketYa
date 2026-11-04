@@ -41,7 +41,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
         try {
             chain.doFilter(request, response);
         } catch (ServletException | IOException | RuntimeException e) {
-            failed = true;   // la excepción llegó hasta acá: el contenedor responderá 500
+            failed = true;
             throw e;
         } finally {
             long durationMs = (System.nanoTime() - start) / 1_000_000;
@@ -52,7 +52,7 @@ public class RequestLoggingFilter extends OncePerRequestFilter {
 
     private String currentUser() {
         try {
-            return userContext.isPresent() ? userContext.userId() : null;
+            return userContext.findUserId().map(String::valueOf).orElse("anonymous");
         } catch (RuntimeException e) {
             return null;
         }
