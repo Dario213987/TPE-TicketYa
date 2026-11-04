@@ -8,7 +8,7 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 
 @RestControllerAdvice
-public class GlobalExceptionHandler {
+public class EventosExceptionHandler {
 
     @ExceptionHandler(SectoresSinPrecioException.class)
     public ResponseEntity<ProblemDetail> handleSectoresSinPrecio(SectoresSinPrecioException ex) {

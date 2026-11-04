@@ -35,6 +35,7 @@ import org.tudai.ticketya.eventos.repository.LugarRepository;
 import java.time.LocalDate;
 import java.util.Comparator;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
@@ -92,8 +93,9 @@ public class EventoService {
             throw new BadRequestException("El lugar del evento no tiene sectores");
         }
 
+        Map<Long, Double> preciosSectores = evento.getPreciosSectores();
         List<SectoresSinPrecioException.SectorFaltante> faltantes = sectores.stream()
-                .filter(sector -> sector.getPrecio() == null)
+                .filter(sector -> preciosSectores.get(sector.getId()) == null)
                 .sorted(Comparator.comparing(Sector::getId))
                 .map(sector -> new SectoresSinPrecioException.SectorFaltante(
                         sector.getId(), sector.getNombre()))
