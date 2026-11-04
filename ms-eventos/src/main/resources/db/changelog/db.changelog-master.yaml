@@ -1,1 +1,19 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: 00001-crear-tabla-lugar.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00002-crear-tabla-sector.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00003-crear-tabla-evento.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00004-crear-tabla-participante.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00005-cambiar-estado-evento-a-varchar.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00006-crear-tabla-evento-sector-precio.xml
+      relativeToChangelogFile: true
