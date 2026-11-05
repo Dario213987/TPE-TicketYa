@@ -403,11 +403,13 @@ public class EventoService {
     private PublicarEventoRequest buildInventarioRequest(Evento evento, Set<Sector> sectores) {
         List<SectorDisponibilidadRequest> items = sectores.stream()
                 .sorted(Comparator.comparing(Sector::getId))
-                .map(this::toSectorDisponibilidadRequest)
+                .map(sector -> toSectorDisponibilidadRequest(
+                        sector, evento.getPreciosSectores().get(sector.getId())))
                 .toList();
 
         return PublicarEventoRequest.builder()
                 .eventoId(evento.getId())
+                .organizadorId(evento.getOrganizadorId())
                 .sectores(items)
                 .build();
     }
@@ -418,14 +420,15 @@ public class EventoService {
      * si no es numerado, incluye la capacidad máxima.
      *
      * @param sector sector a convertir
+     * @param precio precio del sector para el evento
      *
      * @return request con el inventario del sector
      *
      * @throws IllegalStateException si el tipo de sector no está soportado
      */
-    private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector) {
+    private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector, Double precio) {
         SectorDisponibilidadRequest.SectorDisponibilidadRequestBuilder builder =
-                SectorDisponibilidadRequest.builder().sectorId(sector.getId());
+                SectorDisponibilidadRequest.builder().sectorId(sector.getId()).precio(precio);
 
         if (sector instanceof SectorNumerado numerado) {
             builder.tipo(TipoSectorRequest.NUMERADO)

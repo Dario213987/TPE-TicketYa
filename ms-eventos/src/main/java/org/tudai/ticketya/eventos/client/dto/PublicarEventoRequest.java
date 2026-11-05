@@ -13,5 +13,6 @@ import java.util.List;
 @Builder
 public class PublicarEventoRequest {
     private Long eventoId;
+    private Long organizadorId;
     private List<SectorDisponibilidadRequest> sectores;
 }
