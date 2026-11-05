@@ -1,5 +1,5 @@
 package org.tudai.ticketya.tickets.domain;
 
 public enum EstadoPago {
-    APROBADO, RECHAZADO
+    PENDIENTE_PAGO, APROBADO, RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE
 }
