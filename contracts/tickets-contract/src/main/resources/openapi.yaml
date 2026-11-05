@@ -12,10 +12,13 @@ info:
     - La consulta de disponibilidad es publica.
 
     Las reservas vencidas se liberan de forma perezosa antes de reservar y antes de consultar
-    la disponibilidad.
+    la disponibilidad. Ademas, un job periodico libera todas las reservas cuyo tiempo expiro.
+    El job usa un bloqueo distribuido para que, si hay varias instancias, solo una libere cada
+    reserva. Las reservas con un pago en curso no se liberan hasta que el pago se resuelva.
 tags:
   - name: reservas
   - name: disponibilidad
+  - name: pagos
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
     post:
@@ -121,6 +124,72 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos:
+    post:
+      tags: [pagos]
+      operationId: iniciarPagoReserva
+      summary: Inicia el pago de una reserva
+      description: |
+        Solo el rol CLIENTE puede iniciar el pago de sus propias reservas. Marca la reserva
+        como con pago en curso para que el job de liberacion no la expire mientras el pago
+        se esta procesando.
+
+        Si la reserva ya vencio (su expiraEl no es posterior al momento del pedido), responde
+        409 y no inicia el pago.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '202':
+          description: El pago quedo en curso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos/confirmacion:
+    post:
+      tags: [pagos]
+      operationId: confirmarPagoReserva
+      summary: Confirma el pago de una reserva
+      description: |
+        Resuelve el pago como aprobado: las entradas pasan a EMITIDO y los asientos a VENDIDO.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden confirmar pagos.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Pago confirmado }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos/rechazo:
+    post:
+      tags: [pagos]
+      operationId: rechazarPagoReserva
+      summary: Rechaza el pago de una reserva
+      description: |
+        Resuelve el pago como rechazado. Si la reserva ya vencio, el proximo job la libera.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden rechazar pagos.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Pago rechazado }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
