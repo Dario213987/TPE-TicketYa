@@ -28,8 +28,20 @@ public class ReservaVencidaService {
             return;
         }
 
-        for (Ticket ticket : vencidas) {
-            ticket.setEstadoTicket(EstadoTicket.EXPIRADO);
+        liberar(vencidas, EstadoTicket.EXPIRADO);
+    }
+
+    /**
+     * Libera los lugares tomados por los tickets: los asientos vuelven a LIBRE, el sector
+     * recupera la capacidad y cada ticket queda en el estado final indicado.
+     *
+     * @param tickets     tickets a liberar
+     * @param estadoFinal estado en el que quedan los tickets (EXPIRADO, CANCELADO)
+     */
+    @Transactional
+    public void liberar(List<Ticket> tickets, EstadoTicket estadoFinal) {
+        for (Ticket ticket : tickets) {
+            ticket.setEstadoTicket(estadoFinal);
             if (ticket.getAsiento() != null) {
                 ticket.getAsiento().setEstado(EstadoDisponibilidad.LIBRE);
                 ticket.setAsiento(null);
@@ -40,6 +52,6 @@ public class ReservaVencidaService {
             }
         }
 
-        ticketRepository.saveAll(vencidas);
+        ticketRepository.saveAll(tickets);
     }
 }

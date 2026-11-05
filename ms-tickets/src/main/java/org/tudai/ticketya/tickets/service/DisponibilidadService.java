@@ -58,6 +58,12 @@ public class DisponibilidadService {
             eventoRepository.save(evento);
         }
 
+        if (request.getOrganizadorId() != null
+                && !request.getOrganizadorId().equals(evento.getOrganizadorId())) {
+            evento.setOrganizadorId(request.getOrganizadorId());
+            eventoRepository.save(evento);
+        }
+
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
         int asientosOmitidos = 0;
@@ -85,6 +91,7 @@ public class DisponibilidadService {
                     .tipo(dto.getTipo())
                     .capacidadTotal(capacidad)
                     .disponibles(capacidad)
+                    .precio(dto.getPrecio())
                     .build();
 
             sectorRepository.save(sector);
