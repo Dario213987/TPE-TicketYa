@@ -1,0 +1,184 @@
+package org.tudai.ticketya.eventos.service;
+
+import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.modelmapper.ModelMapper;
+import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.eventos.client.TicketsClient;
+import org.tudai.ticketya.eventos.domain.EstadoEvento;
+import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
+import org.tudai.ticketya.eventos.repository.EventoRepository;
+import org.tudai.ticketya.eventos.repository.LugarRepository;
+
+import java.time.LocalDate;
+import java.util.List;
+import java.util.Optional;
+
+import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
+import static org.mockito.Mockito.when;
+
+@ExtendWith(MockitoExtension.class)
+class EventoServiceEstadosAutomaticosTest {
+
+    @Mock
+    private EventoRepository eventoRepository;
+
+    @Mock
+    private LugarRepository lugarRepository;
+
+    @Mock
+    private TicketsClient ticketsClient;
+
+    @Mock
+    private ModelMapper modelMapper;
+
+    @InjectMocks
+    private EventoService eventoService;
+
+    @Test
+    void finalizarEventosVencidos_finalizaSalvoBorradorCanceladoYFinalizado() {
+        eventoService.finalizarEventosVencidos();
+
+        verify(eventoRepository).finalizarEventosVencidos(
+                eq(LocalDate.now()),
+                eq(EstadoEvento.FINALIZADO),
+                eq(List.of(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO, EstadoEvento.FINALIZADO)));
+    }
+
+    @Test
+    void marcarAgotado_enEventoPublicado_loPasaAAgotado() {
+        Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        EventoResponseDTO response = eventoService.marcarAgotado(1L);
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Festival");
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
+        verify(eventoRepository).save(evento);
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarAgotado_yaAgotado_esIdempotenteYNoGuarda() {
+        Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        EventoResponseDTO response = eventoService.marcarAgotado(1L);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Festival");
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarAgotado_enEstadoNoPublicado_lanzaConflictYNoGuarda() {
+        for (EstadoEvento estado : List.of(
+                EstadoEvento.BORRADOR,
+                EstadoEvento.CONFIRMADO,
+                EstadoEvento.CANCELADO,
+                EstadoEvento.FINALIZADO)) {
+            Evento evento = eventoEnEstado(estado);
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+            assertThatThrownBy(() -> eventoService.marcarAgotado(1L))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Solo un evento publicado puede pasar a agotado");
+        }
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarAgotado_conEventoInexistente_lanzaNotFound() {
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventoService.marcarAgotado(99L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Evento no encontrado con id: 99");
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarPublicado_enEventoAgotado_loPasaAPublicado() {
+        Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        EventoResponseDTO response = eventoService.marcarPublicado(1L);
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Festival");
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository).save(evento);
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarPublicado_yaPublicado_esIdempotenteYNoGuarda() {
+        Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        EventoResponseDTO response = eventoService.marcarPublicado(1L);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarPublicado_enEstadoNoAgotado_lanzaConflictYNoGuarda() {
+        for (EstadoEvento estado : List.of(
+                EstadoEvento.BORRADOR,
+                EstadoEvento.CONFIRMADO,
+                EstadoEvento.CANCELADO,
+                EstadoEvento.FINALIZADO)) {
+            Evento evento = eventoEnEstado(estado);
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+            assertThatThrownBy(() -> eventoService.marcarPublicado(1L))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("Solo un evento agotado puede pasar a publicado");
+        }
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    @Test
+    void marcarPublicado_conEventoInexistente_lanzaNotFound() {
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventoService.marcarPublicado(99L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("Evento no encontrado con id: 99");
+        verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(ticketsClient, lugarRepository);
+    }
+
+    private Evento eventoEnEstado(EstadoEvento estado) {
+        return Evento.builder()
+                .id(1L)
+                .nombre("Festival")
+                .estado(estado)
+                .organizadorId(7L)
+                .build();
+    }
+}
