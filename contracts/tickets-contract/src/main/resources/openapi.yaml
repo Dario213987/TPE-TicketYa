@@ -1,0 +1,348 @@
+openapi: 3.0.3
+info:
+  title: ms-tickets
+  version: 1.0.0
+  description: |
+    Gestion de disponibilidad y reservas de entradas. Requiere los headers X-User-Id (numerico)
+    y X-User-Role. El gateway expone estas rutas bajo /api/tickets.
+
+    Roles:
+    - CLIENTE: puede reservar entradas.
+    - ORGANIZADOR y ADMINISTRADOR: pueden publicar la disponibilidad de un evento.
+    - La consulta de disponibilidad es publica.
+
+    Las reservas vencidas se liberan de forma perezosa antes de reservar y antes de consultar
+    la disponibilidad. Ademas, un job periodico libera todas las reservas cuyo tiempo expiro.
+    El job usa un bloqueo distribuido para que, si hay varias instancias, solo una libere cada
+    reserva. Las reservas con un pago en curso no se liberan hasta que el pago se resuelva.
+tags:
+  - name: reservas
+  - name: disponibilidad
+  - name: pagos
+paths:
+  /api/tickets/eventos/{eventoId}/reservas:
+    post:
+      tags: [reservas]
+      operationId: reservarEntradas
+      summary: Reserva asientos de un sector para el cliente autenticado
+      description: |
+        Solo el rol CLIENTE puede reservar. El cliente se toma de X-User-Id, nunca del cuerpo.
+        Respeta el limite de entradas por cliente del evento (o el configurado por defecto).
+
+        Se puede reservar asientos especificos enviando asientos (fila y numero). En ese caso
+        la reserva es todo o nada: si alguno de los asientos ya no esta LIBRE responde 409 y
+        no reserva ninguno. La restriccion unica sobre tickets.asiento_id garantiza que, ante
+        reservas concurrentes del mismo asiento, solo una pueda completarse.
+
+        Si no se envian asientos, se mantiene el comportamiento por cantidad: en sectores
+        numerados asigna los primeros asientos libres; en no numerados descuenta los disponibles.
+
+        El evento debe tener la disponibilidad publicada; si no, responde 409. Las reservas
+        quedan vigentes durante 10 minutos (hasta expiraEl) y devuelven el idReserva.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReservaRequestDTO'
+      responses:
+        '201':
+          description: La reserva creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/eventos/{eventoId}/disponibilidad:
+    post:
+      tags: [disponibilidad]
+      operationId: publicarDisponibilidad
+      summary: Publica la disponibilidad de un evento
+      description: |
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden publicar. El eventoId del path debe
+        coincidir con el del cuerpo.
+
+        Es idempotente por evento: si el evento ya tenia disponibilidad, no se recrean los
+        sectores existentes, pero si se procesan los sectores nuevos y se actualiza el limite
+        de entradas por cliente cuando se informa. En ese caso responde 200 con yaExistia=true;
+        si es la primera publicacion responde 201 con yaExistia=false.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PublicarEventoRequestDTO'
+      responses:
+        '200':
+          description: La disponibilidad ya existia; se procesaron los sectores nuevos
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadResponseDTO'
+        '201':
+          description: La disponibilidad fue creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    get:
+      tags: [disponibilidad]
+      operationId: consultarDisponibilidad
+      summary: Consulta la disponibilidad de un evento
+      description: |
+        Devuelve los sectores y, en sectores numerados, el detalle de los asientos. Antes de
+        responder libera las reservas vencidas del evento para reflejar la disponibilidad real.
+        Responde 404 si el evento no tiene disponibilidad publicada.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: La disponibilidad del evento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos:
+    post:
+      tags: [pagos]
+      operationId: iniciarPagoReserva
+      summary: Inicia el pago de una reserva
+      description: |
+        Solo el rol CLIENTE puede iniciar el pago de sus propias reservas. Marca la reserva
+        como con pago en curso para que el job de liberacion no la expire mientras el pago
+        se esta procesando.
+
+        Si la reserva ya vencio (su expiraEl no es posterior al momento del pedido), responde
+        409 y no inicia el pago.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '202':
+          description: El pago quedo en curso
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReservaResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos/confirmacion:
+    post:
+      tags: [pagos]
+      operationId: confirmarPagoReserva
+      summary: Confirma el pago de una reserva
+      description: |
+        Resuelve el pago como aprobado: las entradas pasan a EMITIDO y los asientos a VENDIDO.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden confirmar pagos.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Pago confirmado }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/reservas/{reservaId}/pagos/rechazo:
+    post:
+      tags: [pagos]
+      operationId: rechazarPagoReserva
+      summary: Rechaza el pago de una reserva
+      description: |
+        Resuelve el pago como rechazado. Si la reserva ya vencio, el proximo job la libera.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden rechazar pagos.
+      parameters:
+        - name: reservaId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Pago rechazado }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error:
+      description: Error (400 invalido, 401 sin usuario, 403 sin permiso, 404 no existe, 409 conflicto)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    TipoSector:
+      type: string
+      enum: [NUMERADO, NO_NUMERADO]
+    EstadoDisponibilidad:
+      type: string
+      enum: [LIBRE, RESERVADO, VENDIDO]
+    AsientoDTO:
+      type: object
+      required: [fila, numero]
+      properties:
+        fila:
+          type: integer
+          minimum: 1
+        numero:
+          type: integer
+          minimum: 1
+    AsientoDisponibilidadDTO:
+      type: object
+      required: [fila, numero, estado]
+      properties:
+        fila: { type: integer }
+        numero: { type: integer }
+        estado:
+          $ref: '#/components/schemas/EstadoDisponibilidad'
+    SectorDisponibilidadDTO:
+      type: object
+      required: [sectorId, tipo]
+      description: |
+        Para sectores NO_NUMERADO se exige capacidadMaxima. Para sectores NUMERADO se exige
+        asientos, o bien filas y asientosPorFila para generarlos.
+      properties:
+        sectorId: { type: integer, format: int64 }
+        tipo:
+          $ref: '#/components/schemas/TipoSector'
+        capacidadMaxima:
+          type: integer
+          minimum: 1
+        asientos:
+          type: array
+          items:
+            $ref: '#/components/schemas/AsientoDTO'
+        filas:
+          type: integer
+          minimum: 1
+        asientosPorFila:
+          type: integer
+          minimum: 1
+    SectorDisponibilidadResponseDTO:
+      type: object
+      required: [sectorId, tipoSector, capacidadTotal, disponibles]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        tipoSector:
+          $ref: '#/components/schemas/TipoSector'
+        capacidadTotal: { type: integer }
+        disponibles: { type: integer }
+        asientos:
+          type: array
+          nullable: true
+          description: Solo se informa en sectores NUMERADO
+          items:
+            $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    PublicarEventoRequestDTO:
+      type: object
+      required: [eventoId, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        limiteEntradasPorCliente:
+          type: integer
+          minimum: 1
+        sectores:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/SectorDisponibilidadDTO'
+    DisponibilidadResponseDTO:
+      type: object
+      required: [eventoId, yaExistia, sectoresProcesados, asientosInsertados, asientosOmitidos, creadoEl]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        yaExistia: { type: boolean }
+        sectoresProcesados: { type: integer }
+        asientosInsertados: { type: integer }
+        asientosOmitidos: { type: integer }
+        creadoEl: { type: string, format: date-time }
+    DisponibilidadEventoResponseDTO:
+      type: object
+      required: [eventoId, limiteEntradasPorCliente, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        limiteEntradasPorCliente: { type: integer }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorDisponibilidadResponseDTO'
+    ReservaRequestDTO:
+      type: object
+      required: [sectorId]
+      description: |
+        Se debe informar asientos, o bien cantidad. Si se informan asientos, cantidad es
+        opcional y se calcula a partir de la lista.
+      properties:
+        sectorId: { type: integer, format: int64 }
+        cantidad:
+          type: integer
+          minimum: 1
+        asientos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AsientoDTO'
+    ReservaResponseDTO:
+      type: object
+      required: [idReserva, eventoId, clienteId, sectorId, cantidad, limiteEntradasPorCliente, entradasVigentes, expiraEl, codigosQr]
+      properties:
+        idReserva: { type: integer, format: int64 }
+        eventoId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        sectorId: { type: integer, format: int64 }
+        cantidad: { type: integer }
+        limiteEntradasPorCliente: { type: integer }
+        entradasVigentes: { type: integer, format: int64 }
+        expiraEl: { type: string, format: date-time }
+        codigosQr:
+          type: array
+          items: { type: string }
+        asientos:
+          type: array
+          nullable: true
+          description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
+          items:
+            $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    Problema:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
