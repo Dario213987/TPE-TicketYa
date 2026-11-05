@@ -11,11 +11,12 @@ import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
 import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 @Data
+@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-@Builder
 public class EventoResponseDTO {
 
     private Long id;
@@ -28,4 +29,5 @@ public class EventoResponseDTO {
     private LocalDate fecha;
     private List<ParticipanteResponseDTO> participantes;
     private List<SectorResponseDTO> sectores;
+    private Map<Long, Double> preciosSectores;
 }
