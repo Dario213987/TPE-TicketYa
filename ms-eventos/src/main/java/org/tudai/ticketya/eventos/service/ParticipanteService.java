@@ -3,9 +3,9 @@ package org.tudai.ticketya.eventos.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.domain.Participante;
-import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
 @Service
@@ -21,9 +21,10 @@ public class ParticipanteService {
     }
 
 
-    public Participante crearParticipante(ParticipanteRequestDTO request) {
-        return Participante.builder()
+    @Transactional
+    public Participante crearParticipante(ParticipanteRequest request) {
+        return participanteRepository.save(Participante.builder()
                 .nombre(request.getNombre())
-                .build();
+                .build());
     }
 }

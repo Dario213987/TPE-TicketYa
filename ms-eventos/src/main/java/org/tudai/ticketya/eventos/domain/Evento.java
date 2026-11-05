@@ -2,6 +2,8 @@ package org.tudai.ticketya.eventos.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,7 +21,8 @@ public class Evento {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String tipo;
+    @Enumerated(EnumType.STRING)
+    private TipoEvento tipo;
 	private LocalDate fecha;
 	@ManyToOne
 	@JoinColumn(name = "lugar_id")

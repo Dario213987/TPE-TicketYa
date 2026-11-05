@@ -4,6 +4,13 @@ import org.modelmapper.ModelMapper;
 import org.modelmapper.config.Configuration;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.LugarCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.LugarDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.LugarResponse;
+import org.tudai.ticketya.contract.eventos.model.ParticipanteResponse;
+import org.tudai.ticketya.contract.eventos.model.SectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoSector;
 import org.tudai.ticketya.eventos.domain.Asiento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
@@ -11,17 +18,11 @@ import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
-import org.tudai.ticketya.eventos.domain.TipoSector;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
-import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
-import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
 import java.util.Comparator;
-import java.util.HashMap;
+import java.util.Map;
+import java.util.Objects;
 import java.util.stream.Collectors;
 
 @org.springframework.context.annotation.Configuration
@@ -36,9 +37,9 @@ public class ModelMapperConfig {
                 .setFieldMatchingEnabled(true)
                 .setFieldAccessLevel(Configuration.AccessLevel.PRIVATE);
 
-        modelMapper.createTypeMap(LugarCreateDTO.class, Lugar.class)
+        modelMapper.createTypeMap(LugarCreateRequest.class, Lugar.class)
                 .setPostConverter(context -> {
-                    LugarCreateDTO source = context.getSource();
+                    LugarCreateRequest source = context.getSource();
                     Lugar destination = context.getDestination();
                     destination.setUbicacion(Ubicacion.builder()
                             .latitud(source.getLatitud())
@@ -47,10 +48,10 @@ public class ModelMapperConfig {
                     return destination;
                 });
 
-        modelMapper.createTypeMap(Evento.class, EventoResponseDTO.class)
+        modelMapper.createTypeMap(Evento.class, EventoResponse.class)
                 .setConverter(context -> {
                     Evento source = context.getSource();
-                    EventoResponseDTO destination = new EventoResponseDTO();
+                    EventoResponse destination = new EventoResponse();
                     destination.setId(source.getId());
                     destination.setNombre(source.getNombre());
                     destination.setDescripcion(source.getDescripcion());
@@ -60,30 +61,38 @@ public class ModelMapperConfig {
                     destination.setOrganizadorId(source.getOrganizadorId());
                     destination.setLugar(source.getLugar() == null
                             ? null
-                            : modelMapper.map(source.getLugar(), LugarResponseDTO.class));
+                            : modelMapper.map(source.getLugar(), LugarResponse.class));
                     destination.setParticipantes(source.getParticipantes().stream()
                             .sorted(Comparator.comparing(Participante::getId,
                                     Comparator.nullsLast(Comparator.naturalOrder())))
-                            .map(participante -> ParticipanteResponseDTO.builder()
-                                    .id(participante.getId())
-                                    .nombre(participante.getNombre())
-                                    .build())
+                            .map(participante -> new ParticipanteResponse(participante.getId(), participante.getNombre()))
                             .toList());
-                    destination.setSectores(source.getLugar() == null
-                            ? java.util.List.of()
-                            : sectoresDe(source.getLugar()).stream()
-                                    .sorted(Comparator.comparing(Sector::getNombre,
-                                            Comparator.nullsLast(Comparator.naturalOrder())))
-                                    .map(sector -> modelMapper.map(sector, SectorResponseDTO.class))
-                                    .toList());
-                    destination.setPreciosSectores(new HashMap<>(source.getPreciosSectores()));
+                    destination.setSectores(source.getPreciosSectores().entrySet().stream()
+                            .map(entry -> {
+                                Sector sector = sectoresDe(source.getLugar()).stream()
+                                        .filter(candidato -> Objects.equals(candidato.getId(), entry.getKey()))
+                                        .findFirst()
+                                        .orElse(null);
+                                if (sector == null) {
+                                    return null;
+                                }
+                                SectorResponse response = modelMapper.map(sector, SectorResponse.class);
+                                response.setPrecio(entry.getValue());
+                                return response;
+                            })
+                            .filter(Objects::nonNull)
+                            .sorted(Comparator.comparing(SectorResponse::getNombre,
+                                    Comparator.nullsLast(Comparator.naturalOrder())))
+                            .toList());
+                    destination.setPreciosSectores(source.getPreciosSectores().entrySet().stream()
+                            .collect(Collectors.toMap(entry -> entry.getKey().toString(), Map.Entry::getValue)));
                     return destination;
                 });
 
-        modelMapper.createTypeMap(Lugar.class, LugarResponseDTO.class)
+        modelMapper.createTypeMap(Lugar.class, LugarResponse.class)
                 .setConverter(context -> {
                     Lugar source = context.getSource();
-                    LugarResponseDTO destination = new LugarResponseDTO();
+                    LugarResponse destination = new LugarResponse();
                     destination.setId(source.getId());
                     destination.setNombre(source.getNombre());
                     destination.setTipo(source.getTipo());
@@ -95,10 +104,10 @@ public class ModelMapperConfig {
                     return destination;
                 });
 
-        modelMapper.createTypeMap(SectorNoNumerado.class, SectorResponseDTO.class)
+        modelMapper.createTypeMap(SectorNoNumerado.class, SectorResponse.class)
                 .setConverter(context -> {
                     SectorNoNumerado source = context.getSource();
-                    SectorResponseDTO destination = new SectorResponseDTO();
+                    SectorResponse destination = new SectorResponse();
                     destination.setId(source.getId());
                     destination.setNombre(source.getNombre());
                     destination.setPrecio(source.getPrecio());
@@ -108,10 +117,10 @@ public class ModelMapperConfig {
                     return destination;
                 });
 
-        modelMapper.createTypeMap(SectorNumerado.class, SectorResponseDTO.class)
+        modelMapper.createTypeMap(SectorNumerado.class, SectorResponse.class)
                 .setConverter(context -> {
                     SectorNumerado source = context.getSource();
-                    SectorResponseDTO destination = new SectorResponseDTO();
+                    SectorResponse destination = new SectorResponse();
                     destination.setId(source.getId());
                     destination.setNombre(source.getNombre());
                     destination.setPrecio(source.getPrecio());
@@ -122,10 +131,10 @@ public class ModelMapperConfig {
                     return destination;
                 });
 
-        modelMapper.createTypeMap(Lugar.class, LugarDetalleResponseDTO.class)
+        modelMapper.createTypeMap(Lugar.class, LugarDetalleResponse.class)
                 .setConverter(context -> {
                     Lugar source = context.getSource();
-                    LugarDetalleResponseDTO destination = new LugarDetalleResponseDTO();
+                    LugarDetalleResponse destination = new LugarDetalleResponse();
                     destination.setId(source.getId());
                     destination.setNombre(source.getNombre());
                     destination.setTipo(source.getTipo());
@@ -137,7 +146,7 @@ public class ModelMapperConfig {
                     destination.setSectores(sectoresDe(source).stream()
                             .sorted(Comparator.comparing(Sector::getNombre,
                                     Comparator.nullsLast(Comparator.naturalOrder())))
-                            .map(sector -> modelMapper.map(sector, SectorResponseDTO.class))
+                            .map(sector -> modelMapper.map(sector, SectorResponse.class))
                             .toList());
                     return destination;
                 });

@@ -10,18 +10,17 @@ import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
+import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
+import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
-import org.tudai.ticketya.eventos.dto.evento.EventoBorradorCreateDTO;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
-import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
-import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.domain.Sector;
-import org.tudai.ticketya.eventos.dto.evento.EventoUpdateDTO;
-import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
+import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
@@ -34,6 +33,9 @@ import java.util.Set;
 @RequiredArgsConstructor
 public class EventoService {
 
+    static final Set<EstadoEvento> ESTADOS_VISIBLES = Set.of(
+            EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
+
     private final EventoRepository eventoRepository;
     private final LugarRepository lugarRepository;
     private final ModelMapper modelMapper;
@@ -43,11 +45,11 @@ public class EventoService {
 
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(Pageable pageable) {
-        return eventoRepository.findByEstadoIn(EstadoEvento.VISIBLES, pageable);
+        return eventoRepository.findByEstadoIn(ESTADOS_VISIBLES, pageable);
     }
 
     @Transactional
-    public EventoResponseDTO actualizarEvento(Long eventoId, EventoUpdateDTO dto, Long organizadorId,
+    public EventoResponse actualizarEvento(Long eventoId, EventoUpdateRequest dto, Long organizadorId,
                                               boolean esAdmin) {
         Evento evento = buscarEvento(eventoId);
         verificarPropiedad(evento, organizadorId, esAdmin, "modificar");
@@ -81,7 +83,7 @@ public class EventoService {
         }
     }
 
-    private void validarCamposEstructurales(Evento evento, EventoUpdateDTO dto) {
+    private void validarCamposEstructurales(Evento evento, EventoUpdateRequest dto) {
         boolean esBorrador = evento.getEstado() == EstadoEvento.BORRADOR;
 
         if (dto.getFecha() != null && !Objects.equals(dto.getFecha(), evento.getFecha())) {
@@ -102,7 +104,8 @@ public class EventoService {
             }
         }
 
-        if (dto.getSectores() != null && !Objects.equals(dto.getSectores(), sectoresDelEvento(evento))) {
+        if (dto.getSectores() != null
+                && !Objects.equals(Set.copyOf(dto.getSectores()), sectoresDelEvento(evento))) {
             if (!esBorrador) {
                 throw new ConflictException(
                         "No se pueden modificar los sectores de un evento ya publicado. Cancelalo o reprogramalo.");
@@ -112,7 +115,7 @@ public class EventoService {
         }
     }
 
-    private void aplicarCambios(Evento evento, EventoUpdateDTO dto) {
+    private void aplicarCambios(Evento evento, EventoUpdateRequest dto) {
         if (dto.getNombre() != null) {
             if (dto.getNombre().isBlank()) {
                 throw new BadRequestException("El nombre del evento no puede estar vacío");
@@ -128,10 +131,7 @@ public class EventoService {
         }
 
         if (dto.getTipo() != null) {
-            if (dto.getTipo().isBlank()) {
-                throw new BadRequestException("El tipo del evento no puede estar vacío");
-            }
-            evento.setTipo(dto.getTipo().trim());
+            evento.setTipo(dto.getTipo());
         }
 
         if (dto.getFecha() != null) {
@@ -157,13 +157,13 @@ public class EventoService {
                 .collect(Collectors.toSet());
     }
 
-    private EventoResponseDTO toResponse(Evento evento) {
-        return modelMapper.map(evento, EventoResponseDTO.class);
+    private EventoResponse toResponse(Evento evento) {
+        return modelMapper.map(evento, EventoResponse.class);
     }
 
     @Transactional
-    public PrecioEventoSectorResponseDTO definirPrecioSector(Long eventoId, Long sectorId, Double precio,
-                                                             Long organizadorId, boolean esAdmin) {
+    public PrecioEventoSectorResponse definirPrecioSector(Long eventoId, Long sectorId, Double precio,
+                                                          Long organizadorId, boolean esAdmin) {
         Evento evento = eventoRepository.findById(eventoId)
                 .orElseThrow(() -> new NotFoundException("Evento no encontrado con id: " + eventoId));
 
@@ -186,11 +186,7 @@ public class EventoService {
         evento.definirPrecioSector(sectorId, precio);
         eventoRepository.save(evento);
 
-        return PrecioEventoSectorResponseDTO.builder()
-                .eventoId(eventoId)
-                .sectorId(sectorId)
-                .precio(precio)
-                .build();
+        return new PrecioEventoSectorResponse(eventoId, sectorId, precio);
     }
 
     private boolean sectorPerteneceAlLugar(Evento evento, Long sectorId) {
@@ -203,7 +199,16 @@ public class EventoService {
     }
 
     @Transactional
-    public EventoResponseDTO crearEventoBorrador(EventoBorradorCreateDTO request, Long organizadorId) {
+    public EventoResponse crearEventoBorrador(EventoBorradorCreateRequest request, Long organizadorId) {
+
+        if (request.getFecha() == null || !request.getFecha().isAfter(LocalDate.now())) {
+            throw new FechaEventoInvalidaException("La fecha del evento debe ser posterior a hoy");
+        }
+        if (request.getNombre() == null || request.getNombre().isBlank()
+                || request.getDescripcion() == null || request.getDescripcion().isBlank()
+                || request.getTipo() == null || request.getLugarId() == null) {
+            throw new BadRequestException("Nombre, descripción, tipo, fecha y lugar son obligatorios");
+        }
 
         Lugar lugar = lugarService.obtenerPorId(request.getLugarId());
 
@@ -230,7 +235,12 @@ public class EventoService {
         return toResponse(guardado);
     }
 
-    private Participante resolverParticipante(ParticipanteRequestDTO request) {
+    private Participante resolverParticipante(ParticipanteRequest request) {
+
+        if (request == null || (request.getId() == null
+                && (request.getNombre() == null || request.getNombre().isBlank()))) {
+            throw new BadRequestException("Cada participante debe incluir un id o un nombre");
+        }
 
         if (request.getId() != null) {
             return participanteService.obtenerPorId(request.getId());
@@ -239,15 +249,4 @@ public class EventoService {
         return participanteService.crearParticipante(request);
     }
 
-    public LugarResponseDTO mapearLugar(Lugar lugar) {
-        return modelMapper.map(lugar, LugarResponseDTO.class);
-    }
-
-    private ParticipanteResponseDTO toParticipanteResponseDTO(Participante participante) {
-        return ParticipanteResponseDTO.builder()
-                .id(participante.getId())
-                .nombre(participante.getNombre())
-                .build();
-    }
 }
-
