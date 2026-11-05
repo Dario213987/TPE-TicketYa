@@ -4,7 +4,6 @@ import org.modelmapper.ModelMapper;
 import org.modelmapper.config.Configuration;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
-import org.springframework.data.domain.Page;
 import org.tudai.ticketya.eventos.domain.Asiento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
@@ -18,6 +17,7 @@ import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
 import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
+import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
 
 import java.util.Comparator;
@@ -61,10 +61,21 @@ public class ModelMapperConfig {
                     destination.setLugar(source.getLugar() == null
                             ? null
                             : modelMapper.map(source.getLugar(), LugarResponseDTO.class));
-                    destination.setArtistas(source.getArtistas().stream()
-                            .map(Participante::getNombre)
-                            .sorted(Comparator.nullsLast(Comparator.naturalOrder()))
+                    destination.setParticipantes(source.getParticipantes().stream()
+                            .sorted(Comparator.comparing(Participante::getId,
+                                    Comparator.nullsLast(Comparator.naturalOrder())))
+                            .map(participante -> ParticipanteResponseDTO.builder()
+                                    .id(participante.getId())
+                                    .nombre(participante.getNombre())
+                                    .build())
                             .toList());
+                    destination.setSectores(source.getLugar() == null
+                            ? java.util.List.of()
+                            : sectoresDe(source.getLugar()).stream()
+                                    .sorted(Comparator.comparing(Sector::getNombre,
+                                            Comparator.nullsLast(Comparator.naturalOrder())))
+                                    .map(sector -> modelMapper.map(sector, SectorResponseDTO.class))
+                                    .toList());
                     destination.setPreciosSectores(new HashMap<>(source.getPreciosSectores()));
                     return destination;
                 });

@@ -22,7 +22,6 @@ public class ParticipanteService {
 
 
     public Participante crearParticipante(ParticipanteRequestDTO request) {
-
         return Participante.builder()
                 .nombre(request.getNombre())
                 .build();

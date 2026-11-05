@@ -20,19 +20,15 @@ import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteRequestDTO;
 import org.tudai.ticketya.eventos.dto.participante.ParticipanteResponseDTO;
 import org.tudai.ticketya.eventos.domain.Sector;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.dto.evento.EventoUpdateDTO;
 import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.time.LocalDate;
-import java.util.Comparator;
-import java.util.List;
 import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Set;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -227,7 +223,7 @@ public class EventoService {
             Set<Participante> participantesResueltos = request.getParticipantes().stream()
                     .map(this::resolverParticipante)
                     .collect(Collectors.toSet());
-            evento.getArtistas().addAll(participantesResueltos);
+            evento.getParticipantes().addAll(participantesResueltos);
         }
 
         Evento guardado = eventoRepository.save(evento);
@@ -243,29 +239,8 @@ public class EventoService {
         return participanteService.crearParticipante(request);
     }
 
-    private EventoResponseDTO toResponse(Evento evento) {
-        return EventoResponseDTO.builder()
-                .id(evento.getId())
-                .nombre(evento.getNombre())
-                .descripcion(evento.getDescripcion())
-                .tipo(evento.getTipo())
-                .estado(evento.getEstado())
-                .organizadorId(evento.getOrganizadorId())
-                .lugar(mapearLugar(evento.getLugar()))
-                .fecha(evento.getFecha())
-                .participantes(toParticipanteResponses(evento.getArtistas()))
-                .build();
-    }
-
     public LugarResponseDTO mapearLugar(Lugar lugar) {
         return modelMapper.map(lugar, LugarResponseDTO.class);
-    }
-
-    private List<ParticipanteResponseDTO> toParticipanteResponses(Set<Participante> participantes) {
-        return participantes.stream()
-                .sorted(Comparator.comparing(Participante::getId))
-                .map(this::toParticipanteResponseDTO)
-                .toList();
     }
 
     private ParticipanteResponseDTO toParticipanteResponseDTO(Participante participante) {

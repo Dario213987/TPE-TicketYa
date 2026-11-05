@@ -30,7 +30,7 @@ public class Evento {
     private EstadoEvento estado = EstadoEvento.BORRADOR;
     private String nombre;
 	private String descripcion;
-	@ManyToMany
+	@ManyToMany(cascade = CascadeType.PERSIST)
 	@JoinTable(
 			name = "evento_participante",
 			joinColumns = @JoinColumn(name = "evento_id"),
@@ -38,7 +38,7 @@ public class Evento {
 	)
 	@Builder.Default
 	@Setter(AccessLevel.NONE)
-	private Set<Participante> artistas = new HashSet<>();
+	private Set<Participante> participantes = new HashSet<>();
 
 	@ElementCollection
 	@CollectionTable(
@@ -54,11 +54,11 @@ public class Evento {
 		this.preciosSectores.put(sectorId, precio);
 	}
 
-	public void addArtista(Participante part) {
-		this.artistas.add(part);
+	public void addParticipante(Participante part) {
+		this.participantes.add(part);
 	}
 
-	public void removeArtista(Participante part) {this.artistas.remove(part);
+	public void removeParticipante(Participante part) {this.participantes.remove(part);
 	}
 
     @Override
