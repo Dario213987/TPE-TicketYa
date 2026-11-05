@@ -145,8 +145,8 @@ public class EventoService {
      * Cancela un evento publicado. Solo puede ser realizado por un administrador.
      * <p>
      * Valida que el usuario sea administrador, que el evento exista y que esté en estado
-     * PUBLICADO. Si las validaciones pasan, avisa a ms-tickets para que bloquee nuevas
-     * reservas y compras, y recién después cambia el estado a CANCELADO.
+     * PUBLICADO o SUSPENDIDO. Si las validaciones pasan, avisa a ms-tickets para que bloquee
+     * nuevas reservas y compras, y recién después cambia el estado a CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
@@ -158,7 +158,7 @@ public class EventoService {
      *
      * @throws ForbiddenException     si el usuario no es administrador
      * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
@@ -177,7 +177,8 @@ public class EventoService {
             return toPublicadoDTO(evento);
         }
 
-        if(evento.getEstado() != EstadoEvento.PUBLICADO){
+        if (evento.getEstado() != EstadoEvento.PUBLICADO
+                && evento.getEstado() != EstadoEvento.SUSPENDIDO) {
             throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
         }
 
@@ -198,6 +199,40 @@ public class EventoService {
 
         return toPublicadoDTO(evento);
 
+    }
+
+    @Transactional
+    public EventoPublicadoDTO suspenderEvento(Long id, boolean esAdmin) {
+
+        if (!esAdmin) {
+            throw new ForbiddenException("Solo administradores pueden suspender un evento");
+        }
+
+        Evento evento = eventoRepository.findById(id).orElseThrow(
+                () -> new NotFoundException("No se encontró el evento solicitado"));
+
+        if (evento.getEstado() == EstadoEvento.SUSPENDIDO) {
+            return toPublicadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("El evento debe ser publicado para poder ser suspendido");
+        }
+
+        evento.setEstado(EstadoEvento.SUSPENDIDO);
+        evento = eventoRepository.save(evento);
+
+        try {
+            ticketsClient.suspenderEvento(evento.getId());
+
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
+
+        } catch (FeignException e) {
+            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
+        }
+
+        return toPublicadoDTO(evento);
     }
 
     @Transactional

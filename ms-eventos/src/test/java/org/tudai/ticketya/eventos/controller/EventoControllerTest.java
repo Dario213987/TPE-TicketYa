@@ -418,6 +418,73 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
     }
 
+    @Test
+    void suspenderEvento_comoAdministrador_devuelve200() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.suspenderEvento(1L, true))
+                .thenReturn(eventoSuspendido());
+
+        mvc.perform(put("/api/eventos/1/suspender"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.nombre").value("Festival"))
+                .andExpect(jsonPath("$.estado").value("SUSPENDIDO"));
+
+        verify(eventoService).suspenderEvento(1L, true);
+    }
+
+    @Test
+    void suspenderEvento_conRolNoAdministrador_devuelve403SinLlamarAlServicio() throws Exception {
+        when(userContext.userId()).thenReturn(7L);
+
+        for (Role rol : List.of(Role.ORGANIZADOR, Role.CLIENTE, Role.PERSONAL_ACCESO)) {
+            when(userContext.role()).thenReturn(rol);
+
+            mvc.perform(put("/api/eventos/1/suspender"))
+                    .andExpect(status().isForbidden());
+        }
+
+        verifyNoInteractions(eventoService);
+    }
+
+    @Test
+    void suspenderEvento_conEventoInexistente_devuelve404() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.suspenderEvento(99L, true))
+                .thenThrow(new NotFoundException("No se encontró el evento solicitado"));
+
+        mvc.perform(put("/api/eventos/99/suspender"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No se encontró el evento solicitado"));
+    }
+
+    @Test
+    void suspenderEvento_enEstadoNoSuspendible_devuelve409() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.suspenderEvento(1L, true))
+                .thenThrow(new ConflictException("El evento debe ser publicado para poder ser suspendido"));
+
+        mvc.perform(put("/api/eventos/1/suspender"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("El evento debe ser publicado para poder ser suspendido"));
+    }
+
+    @Test
+    void suspenderEvento_conMsTicketsNoDisponible_devuelve502() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.suspenderEvento(1L, true))
+                .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
+
+        mvc.perform(put("/api/eventos/1/suspender"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
+    }
+
     private MockMvc mockMvc(Object... controllerAdvice) {
         return MockMvcBuilders.standaloneSetup(new EventoController(eventoService, new ModelMapper(), userContext))
                 .setControllerAdvice(controllerAdvice)
@@ -439,6 +506,14 @@ class EventoControllerTest {
                 .id(1L)
                 .nombre("Festival")
                 .estado("CANCELADO")
+                .build();
+    }
+
+    private EventoPublicadoDTO eventoSuspendido() {
+        return EventoPublicadoDTO.builder()
+                .id(1L)
+                .nombre("Festival")
+                .estado("SUSPENDIDO")
                 .build();
     }
 }

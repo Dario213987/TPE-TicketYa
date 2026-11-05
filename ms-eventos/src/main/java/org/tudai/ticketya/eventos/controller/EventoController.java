@@ -101,8 +101,15 @@ public class EventoController {
 
     @Authorize("hasRole('ADMINISTRADOR')")
     @PutMapping("/{id}/cancelar")
-    public EventoPublicadoDTO suspenderEvento(@PathVariable Long id){
+    public EventoPublicadoDTO cacelarEvento(@PathVariable Long id){
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.cancelarEvento(id, esAdmin);
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/suspender")
+    public EventoPublicadoDTO suspenderEvento(@PathVariable Long id){
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.suspenderEvento(id, esAdmin);
     }
 }

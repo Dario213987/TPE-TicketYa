@@ -9,6 +9,7 @@ public enum EstadoEvento {
     CANCELADO,
     FINALIZADO,
     PUBLICADO,
+    SUSPENDIDO,
     AGOTADO;
 
     public static final Set<EstadoEvento> VISIBLES = EnumSet.of(CONFIRMADO, FINALIZADO, AGOTADO);
