@@ -14,11 +14,13 @@ import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.ReservaRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
+import org.tudai.ticketya.tickets.repository.VentaRepository;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Cobro;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Preparacion;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -48,12 +50,15 @@ class ReservaPagoServiceTest {
     @Mock
     private ReservaVencidaService reservaVencidaService;
 
+    @Mock
+    private VentaRepository ventaRepository;
+
     private ReservaPagoService service;
 
     @BeforeEach
     void setUp() {
         service = new ReservaPagoService(reservaRepository, eventoRepository, ticketRepository,
-                reservaVencidaService);
+                reservaVencidaService, ventaRepository);
     }
 
     @Test
@@ -190,8 +195,13 @@ class ReservaPagoServiceTest {
         ticket.setPrecio(1500.0);
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
         when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(ticket));
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(invocacion -> {
+            Venta venta = invocacion.getArgument(0);
+            venta.setId(300L);
+            return venta;
+        });
 
-        CompraResponseDTO compra = service.emitir(RESERVA_ID);
+        CompraResponseDTO compra = service.emitir(RESERVA_ID, Map.of(1L, 501L));
 
         assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.VENDIDO);
         assertThat(ticket.getExpiraEl()).isNull();
@@ -199,6 +209,7 @@ class ReservaPagoServiceTest {
         assertThat(reserva.getEstadoPago()).isEqualTo(EstadoPago.APROBADO);
         assertThat(reserva.getPagadoEl()).isNotNull();
         assertThat(compra.getTotal()).isEqualTo(1500.0);
+        assertThat(compra.getVentaId()).isEqualTo(300L);
         assertThat(compra.getTickets()).singleElement().satisfies(emitido -> {
             assertThat(emitido.getCodigoQr()).isEqualTo("qr-1");
             assertThat(emitido.getFila()).isEqualTo(2);
@@ -207,11 +218,64 @@ class ReservaPagoServiceTest {
     }
 
     @Test
+    void emitir_registraLaVentaConSusItemsYElPrecioCobrado() {
+        Reserva reserva = reserva(EstadoPago.PENDIENTE_PAGO);
+        reserva.setMedioPago("TARJETA");
+        DisponibilidadSector sector = sector(1500.0);
+        DisponibilidadAsiento asiento = DisponibilidadAsiento.builder()
+                .sector(sector).fila(2).numero(5).estado(EstadoDisponibilidad.RESERVADO).build();
+        Ticket numerado = ticket(1L, sector, asiento, EstadoTicket.PENDIENTE_PAGO);
+        numerado.setPrecio(1500.0);
+        Ticket campo = ticket(2L, sector, null, EstadoTicket.PENDIENTE_PAGO);
+        campo.setPrecio(800.0);
+        sector.setPrecio(9999.0);
+        when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(numerado, campo));
+        when(ventaRepository.save(any(Venta.class))).thenAnswer(invocacion -> invocacion.getArgument(0));
+
+        service.emitir(RESERVA_ID, Map.of(1L, 501L, 2L, 502L));
+
+        org.mockito.ArgumentCaptor<Venta> guardada = org.mockito.ArgumentCaptor.forClass(Venta.class);
+        verify(ventaRepository).save(guardada.capture());
+        Venta venta = guardada.getValue();
+        assertThat(venta.getReservaId()).isEqualTo(RESERVA_ID);
+        assertThat(venta.getClienteId()).isEqualTo(CLIENTE_ID);
+        assertThat(venta.getEventoId()).isEqualTo(EVENTO_ID);
+        assertThat(venta.getMedioPago()).isEqualTo("TARJETA");
+        assertThat(venta.getTotal()).isEqualTo(2300.0);
+        assertThat(venta.getCreadoEl()).isNotNull();
+        assertThat(venta.getItems())
+                .extracting(VentaItem::getTicket, VentaItem::getSectorIdExterno, VentaItem::getFila,
+                        VentaItem::getNumero, VentaItem::getPrecio, VentaItem::getTransaccionId)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(numerado, 3L, 2, 5, 1500.0, 501L),
+                        org.assertj.core.groups.Tuple.tuple(campo, 3L, null, null, 800.0, 502L));
+        assertThat(venta.getItems()).allSatisfy(item -> assertThat(item.getVenta()).isSameAs(venta));
+        assertThat(numerado.getVenta()).isSameAs(venta);
+        assertThat(campo.getVenta()).isSameAs(venta);
+    }
+
+    @Test
+    void emitir_reservaYaAprobada_devuelveLaCompraSinRegistrarOtraVenta() {
+        Reserva reserva = reserva(EstadoPago.APROBADO);
+        Venta venta = Venta.builder().id(300L).build();
+        Ticket vendido = ticket(1L, sector(1500.0), null, EstadoTicket.VENDIDO);
+        vendido.setVenta(venta);
+        when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(vendido));
+
+        CompraResponseDTO compra = service.emitir(RESERVA_ID, Map.of(1L, 501L));
+
+        assertThat(compra.getVentaId()).isEqualTo(300L);
+        verifyNoInteractions(ventaRepository);
+    }
+
+    @Test
     void emitir_reservaSinPagoPendiente_lanzaConflictException() {
         when(reservaRepository.findByIdForUpdate(RESERVA_ID))
                 .thenReturn(Optional.of(reserva(EstadoPago.RECHAZADO)));
 
-        assertThatThrownBy(() -> service.emitir(RESERVA_ID))
+        assertThatThrownBy(() -> service.emitir(RESERVA_ID, Map.of()))
                 .isInstanceOf(ConflictException.class);
         verify(ticketRepository, never()).saveAll(any());
     }
@@ -226,6 +290,7 @@ class ReservaPagoServiceTest {
         service.liberar(RESERVA_ID, EstadoPago.REINTEGRADO, "falla de emisión");
 
         verify(reservaVencidaService).liberar(List.of(pendiente), EstadoTicket.CANCELADO);
+        verifyNoInteractions(ventaRepository);
         assertThat(reserva.getEstadoPago()).isEqualTo(EstadoPago.REINTEGRADO);
         assertThat(reserva.getMotivoRechazo()).isEqualTo("falla de emisión");
     }

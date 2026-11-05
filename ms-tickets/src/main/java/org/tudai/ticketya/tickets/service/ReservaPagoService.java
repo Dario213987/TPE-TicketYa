@@ -13,9 +13,11 @@ import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.ReservaRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
+import org.tudai.ticketya.tickets.repository.VentaRepository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 
 /**
@@ -32,6 +34,7 @@ public class ReservaPagoService {
     private final DisponibilidadEventoRepository eventoRepository;
     private final TicketRepository ticketRepository;
     private final ReservaVencidaService reservaVencidaService;
+    private final VentaRepository ventaRepository;
 
     /**
      * Débito a generar por un ticket de la reserva.
@@ -113,13 +116,16 @@ public class ReservaPagoService {
     }
 
     /**
-     * Emite las entradas de una reserva cuyo pago se aprobó: tickets y asientos pasan a VENDIDO.
+     * Emite las entradas de una reserva cuyo pago se aprobó: tickets y asientos pasan a VENDIDO
+     * y se registra la venta con sus ítems (sector, asiento, precio cobrado y transacción).
      * Si otro intento ya la emitió, devuelve esa compra.
+     *
+     * @param transacciones id de la transacción de débito de cada ticket (ticketId → transaccionId)
      *
      * @throws ConflictException si la reserva no está en PENDIENTE_PAGO ni APROBADO
      */
     @Transactional
-    public CompraResponseDTO emitir(Long reservaId) {
+    public CompraResponseDTO emitir(Long reservaId, Map<Long, Long> transacciones) {
         Reserva reserva = reservaBloqueada(reservaId);
         if (reserva.getEstadoPago() == EstadoPago.APROBADO) {
             return toResponse(reserva, ticketsDe(reservaId));
@@ -136,13 +142,40 @@ public class ReservaPagoService {
                 ticket.getAsiento().setEstado(EstadoDisponibilidad.VENDIDO);
             }
         }
+        Instant ahora = Instant.now();
+        Venta venta = registrarVenta(reserva, tickets, transacciones, ahora);
+        tickets.forEach(ticket -> ticket.setVenta(venta));
         ticketRepository.saveAll(tickets);
 
         reserva.setEstadoPago(EstadoPago.APROBADO);
-        reserva.setPagadoEl(Instant.now());
+        reserva.setPagadoEl(ahora);
         reservaRepository.save(reserva);
 
         return toResponse(reserva, tickets);
+    }
+
+    private Venta registrarVenta(Reserva reserva, List<Ticket> tickets, Map<Long, Long> transacciones,
+                                 Instant ahora) {
+        Venta venta = Venta.builder()
+                .reservaId(reserva.getId())
+                .clienteId(reserva.getClienteId())
+                .eventoId(reserva.getEventoId())
+                .medioPago(reserva.getMedioPago())
+                .total(tickets.stream().mapToDouble(Ticket::getPrecio).sum())
+                .creadoEl(ahora)
+                .build();
+
+        for (Ticket ticket : tickets) {
+            venta.agregarItem(VentaItem.builder()
+                    .ticket(ticket)
+                    .sectorIdExterno(ticket.getSector().getSectorIdExterno())
+                    .fila(ticket.getAsiento() == null ? null : ticket.getAsiento().getFila())
+                    .numero(ticket.getAsiento() == null ? null : ticket.getAsiento().getNumero())
+                    .precio(ticket.getPrecio())
+                    .transaccionId(transacciones.get(ticket.getId()))
+                    .build());
+        }
+        return ventaRepository.save(venta);
     }
 
     /**
@@ -227,6 +260,13 @@ public class ReservaPagoService {
 
         return CompraResponseDTO.builder()
                 .reservaId(reserva.getId())
+                .ventaId(tickets.stream()
+                        .map(Ticket::getVenta)
+                        .filter(Objects::nonNull)
+                        .map(Venta::getId)
+                        .filter(Objects::nonNull)
+                        .findFirst()
+                        .orElse(null))
                 .eventoId(reserva.getEventoId())
                 .clienteId(reserva.getClienteId())
                 .medioPago(reserva.getMedioPago())

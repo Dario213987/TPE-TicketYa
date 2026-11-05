@@ -132,7 +132,9 @@
 									"pm.test(\"registra el medio de pago\", () => pm.expect(j.medioPago).to.eql(\"TARJETA_CREDITO\"));",
 									"pm.test(\"tickets VENDIDO con QR\", () => j.tickets.forEach(t => { pm.expect(t.estado).to.eql(\"VENDIDO\"); pm.expect(t.codigoQr).to.exist; }));",
 									"pm.test(\"total = 2 x 1500\", () => pm.expect(j.total).to.eql(3000));",
-									"pm.collectionVariables.set(\"primerQr\", j.tickets[0].codigoQr);"
+									"pm.test(\"registra la venta\", () => pm.expect(j.ventaId).to.be.a(\"number\"));",
+									"pm.collectionVariables.set(\"primerQr\", j.tickets[0].codigoQr);",
+									"pm.collectionVariables.set(\"ventaId\", j.ventaId);"
 								]
 							}
 						}
@@ -190,7 +192,8 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
-									"pm.test(\"devuelve la compra original\", () => pm.expect(pm.response.json().tickets[0].codigoQr).to.eql(pm.collectionVariables.get(\"primerQr\")));"
+									"pm.test(\"devuelve la compra original\", () => pm.expect(pm.response.json().tickets[0].codigoQr).to.eql(pm.collectionVariables.get(\"primerQr\")));",
+									"pm.test(\"la misma venta\", () => pm.expect(pm.response.json().ventaId).to.eql(Number(pm.collectionVariables.get(\"ventaId\"))));"
 								]
 							}
 						}
@@ -506,6 +509,10 @@
 		},
 		{
 			"key": "primerQr",
+			"value": ""
+		},
+		{
+			"key": "ventaId",
 			"value": ""
 		}
 	]
