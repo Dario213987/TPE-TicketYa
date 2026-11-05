@@ -1,0 +1,45 @@
+// Busca los archivos JSON de log de cada servicio. Los servicios escriben en
+// logs/<servicio>/<servicio>.json.log relativo a la carpeta desde donde se
+// lanzan: la raíz del repo (java -jar) o la del módulo (spring-boot:run, IntelliJ).
+local.file_match "ticketya" {
+  path_targets = [
+    {"__path__" = "/ticketya/logs/*/*.json.log"},
+    {"__path__" = "/ticketya/*/logs/*/*.json.log"},
+  ]
+  sync_period = "5s"
+}
+
+loki.source.file "ticketya" {
+  targets    = local.file_match.ticketya.targets
+  forward_to = [loki.process.ticketya.receiver]
+}
+
+// Cada línea trae el campo "service" (lo agrega ticketya-logging): se usa como
+// etiqueta, y "timestamp" como hora del log.
+loki.process "ticketya" {
+  stage.json {
+    expressions = {
+      service   = "service",
+      timestamp = "timestamp",
+    }
+  }
+
+  stage.labels {
+    values = {
+      service = "",
+    }
+  }
+
+  stage.timestamp {
+    source = "timestamp"
+    format = "RFC3339Nano"
+  }
+
+  forward_to = [loki.write.local.receiver]
+}
+
+loki.write "local" {
+  endpoint {
+    url = "http://loki:3100/loki/api/v1/push"
+  }
+}
