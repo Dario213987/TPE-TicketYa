@@ -467,9 +467,13 @@ class EventoServiceTest {
         PublicarEventoRequest request = captor.getValue();
 
         assertThat(request.getEventoId()).isEqualTo(1L);
+        assertThat(request.getOrganizadorId()).isEqualTo(7L);
         assertThat(request.getSectores())
-                .extracting(SectorDisponibilidadRequest::getSectorId)
-                .containsExactly(10L, 20L, 30L);
+                .extracting(SectorDisponibilidadRequest::getSectorId, SectorDisponibilidadRequest::getPrecio)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(10L, 1000.0),
+                        org.assertj.core.groups.Tuple.tuple(20L, 2000.0),
+                        org.assertj.core.groups.Tuple.tuple(30L, 3000.0));
 
         SectorDisponibilidadRequest platea = request.getSectores().get(0);
         assertThat(platea.getTipo()).isEqualTo(TipoSectorRequest.NUMERADO);
