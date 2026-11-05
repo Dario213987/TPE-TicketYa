@@ -33,7 +33,7 @@ import java.util.UUID;
 public class ReservaService {
 
     private static final List<EstadoTicket> ESTADOS_VENDIDOS =
-            List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO);
+            List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO);
 
     private final DisponibilidadEventoRepository eventoRepository;
     private final DisponibilidadSectorRepository sectorRepository;

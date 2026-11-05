@@ -56,11 +56,12 @@ class LiquibaseMigrationTest {
     @Test
     void creaLasColumnasEsperadasEnCadaTabla() throws Exception {
         assertThat(columnas("disponibilidad_eventos"))
-                .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente");
+                .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente",
+                        "organizador_id");
 
         assertThat(columnas("disponibilidad_sectores"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id_externo", "tipo",
-                        "capacidad_total", "disponibles");
+                        "capacidad_total", "disponibles", "precio");
 
         assertThat(columnas("disponibilidad_asientos"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id", "fila", "numero",
@@ -73,7 +74,8 @@ class LiquibaseMigrationTest {
 
         assertThat(columnas("reservas"))
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
-                        "expira_el", "creado_el");
+                        "expira_el", "creado_el", "idempotency_key", "medio_pago", "estado_pago",
+                        "motivo_rechazo", "pagado_el");
     }
 
     @Test
@@ -112,7 +114,7 @@ class LiquibaseMigrationTest {
         liquibase.update(new Contexts());
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas");
-        assertThat(contarCambiosAplicados()).isEqualTo(5);
+        assertThat(contarCambiosAplicados()).isEqualTo(6);
     }
 
     @Test

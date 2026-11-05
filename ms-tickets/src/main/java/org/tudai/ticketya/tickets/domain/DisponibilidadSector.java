@@ -43,6 +43,9 @@ public class DisponibilidadSector {
     @Column(name = "disponibles", nullable = false)
     private Integer disponibles;
 
+    @Column(name = "precio")
+    private Double precio;
+
     @OneToMany(mappedBy = "sector", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<DisponibilidadAsiento> asientos = new HashSet<>();
