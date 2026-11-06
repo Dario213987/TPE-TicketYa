@@ -6,11 +6,13 @@ import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
 import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
@@ -21,12 +23,9 @@ import java.util.Optional;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.doThrow;
-import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -47,11 +46,17 @@ class EventoServiceEstadosAutomaticosTest {
     @Mock
     private ModelMapper modelMapper;
 
+    @Mock
+    private NotificacionTicketsService notificacionTicketsService;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private EventoService eventoService;
 
     @Test
-    void finalizarEventosVencidos_finalizaEstadosActivosYNotificaATickets() {
+    void finalizarEventosVencidos_finalizaYEncolaUnaNotificacionPorEvento() {
         LocalDate hoy = LocalDate.now();
         when(eventoRepository.findIdsEventosVencidos(eq(hoy), any()))
                 .thenReturn(List.of(10L, 20L));
@@ -62,22 +67,20 @@ class EventoServiceEstadosAutomaticosTest {
                 eq(hoy),
                 eq(EstadoEvento.FINALIZADO),
                 eq(Set.of(EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO, EstadoEvento.SUSPENDIDO)));
-        verify(ticketsClient).finalizarEvento(10L);
-        verify(ticketsClient).finalizarEvento(20L);
+        verify(notificacionTicketsService).encolar(10L, TipoNotificacionTickets.FINALIZAR);
+        verify(notificacionTicketsService).encolar(20L, TipoNotificacionTickets.FINALIZAR);
+        verifyNoInteractions(ticketsClient);
     }
 
     @Test
-    void finalizarEventosVencidos_siMsTicketsFalla_continuaConLosDemas() {
-        LocalDate hoy = LocalDate.now();
-        when(eventoRepository.findIdsEventosVencidos(eq(hoy), any()))
-                .thenReturn(List.of(10L, 20L));
-        doThrow(mock(feign.RetryableException.class))
-                .when(ticketsClient).finalizarEvento(10L);
+    void finalizarEventosVencidos_sinEventosVencidos_noActualizaNiEncola() {
+        when(eventoRepository.findIdsEventosVencidos(eq(LocalDate.now()), any()))
+                .thenReturn(List.of());
 
-        assertThatCode(() -> eventoService.finalizarEventosVencidos())
-                .doesNotThrowAnyException();
+        eventoService.finalizarEventosVencidos();
 
-        verify(ticketsClient).finalizarEvento(20L);
+        verify(eventoRepository, never()).finalizarEventosVencidos(any(), any(), any());
+        verifyNoInteractions(notificacionTicketsService, ticketsClient);
     }
 
     @Test

@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00011-crear-tabla-evento-notificacion" author="ticketya">
+        <createTable tableName="evento_notificacion">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="evento_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tipo" type="varchar(32)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="estado" type="varchar(16)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="intentos" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="proximo_intento" type="timestamp with time zone"/>
+            <column name="creado_el" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actualizado_el" type="timestamp with time zone"/>
+        </createTable>
+
+        <addUniqueConstraint tableName="evento_notificacion"
+                             columnNames="evento_id, tipo"
+                             constraintName="uk_evento_notificacion_evento_tipo"/>
+
+        <createIndex tableName="evento_notificacion" indexName="idx_evento_notificacion_pendientes">
+            <column name="estado"/>
+            <column name="proximo_intento"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>

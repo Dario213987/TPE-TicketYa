@@ -2,6 +2,7 @@ package org.tudai.ticketya.eventos.service;
 
 import feign.FeignException;
 import feign.RetryableException;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -15,6 +16,9 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.transaction.TransactionStatus;
+import org.springframework.transaction.support.TransactionCallback;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
@@ -51,6 +55,7 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.inOrder;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -72,8 +77,22 @@ class EventoServiceTest {
     @Spy
     private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
 
+    @Mock
+    private NotificacionTicketsService notificacionTicketsService;
+
+    @Mock
+    private TransactionTemplate transactionTemplate;
+
     @InjectMocks
     private EventoService eventoService;
+
+    @BeforeEach
+    void configurarTransacciones() {
+        lenient().when(transactionTemplate.execute(any())).thenAnswer(invocation -> {
+            TransactionCallback<?> callback = invocation.getArgument(0);
+            return callback.doInTransaction(mock(TransactionStatus.class));
+        });
+    }
 
     @Test
     void losEventosAgotadosSiguenSiendoVisibles() {
@@ -666,9 +685,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo("CANCELADO");
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
-        orden.verify(eventoRepository).save(evento);
+        InOrder orden = inOrder(ticketsClient, eventoRepository);
         orden.verify(ticketsClient).cancelarEvento(1L);
+        orden.verify(eventoRepository).save(evento);
     }
 
     @Test
@@ -721,10 +740,9 @@ class EventoServiceTest {
     }
 
     @Test
-    void cancelarEvento_conMsTicketsNoDisponible_lanzaRemoteServiceException() {
+    void cancelarEvento_conMsTicketsNoDisponible_lanzaRemoteServiceExceptionYNoGuarda() {
         Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
-        when(eventoRepository.save(evento)).thenReturn(evento);
         doThrow(mock(RetryableException.class)).when(ticketsClient).cancelarEvento(1L);
 
         assertThatThrownBy(() -> eventoService.cancelarEvento(1L, true))
@@ -732,16 +750,14 @@ class EventoServiceTest {
                 .hasMessage("ms-tickets no disponible")
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
-        orden.verify(eventoRepository).save(evento);
-        orden.verify(ticketsClient).cancelarEvento(1L);
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     @Test
     void cancelarEvento_cuandoMsTicketsRespondeConError_propagaElStatus() {
         Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
-        when(eventoRepository.save(evento)).thenReturn(evento);
         FeignException error = mock(FeignException.class);
         when(error.status()).thenReturn(409);
         doThrow(error).when(ticketsClient).cancelarEvento(1L);
@@ -750,6 +766,9 @@ class EventoServiceTest {
                 .isInstanceOf(RemoteServiceException.class)
                 .hasMessage("ms-tickets respondió con error")
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(409));
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     @Test
@@ -764,9 +783,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo("CANCELADO");
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
-        orden.verify(eventoRepository).save(evento);
+        InOrder orden = inOrder(ticketsClient, eventoRepository);
         orden.verify(ticketsClient).cancelarEvento(1L);
+        orden.verify(eventoRepository).save(evento);
     }
 
     @Test
@@ -782,9 +801,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo("SUSPENDIDO");
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.SUSPENDIDO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
-        orden.verify(eventoRepository).save(evento);
+        InOrder orden = inOrder(ticketsClient, eventoRepository);
         orden.verify(ticketsClient).suspenderEvento(1L);
+        orden.verify(eventoRepository).save(evento);
     }
 
     @Test
@@ -838,10 +857,9 @@ class EventoServiceTest {
     }
 
     @Test
-    void suspenderEvento_conMsTicketsNoDisponible_lanzaRemoteServiceException() {
+    void suspenderEvento_conMsTicketsNoDisponible_lanzaRemoteServiceExceptionYNoGuarda() {
         Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
-        when(eventoRepository.save(evento)).thenReturn(evento);
         doThrow(mock(RetryableException.class)).when(ticketsClient).suspenderEvento(1L);
 
         assertThatThrownBy(() -> eventoService.suspenderEvento(1L, true))
@@ -849,16 +867,14 @@ class EventoServiceTest {
                 .hasMessage("ms-tickets no disponible")
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
-        orden.verify(eventoRepository).save(evento);
-        orden.verify(ticketsClient).suspenderEvento(1L);
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     @Test
     void suspenderEvento_cuandoMsTicketsRespondeConError_propagaElStatus() {
         Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
-        when(eventoRepository.save(evento)).thenReturn(evento);
         FeignException error = mock(FeignException.class);
         when(error.status()).thenReturn(409);
         doThrow(error).when(ticketsClient).suspenderEvento(1L);
@@ -867,6 +883,9 @@ class EventoServiceTest {
                 .isInstanceOf(RemoteServiceException.class)
                 .hasMessage("ms-tickets respondió con error")
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(409));
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     private Evento eventoCancelable(EstadoEvento estado) {
