@@ -15,7 +15,7 @@ paths:
       tags: [eventos]
       operationId: listarEventos
       summary: Lista los eventos publicados
-      description: Paginado. Devuelve únicamente eventos confirmados o finalizados. Ordenado por fecha por defecto.
+      description: Paginado. Devuelve únicamente eventos publicados, agotados o finalizados. Ordenado por fecha por defecto.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -141,6 +141,54 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/{id}/estado/agotado:
+    put:
+      tags: [eventos]
+      operationId: marcarEventoAgotado
+      summary: Marca un evento como AGOTADO
+      description: |
+        Endpoint interno de integración para pasar un evento PUBLICADO a AGOTADO.
+        Es idempotente si el evento ya está agotado. No requiere autenticación.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: El evento agotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/{id}/estado/publicar:
+    put:
+      tags: [eventos]
+      operationId: marcarEventoPublicado
+      summary: Vuelve a publicar un evento AGOTADO
+      description: |
+        Endpoint interno de integración para pasar un evento AGOTADO a PUBLICADO.
+        Es idempotente si el evento ya está publicado. No requiere autenticación.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: El evento publicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/lugares:
     get:
       tags: [lugares]
@@ -343,7 +391,7 @@ components:
       enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
     EstadoEvento:
       type: string
-      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
+      enum: [BORRADOR, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]

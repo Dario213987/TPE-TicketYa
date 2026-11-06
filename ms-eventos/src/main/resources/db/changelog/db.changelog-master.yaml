@@ -23,3 +23,6 @@ databaseChangeLog:
   - include:
       file: 00008-agregar-estado-suspendido.xml
       relativeToChangelogFile: true
+  - include:
+      file: 00009-eliminar-estado-confirmado.xml
+      relativeToChangelogFile: true

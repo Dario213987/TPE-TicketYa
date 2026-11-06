@@ -79,7 +79,7 @@ class EventoServiceTest {
     void losEventosAgotadosSiguenSiendoVisibles() {
         assertThat(EstadoEvento.VISIBLES)
                 .containsExactlyInAnyOrder(
-                        EstadoEvento.CONFIRMADO,
+                        EstadoEvento.PUBLICADO,
                         EstadoEvento.FINALIZADO,
                         EstadoEvento.AGOTADO);
     }
@@ -161,7 +161,7 @@ class EventoServiceTest {
     void definirPrecioSector_enEventoPublicado_lanzaConflict() {
         Evento evento = Evento.builder()
                 .id(1L)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -290,7 +290,7 @@ class EventoServiceTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .fecha(fechaOriginal)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -311,7 +311,7 @@ class EventoServiceTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .nombre("Nombre viejo")
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -386,7 +386,7 @@ class EventoServiceTest {
     void eliminarEvento_enEventoPublicado_lanzaConflict() {
         Evento evento = Evento.builder()
                 .id(1L)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -551,7 +551,7 @@ class EventoServiceTest {
     @Test
     void publicarEvento_enEstadoNoBorrador_lanzaConflict() {
         for (EstadoEvento estado : List.of(
-                EstadoEvento.CONFIRMADO,
+                EstadoEvento.SUSPENDIDO,
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
@@ -707,7 +707,6 @@ class EventoServiceTest {
     void cancelarEvento_enEstadoNoCancelable_lanzaConflictYNoAvisaATickets() {
         for (EstadoEvento estado : List.of(
                 EstadoEvento.BORRADOR,
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
             Evento evento = eventoCancelable(estado);
@@ -824,7 +823,6 @@ class EventoServiceTest {
     void suspenderEvento_enEstadoNoSuspendible_lanzaConflictYNoAvisaATickets() {
         for (EstadoEvento estado : List.of(
                 EstadoEvento.BORRADOR,
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {

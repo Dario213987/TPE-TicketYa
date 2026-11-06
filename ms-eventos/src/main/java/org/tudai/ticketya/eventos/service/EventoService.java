@@ -4,10 +4,10 @@ import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
-import org.springframework.scheduling.annotation.EnableScheduling;
-import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -37,16 +37,22 @@ import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
 
-@EnableScheduling
 @Service
 @RequiredArgsConstructor
 public class EventoService {
+
+    private static final Logger log = LoggerFactory.getLogger(EventoService.class);
+    private static final Set<EstadoEvento> ESTADOS_FINALIZABLES = EnumSet.of(
+            EstadoEvento.PUBLICADO,
+            EstadoEvento.AGOTADO,
+            EstadoEvento.SUSPENDIDO);
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
@@ -204,24 +210,39 @@ public class EventoService {
     }
 
     /**
-     * Finaliza los eventos cuya fecha ya pasó. Se ejecuta de forma programada.
+     * Finaliza los eventos cuya fecha ya pasó.
      * <p>
-     * Pasa a FINALIZADO todos los eventos con fecha anterior a hoy, excepto los que están
-     * en BORRADOR, CANCELADO o FINALIZADO. En la práctica, finaliza los eventos PUBLICADO
-     * y AGOTADO vencidos. Un evento se finaliza al día siguiente de su fecha.
+     * Pasa a FINALIZADO los eventos con fecha anterior a hoy que estén en estado
+     * PUBLICADO, AGOTADO o SUSPENDIDO. Un evento se finaliza al día siguiente de su
+     * fecha, ya que la comparación es estrictamente anterior a hoy.
      * <p>
-     * La frecuencia se configura con la propiedad {@code ticketya.eventos.finalizacion.cron};
-     * si no está definida, se ejecuta una vez por hora, en punto.
+     * Después del update, avisa a ms-tickets de cada evento finalizado. La notificación
+     * es best-effort: si ms-tickets no está disponible o todavía no implementa el
+     * endpoint, se registra el error y el resto de los eventos continúa procesándose.
      * <p>
      * Es idempotente: si se ejecuta dos veces seguidas, la segunda no modifica nada.
      */
-    @Scheduled(cron = "${ticketya.eventos.finalizacion.cron:0 0 * * * *}")
     @Transactional
     public void finalizarEventosVencidos() {
-        eventoRepository.finalizarEventosVencidos(
-                LocalDate.now(),
-                EstadoEvento.FINALIZADO,
-                List.of(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO, EstadoEvento.FINALIZADO));
+        LocalDate hoy = LocalDate.now();
+        List<Long> ids = eventoRepository.findIdsEventosVencidos(hoy, ESTADOS_FINALIZABLES);
+
+        eventoRepository.finalizarEventosVencidos(hoy, EstadoEvento.FINALIZADO, ESTADOS_FINALIZABLES);
+
+        for (Long id : ids) {
+            notificarFinalizacion(id);
+        }
+    }
+
+    private void notificarFinalizacion(Long eventoId) {
+        try {
+            ticketsClient.finalizarEvento(eventoId);
+        } catch (RetryableException e) {
+            log.warn("No se pudo notificar a ms-tickets la finalización del evento {}", eventoId, e);
+        } catch (FeignException e) {
+            log.warn("ms-tickets respondió con error {} al finalizar el evento {}",
+                    e.status(), eventoId, e);
+        }
     }
 
     /**
@@ -245,7 +266,6 @@ public class EventoService {
 
         Evento evento = buscarEvento(id);
 
-        //Nuevamente sucede el error de que el ENUM no considera el estado agotado.
         if(estaEn(evento, EstadoEvento.AGOTADO)){
             return toResponseDTO(evento);
         }

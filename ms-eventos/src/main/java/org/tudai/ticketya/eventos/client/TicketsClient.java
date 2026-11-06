@@ -22,4 +22,7 @@ public interface TicketsClient {
     @PutMapping("/api/tickets/eventos/{eventoId}/suspender")
     void suspenderEvento(@PathVariable("eventoId") Long eventoId);
 
+    @PutMapping("/api/tickets/eventos/{eventoId}/finalizar")
+    void finalizarEvento(@PathVariable("eventoId") Long eventoId);
+
 }
