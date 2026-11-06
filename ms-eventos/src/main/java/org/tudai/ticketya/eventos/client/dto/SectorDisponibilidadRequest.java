@@ -18,4 +18,5 @@ public class SectorDisponibilidadRequest {
     private List<AsientoRequest> asientos;
     private Integer filas;
     private Integer asientosPorFila;
+    private Double precio;
 }

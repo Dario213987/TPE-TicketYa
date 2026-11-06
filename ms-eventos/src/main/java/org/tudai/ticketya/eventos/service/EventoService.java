@@ -147,8 +147,8 @@ public class EventoService {
      * Cancela un evento publicado. Solo puede ser realizado por un administrador.
      * <p>
      * Valida que el usuario sea administrador, que el evento exista y que esté en estado
-     * PUBLICADO. Si las validaciones pasan, avisa a ms-tickets para que bloquee nuevas
-     * reservas y compras, y recién después cambia el estado a CANCELADO.
+     * PUBLICADO o SUSPENDIDO. Si las validaciones pasan, avisa a ms-tickets para que bloquee
+     * nuevas reservas y compras, y recién después cambia el estado a CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
@@ -160,7 +160,7 @@ public class EventoService {
      *
      * @throws ForbiddenException     si el usuario no es administrador
      * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no está en estado PUBLICADO ni CANCELADO
+     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     @Transactional
@@ -179,7 +179,8 @@ public class EventoService {
             return toPublicadoDTO(evento);
         }
 
-        if(evento.getEstado() != EstadoEvento.PUBLICADO){
+        if (evento.getEstado() != EstadoEvento.PUBLICADO
+                && evento.getEstado() != EstadoEvento.SUSPENDIDO) {
             throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
         }
 
@@ -293,6 +294,40 @@ public class EventoService {
         evento = eventoRepository.save(evento);
 
         return toResponseDTO(evento);
+    }
+
+    @Transactional
+    public EventoPublicadoDTO suspenderEvento(Long id, boolean esAdmin) {
+
+        if (!esAdmin) {
+            throw new ForbiddenException("Solo administradores pueden suspender un evento");
+        }
+
+        Evento evento = eventoRepository.findById(id).orElseThrow(
+                () -> new NotFoundException("No se encontró el evento solicitado"));
+
+        if (evento.getEstado() == EstadoEvento.SUSPENDIDO) {
+            return toPublicadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("El evento debe ser publicado para poder ser suspendido");
+        }
+
+        evento.setEstado(EstadoEvento.SUSPENDIDO);
+        evento = eventoRepository.save(evento);
+
+        try {
+            ticketsClient.suspenderEvento(evento.getId());
+
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
+
+        } catch (FeignException e) {
+            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
+        }
+
+        return toPublicadoDTO(evento);
     }
 
     @Transactional
@@ -475,11 +510,13 @@ public class EventoService {
     private PublicarEventoRequest buildInventarioRequest(Evento evento, Set<Sector> sectores) {
         List<SectorDisponibilidadRequest> items = sectores.stream()
                 .sorted(Comparator.comparing(Sector::getId))
-                .map(this::toSectorDisponibilidadRequest)
+                .map(sector -> toSectorDisponibilidadRequest(
+                        sector, evento.getPreciosSectores().get(sector.getId())))
                 .toList();
 
         return PublicarEventoRequest.builder()
                 .eventoId(evento.getId())
+                .organizadorId(evento.getOrganizadorId())
                 .sectores(items)
                 .build();
     }
@@ -490,14 +527,15 @@ public class EventoService {
      * si no es numerado, incluye la capacidad máxima.
      *
      * @param sector sector a convertir
+     * @param precio precio del sector para el evento
      *
      * @return request con el inventario del sector
      *
      * @throws IllegalStateException si el tipo de sector no está soportado
      */
-    private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector) {
+    private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector, Double precio) {
         SectorDisponibilidadRequest.SectorDisponibilidadRequestBuilder builder =
-                SectorDisponibilidadRequest.builder().sectorId(sector.getId());
+                SectorDisponibilidadRequest.builder().sectorId(sector.getId()).precio(precio);
 
         if (sector instanceof SectorNumerado numerado) {
             builder.tipo(TipoSectorRequest.NUMERADO)

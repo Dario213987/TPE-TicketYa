@@ -471,9 +471,13 @@ class EventoServiceTest {
         PublicarEventoRequest request = captor.getValue();
 
         assertThat(request.getEventoId()).isEqualTo(1L);
+        assertThat(request.getOrganizadorId()).isEqualTo(7L);
         assertThat(request.getSectores())
-                .extracting(SectorDisponibilidadRequest::getSectorId)
-                .containsExactly(10L, 20L, 30L);
+                .extracting(SectorDisponibilidadRequest::getSectorId, SectorDisponibilidadRequest::getPrecio)
+                .containsExactly(
+                        org.assertj.core.groups.Tuple.tuple(10L, 1000.0),
+                        org.assertj.core.groups.Tuple.tuple(20L, 2000.0),
+                        org.assertj.core.groups.Tuple.tuple(30L, 3000.0));
 
         SectorDisponibilidadRequest platea = request.getSectores().get(0);
         assertThat(platea.getTipo()).isEqualTo(TipoSectorRequest.NUMERADO);
@@ -744,6 +748,124 @@ class EventoServiceTest {
         doThrow(error).when(ticketsClient).cancelarEvento(1L);
 
         assertThatThrownBy(() -> eventoService.cancelarEvento(1L, true))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-tickets respondió con error")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(409));
+    }
+
+    @Test
+    void cancelarEvento_desdeSuspendido_loCancelaYNotificaTickets() {
+        Evento evento = eventoCancelable(EstadoEvento.SUSPENDIDO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        EventoPublicadoDTO response = eventoService.cancelarEvento(1L, true);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getEstado()).isEqualTo("CANCELADO");
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
+
+        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        orden.verify(eventoRepository).save(evento);
+        orden.verify(ticketsClient).cancelarEvento(1L);
+    }
+
+    @Test
+    void suspenderEvento_publicadoComoAdmin_loSuspendeYBloqueaTickets() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        EventoPublicadoDTO response = eventoService.suspenderEvento(1L, true);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Festival");
+        assertThat(response.getEstado()).isEqualTo("SUSPENDIDO");
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.SUSPENDIDO);
+
+        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        orden.verify(eventoRepository).save(evento);
+        orden.verify(ticketsClient).suspenderEvento(1L);
+    }
+
+    @Test
+    void suspenderEvento_sinSerAdmin_lanzaForbiddenYNoTocaNada() {
+        assertThatThrownBy(() -> eventoService.suspenderEvento(1L, false))
+                .isInstanceOf(ForbiddenException.class)
+                .hasMessage("Solo administradores pueden suspender un evento");
+        verifyNoInteractions(eventoRepository, ticketsClient);
+    }
+
+    @Test
+    void suspenderEvento_conEventoInexistente_lanzaNotFoundYNoAvisaATickets() {
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventoService.suspenderEvento(99L, true))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessage("No se encontró el evento solicitado");
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void suspenderEvento_yaSuspendido_esIdempotenteYNoAvisaATickets() {
+        Evento evento = eventoCancelable(EstadoEvento.SUSPENDIDO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        EventoPublicadoDTO response = eventoService.suspenderEvento(1L, true);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getEstado()).isEqualTo("SUSPENDIDO");
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void suspenderEvento_enEstadoNoSuspendible_lanzaConflictYNoAvisaATickets() {
+        for (EstadoEvento estado : List.of(
+                EstadoEvento.BORRADOR,
+                EstadoEvento.CONFIRMADO,
+                EstadoEvento.CANCELADO,
+                EstadoEvento.FINALIZADO,
+                EstadoEvento.AGOTADO)) {
+            Evento evento = eventoCancelable(estado);
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+            assertThatThrownBy(() -> eventoService.suspenderEvento(1L, true))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessage("El evento debe ser publicado para poder ser suspendido");
+        }
+        verifyNoInteractions(ticketsClient);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void suspenderEvento_conMsTicketsNoDisponible_lanzaRemoteServiceException() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+        doThrow(mock(RetryableException.class)).when(ticketsClient).suspenderEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.suspenderEvento(1L, true))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-tickets no disponible")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
+
+        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        orden.verify(eventoRepository).save(evento);
+        orden.verify(ticketsClient).suspenderEvento(1L);
+    }
+
+    @Test
+    void suspenderEvento_cuandoMsTicketsRespondeConError_propagaElStatus() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+        FeignException error = mock(FeignException.class);
+        when(error.status()).thenReturn(409);
+        doThrow(error).when(ticketsClient).suspenderEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.suspenderEvento(1L, true))
                 .isInstanceOf(RemoteServiceException.class)
                 .hasMessage("ms-tickets respondió con error")
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(409));
