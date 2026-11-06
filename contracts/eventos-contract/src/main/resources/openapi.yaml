@@ -295,7 +295,7 @@ components:
       enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
     EstadoEvento:
       type: string
-      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, AGOTADO]
+      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, PUBLICADO, AGOTADO]
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]

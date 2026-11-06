@@ -18,6 +18,7 @@ import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.util.Set;
@@ -39,6 +40,13 @@ public class EventoController {
 
         return new PagedModel<>(eventoService.listarPublicados(ordenable(pageable))
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
+    }
+
+    @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
+    @PutMapping("/{id}/publicar")
+    public EventoPublicadoDTO publicarEvento(@PathVariable Long id) {
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.publicarEvento(id, organizadorIdActual(), esAdmin);
     }
 
     @PutMapping("/{eventoId}")
@@ -69,6 +77,10 @@ public class EventoController {
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.definirPrecioSector(eventoId, sectorId, dto.getPrecio(),
                 userContext.userId(), esAdmin);
+    }
+
+    private Long organizadorIdActual() {
+        return userContext.userId();
     }
 
     private static Pageable ordenable(Pageable pageable) {

@@ -18,5 +18,8 @@ databaseChangeLog:
       file: 00006-crear-tabla-evento-sector-precio.xml
       relativeToChangelogFile: true
   - include:
+      file: 00007-agregar-estado-publicado.xml
+      relativeToChangelogFile: true
+  - include:
       file: 00002-insert-lugares-dev.xml
       relativeToChangelogFile: true

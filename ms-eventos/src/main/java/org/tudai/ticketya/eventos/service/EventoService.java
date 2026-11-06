@@ -1,5 +1,6 @@
 package org.tudai.ticketya.eventos.service;
 
+import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
@@ -16,15 +17,29 @@ import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.TicketsClient;
+import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
+import org.tudai.ticketya.eventos.client.dto.PublicarEventoRequest;
+import org.tudai.ticketya.eventos.client.dto.SectorDisponibilidadRequest;
+import org.tudai.ticketya.eventos.client.dto.TipoSectorRequest;
+import org.tudai.ticketya.eventos.domain.Asiento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
+import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
+import org.tudai.ticketya.eventos.domain.SectorNumerado;
+import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
+import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.time.LocalDate;
+import java.util.Comparator;
+import java.util.List;
+import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Set;
@@ -37,6 +52,7 @@ public class EventoService {
             EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
 
     private final EventoRepository eventoRepository;
+    private final TicketsClient ticketsClient;
     private final LugarRepository lugarRepository;
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
@@ -46,6 +62,69 @@ public class EventoService {
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(Pageable pageable) {
         return eventoRepository.findByEstadoIn(ESTADOS_VISIBLES, pageable);
+    }
+
+    @Transactional
+    public EventoPublicadoDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
+
+        //Busco el evento existente como borrador
+        Evento evento = eventoRepository.findById(idEvento)
+                .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
+
+        //Verifico que tenga el permiso para publicar evento
+        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
+            throw new ForbiddenException("No podés publicar un evento que no te pertenece");
+        }
+
+        //Si el evento ya esta publicado, lo retorno (no lo creo de nuevo)
+        EstadoEvento estadoPublicado = estadoPublicado();
+        if (evento.getEstado() == estadoPublicado) {
+            return toPublicadoDTO(evento);
+        }
+
+        //Verifico que si este en borrador
+        if (evento.getEstado() != EstadoEvento.BORRADOR) {
+            throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
+        }
+
+        if (evento.getFecha() == null || !evento.getFecha().isAfter(LocalDate.now())) {
+            throw new BadRequestException("La fecha del evento debe ser posterior a hoy");
+        }
+
+        if (evento.getLugar() == null) {
+            throw new BadRequestException("El evento no tiene un lugar asociado");
+        }
+
+        //Verificacion de errores de sector. Si algun sector no tiene un precio, se crea dentro de una exception
+        //especifica.
+
+        Set<Sector> sectores = evento.getLugar().getSectores();
+        if (sectores == null || sectores.isEmpty()) {
+            throw new BadRequestException("El lugar del evento no tiene sectores");
+        }
+
+        Map<Long, Double> preciosSectores = evento.getPreciosSectores();
+        List<SectoresSinPrecioException.SectorFaltante> faltantes = sectores.stream()
+                .filter(sector -> preciosSectores.get(sector.getId()) == null)
+                .sorted(Comparator.comparing(Sector::getId))
+                .map(sector -> new SectoresSinPrecioException.SectorFaltante(
+                        sector.getId(), sector.getNombre()))
+                .toList();
+
+        //Si la lista de los sectores con error no esta vacia, tira la exepcion.
+        if (!faltantes.isEmpty()) {
+            throw new SectoresSinPrecioException(faltantes);
+        }
+
+        try {
+            ticketsClient.crearDisponibilidad(evento.getId(), buildInventarioRequest(evento, sectores));
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
+        }
+
+        evento.setEstado(estadoPublicado);
+        Evento guardado = eventoRepository.save(evento);
+        return toPublicadoDTO(guardado);
     }
 
     @Transactional
@@ -187,6 +266,62 @@ public class EventoService {
         eventoRepository.save(evento);
 
         return new PrecioEventoSectorResponse(eventoId, sectorId, precio);
+    }
+
+    private EstadoEvento estadoPublicado() {
+        try {
+            return EstadoEvento.valueOf("PUBLICADO");
+        } catch (IllegalArgumentException e) {
+            throw new IllegalStateException(
+                    "El enum EstadoEvento no tiene PUBLICADO", e);
+        }
+    }
+
+    private PublicarEventoRequest buildInventarioRequest(Evento evento, Set<Sector> sectores) {
+        List<SectorDisponibilidadRequest> items = sectores.stream()
+                .sorted(Comparator.comparing(Sector::getId))
+                .map(sector -> toSectorDisponibilidadRequest(
+                        sector, evento.getPreciosSectores().get(sector.getId())))
+                .toList();
+
+        return PublicarEventoRequest.builder()
+                .eventoId(evento.getId())
+                .organizadorId(evento.getOrganizadorId())
+                .sectores(items)
+                .build();
+    }
+
+    private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector, Double precio) {
+        SectorDisponibilidadRequest.SectorDisponibilidadRequestBuilder builder =
+                SectorDisponibilidadRequest.builder().sectorId(sector.getId()).precio(precio);
+
+        if (sector instanceof SectorNumerado numerado) {
+            builder.tipo(TipoSectorRequest.NUMERADO)
+                    .asientos(numerado.getAsientos().stream()
+                            .sorted(Comparator.comparing(Asiento::getFila)
+                                    .thenComparing(Asiento::getNumero))
+                            .map(asiento -> AsientoRequest.builder()
+                                    .fila(asiento.getFila())
+                                    .numero(asiento.getNumero())
+                                    .build())
+                            .toList());
+        } else if (sector instanceof SectorNoNumerado noNumerado) {
+            builder.tipo(TipoSectorRequest.NO_NUMERADO)
+                    .capacidadMaxima(noNumerado.getCapacidadMaxima());
+        } else {
+            throw new IllegalStateException(
+                    "Tipo de sector no soportado: " + sector.getClass().getName());
+        }
+
+        return builder.build();
+    }
+
+    private EventoPublicadoDTO toPublicadoDTO(Evento evento) {
+        return EventoPublicadoDTO.builder()
+                .id(evento.getId())
+                .nombre(evento.getNombre())
+                .estado(evento.getEstado().name())
+                .build();
     }
 
     private boolean sectorPerteneceAlLugar(Evento evento, Long sectorId) {
