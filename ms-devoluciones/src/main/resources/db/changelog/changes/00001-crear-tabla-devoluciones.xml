@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00001-crear-tabla-devoluciones" author="TicketYa">
+        <createTable tableName="devoluciones">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="cliente_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ticket_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fecha" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="estado" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="transaccion_id" type="bigint"/>
+            <column name="motivo" type="varchar(255)"/>
+            <column name="creado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actualizado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="devoluciones" indexName="idx_devoluciones_ticket">
+            <column name="ticket_id"/>
+        </createIndex>
+
+        <createIndex tableName="devoluciones" indexName="idx_devoluciones_cliente">
+            <column name="cliente_id"/>
+        </createIndex>
+
+        <addUniqueConstraint
+                tableName="devoluciones"
+                columnNames="ticket_id, estado"
+                constraintName="uk_devoluciones_ticket_estado"/>
+    </changeSet>
+
+</databaseChangeLog>

@@ -21,5 +21,6 @@
     <modules>
         <module>eventos-contract</module>
         <module>transacciones-contract</module>
+        <module>devoluciones-contract</module>
     </modules>
 </project>
