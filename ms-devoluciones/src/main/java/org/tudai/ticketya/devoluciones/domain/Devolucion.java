@@ -9,6 +9,7 @@ import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
@@ -20,7 +21,10 @@ import org.tudai.ticketya.persistence.Auditable;
 import java.time.Instant;
 
 @Entity
-@Table(name = "devoluciones")
+@Table(
+        name = "devoluciones",
+        uniqueConstraints = @UniqueConstraint(name = "uk_devoluciones_ticket_estado", columnNames = {"ticket_id", "estado"})
+)
 @Getter
 @Setter
 @NoArgsConstructor

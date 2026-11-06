@@ -3,6 +3,7 @@ package org.tudai.ticketya.devoluciones.service;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
@@ -51,7 +52,16 @@ public class DevolucionService {
     }
 
     public Devolucion solicitarDevolucion(SolicitudDevolucionRequest request, TicketDTO ticket, Long clienteId) {
-        if (ticket.getUsuarioId() != null && clienteId != null && !ticket.getUsuarioId().equals(clienteId)) {
+
+        if (clienteId == null) {
+            throw new ForbiddenException("El ID del cliente no es valido");
+        }
+
+        if (ticket.getUsuarioId() == null) {
+            throw new ForbiddenException("El ticket no incluye un cliente asociado");
+        }
+
+        if (!ticket.getUsuarioId().equals(clienteId)) {
             throw new ForbiddenException("El ticket no pertenece al cliente solicitante");
         }
 
@@ -69,6 +79,7 @@ public class DevolucionService {
 
         boolean tieneSolicitudPendiente = devolucionRepository.existsByTicketIdAndEstado(
                 ticket.getId(), EstadoDevolucion.PENDIENTE);
+
         if (tieneSolicitudPendiente) {
             throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
         }
@@ -76,7 +87,11 @@ public class DevolucionService {
         LocalDateTime ahora = LocalDateTime.now(clock);
         LocalDateTime fechaEvento = obtenerFechaEvento(ticket);
 
-        if (fechaEvento != null && fechaEvento.isBefore(ahora.plusHours(72))) {
+        if (fechaEvento == null) {
+            throw new ConflictException("No es posible verificar el plazo del evento para la devolución");
+        }
+
+        if (fechaEvento.isBefore(ahora.plusHours(72))) {
             throw new ConflictException("No se pueden solicitar devoluciones con menos de 72 horas de anticipación al evento");
         }
 
@@ -88,7 +103,11 @@ public class DevolucionService {
                 .motivo(request.getMotivo())
                 .build();
 
-        return devolucionRepository.save(devolucion);
+        try {
+            return devolucionRepository.saveAndFlush(devolucion);
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
+        }
     }
 
     private LocalDateTime obtenerFechaEvento(TicketDTO ticket) {
@@ -98,13 +117,8 @@ public class DevolucionService {
         if (ticket.getEventoId() != null && eventoClient != null) {
             try {
                 EventoDTO evento = eventoClient.obtenerEvento(ticket.getEventoId());
-                if (evento != null) {
-                    if (evento.getFechaHora() != null) {
-                        return evento.getFechaHora();
-                    }
-                    if (evento.getFecha() != null) {
-                        return evento.getFecha().atStartOfDay();
-                    }
+                if (evento != null && evento.getFecha() != null) {
+                    return evento.getFecha().atStartOfDay();
                 }
             } catch (Exception e) {
                 log.warn("No se pudo obtener información del evento con id {}", ticket.getEventoId(), e);

@@ -39,6 +39,11 @@
         <createIndex tableName="devoluciones" indexName="idx_devoluciones_cliente">
             <column name="cliente_id"/>
         </createIndex>
+
+        <addUniqueConstraint
+                tableName="devoluciones"
+                columnNames="ticket_id, estado"
+                constraintName="uk_devoluciones_ticket_estado"/>
     </changeSet>
 
 </databaseChangeLog>
