@@ -28,6 +28,28 @@ paths:
               schema:
                 $ref: '#/components/schemas/PagedEventos'
         '400': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [eventos]
+      operationId: crearEventoBorrador
+      summary: Crea un evento en estado BORRADOR
+      description: El organizador del evento se obtiene del header X-User-Id. Los borradores no aparecen en la consulta pública.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoBorradorCreateRequest'
+      responses:
+        '201':
+          description: El evento creado en estado BORRADOR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/eventos/{eventoId}:
     put:
       tags: [eventos]
@@ -363,13 +385,28 @@ components:
       properties:
         nombre: { type: string, maxLength: 200 }
         descripcion: { type: string, maxLength: 255 }
-        tipo: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
         fecha: { type: string, format: date }
         lugarId: { type: integer, format: int64 }
         sectores:
           type: array
           description: "IDs de sectores. Alias aceptado: sectorIds."
           items: { type: integer, format: int64 }
+    EventoBorradorCreateRequest:
+      type: object
+      required: [nombre, descripcion, tipo, fecha, lugarId]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 200, pattern: '.*\S.*' }
+        descripcion: { type: string, minLength: 1, maxLength: 255, pattern: '.*\S.*' }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        lugarId: { type: integer, format: int64 }
+        participantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipanteRequest'
     EventoResponse:
       type: object
       required: [id, nombre, tipo, fecha, estado, organizadorId]
@@ -385,9 +422,14 @@ components:
         organizadorId: { type: integer, format: int64 }
         lugar:
           $ref: '#/components/schemas/LugarResponse'
-        artistas:
+        participantes:
           type: array
-          items: { type: string }
+          items:
+            $ref: '#/components/schemas/ParticipanteResponse'
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorResponse'
         preciosSectores:
           type: object
           additionalProperties:
@@ -401,6 +443,17 @@ components:
         nombre: { type: string }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
+    ParticipanteRequest:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+    ParticipanteResponse:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
     TipoSector:
       type: string
       enum: [NUMERADO, NO_NUMERADO]
@@ -408,10 +461,10 @@ components:
       type: object
       required: [nombre, tipo, direccion, ciudad, latitud, longitud]
       properties:
-        nombre: { type: string }
-        tipo: { type: string }
-        direccion: { type: string }
-        ciudad: { type: string }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+        tipo: { type: string, minLength: 1, pattern: '.*\S.*' }
+        direccion: { type: string, minLength: 1, pattern: '.*\S.*' }
+        ciudad: { type: string, minLength: 1, pattern: '.*\S.*' }
         latitud:
           type: number
           format: double
@@ -442,7 +495,7 @@ components:
       required: [id, nombre, tipo, direccion, ciudad, latitud, longitud, sectores]
       properties:
         id: { type: integer, format: int64 }
-        nombre: { type: string }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
         tipo: { type: string }
         direccion: { type: string }
         ciudad: { type: string }
@@ -457,7 +510,7 @@ components:
       type: object
       required: [nombre, precio, filas, asientosPorFila]
       properties:
-        nombre: { type: string }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
         precio:
           type: number
           format: double
@@ -472,7 +525,7 @@ components:
       type: object
       required: [nombre, precio, capacidadMaxima]
       properties:
-        nombre: { type: string }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
         precio:
           type: number
           format: double

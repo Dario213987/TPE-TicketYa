@@ -18,7 +18,7 @@ public class Participante {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
     private String nombre;
-    @ManyToMany(mappedBy = "artistas")
+    @ManyToMany(mappedBy = "participantes")
     @Builder.Default
     @Setter(AccessLevel.NONE)
     private Set<Evento> eventos = new HashSet<>();

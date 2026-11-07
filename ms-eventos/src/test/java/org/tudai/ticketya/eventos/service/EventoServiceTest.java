@@ -19,6 +19,13 @@ import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
+import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
+import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
@@ -27,16 +34,14 @@ import org.tudai.ticketya.eventos.client.dto.SectorDisponibilidadRequest;
 import org.tudai.ticketya.eventos.client.dto.TipoSectorRequest;
 import org.tudai.ticketya.eventos.config.ModelMapperConfig;
 import org.tudai.ticketya.eventos.domain.Asiento;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
+import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
-import org.tudai.ticketya.eventos.dto.evento.EventoUpdateDTO;
-import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
+import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
@@ -69,6 +74,12 @@ class EventoServiceTest {
     @Mock
     private TicketsClient ticketsClient;
 
+    @Mock
+    private LugarService lugarService;
+
+    @Mock
+    private ParticipanteService participanteService;
+
     @Spy
     private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
 
@@ -77,21 +88,67 @@ class EventoServiceTest {
 
     @Test
     void losEventosAgotadosSiguenSiendoVisibles() {
-        assertThat(EstadoEvento.VISIBLES)
-                .containsExactlyInAnyOrder(
-                        EstadoEvento.CONFIRMADO,
-                        EstadoEvento.FINALIZADO,
-                        EstadoEvento.AGOTADO);
+        assertThat(EventoService.ESTADOS_VISIBLES)
+                .containsExactlyInAnyOrder(EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO)
+                .doesNotContain(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO);
     }
 
     @Test
     void listarPublicados_consultaLosEstadosVisibles() {
         Pageable pageable = PageRequest.of(0, 20);
         Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
-        when(eventoRepository.findByEstadoIn(EstadoEvento.VISIBLES, pageable)).thenReturn(page);
+        when(eventoRepository.findByEstadoIn(EventoService.ESTADOS_VISIBLES, pageable)).thenReturn(page);
 
         assertThat(eventoService.listarPublicados(pageable)).isSameAs(page);
-        verify(eventoRepository).findByEstadoIn(EstadoEvento.VISIBLES, pageable);
+        verify(eventoRepository).findByEstadoIn(EventoService.ESTADOS_VISIBLES, pageable);
+    }
+
+    @Test
+    void crearEventoBorrador_guardaBorradorDelOrganizadorConParticipantesExistentesYNuevos() {
+        Lugar lugar = Lugar.builder().id(10L).nombre("Estadio").build();
+        Participante existente = Participante.builder().id(3L).nombre("Artista existente").build();
+        Participante nuevo = Participante.builder().nombre("Artista nuevo").build();
+        when(lugarService.obtenerPorId(10L)).thenReturn(lugar);
+        when(participanteService.obtenerPorId(3L)).thenReturn(existente);
+        when(participanteService.crearParticipante(any(ParticipanteRequest.class))).thenReturn(nuevo);
+        when(eventoRepository.save(any(Evento.class))).thenAnswer(invocation -> {
+            Evento evento = invocation.getArgument(0);
+            evento.setId(20L);
+            return evento;
+        });
+        EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().plusDays(5), 10L)
+                .addParticipantesItem(new ParticipanteRequest().id(3L))
+                .addParticipantesItem(new ParticipanteRequest().nombre("Artista nuevo"));
+
+        EventoResponse response = eventoService.crearEventoBorrador(request, 7L);
+
+        assertThat(response.getId()).isEqualTo(20L);
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.BORRADOR);
+        assertThat(response.getOrganizadorId()).isEqualTo(7L);
+        assertThat(response.getParticipantes()).hasSize(2);
+        verify(eventoRepository).save(any(Evento.class));
+    }
+
+    @Test
+    void crearEventoBorrador_conFechaPasada_rechazaSinGuardar() {
+        EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().minusDays(1), 10L);
+
+        assertThatThrownBy(() -> eventoService.crearEventoBorrador(request, 7L))
+                .isInstanceOf(FechaEventoInvalidaException.class);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void crearEventoBorrador_conLugarInexistente_propagaNotFound() {
+        when(lugarService.obtenerPorId(999L)).thenThrow(new NotFoundException("Lugar no encontrado"));
+        EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().plusDays(1), 999L);
+
+        assertThatThrownBy(() -> eventoService.crearEventoBorrador(request, 7L))
+                .isInstanceOf(NotFoundException.class);
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     @Test
@@ -108,7 +165,7 @@ class EventoServiceTest {
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        PrecioEventoSectorResponseDTO response =
+        PrecioEventoSectorResponse response =
                 eventoService.definirPrecioSector(1L, 100L, 15000.0, 7L, false);
 
         assertThat(evento.getPreciosSectores()).containsEntry(100L, 15000.0);
@@ -235,7 +292,7 @@ class EventoServiceTest {
                 .id(1L)
                 .nombre("Nombre viejo")
                 .descripcion("Descripción vieja")
-                .tipo("RECITAL")
+                .tipo(TipoEvento.RECITAL)
                 .fecha(LocalDate.of(2026, 12, 1))
                 .estado(EstadoEvento.BORRADOR)
                 .organizadorId(7L)
@@ -243,17 +300,16 @@ class EventoServiceTest {
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        EventoUpdateDTO dto = EventoUpdateDTO.builder()
+        EventoUpdateRequest dto = new EventoUpdateRequest()
                 .nombre("Nombre nuevo")
                 .descripcion("Descripción nueva")
-                .tipo("TEATRO")
-                .build();
+                .tipo(TipoEvento.TEATRO);
 
-        EventoResponseDTO response = eventoService.actualizarEvento(1L, dto, 7L, false);
+        EventoResponse response = eventoService.actualizarEvento(1L, dto, 7L, false);
 
         assertThat(evento.getNombre()).isEqualTo("Nombre nuevo");
         assertThat(evento.getDescripcion()).isEqualTo("Descripción nueva");
-        assertThat(evento.getTipo()).isEqualTo("TEATRO");
+        assertThat(evento.getTipo()).isEqualTo(TipoEvento.TEATRO);
         assertThat(response.getNombre()).isEqualTo("Nombre nuevo");
         verify(eventoRepository).save(evento);
     }
@@ -273,10 +329,9 @@ class EventoServiceTest {
         when(lugarRepository.findById(20L)).thenReturn(Optional.of(lugarNuevo));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        EventoUpdateDTO dto = EventoUpdateDTO.builder()
+        EventoUpdateRequest dto = new EventoUpdateRequest()
                 .fecha(LocalDate.of(2026, 12, 15))
-                .lugarId(20L)
-                .build();
+                .lugarId(20L);
 
         eventoService.actualizarEvento(1L, dto, 7L, false);
 
@@ -295,9 +350,7 @@ class EventoServiceTest {
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
-        EventoUpdateDTO dto = EventoUpdateDTO.builder()
-                .fecha(LocalDate.of(2026, 12, 15))
-                .build();
+        EventoUpdateRequest dto = new EventoUpdateRequest().fecha(LocalDate.of(2026, 12, 15));
 
         assertThatThrownBy(() -> eventoService.actualizarEvento(1L, dto, 7L, false))
                 .isInstanceOf(ConflictException.class)
@@ -317,7 +370,7 @@ class EventoServiceTest {
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        EventoUpdateDTO dto = EventoUpdateDTO.builder().nombre("Nombre nuevo").build();
+        EventoUpdateRequest dto = new EventoUpdateRequest().nombre("Nombre nuevo");
 
         eventoService.actualizarEvento(1L, dto, 7L, false);
 
@@ -334,7 +387,7 @@ class EventoServiceTest {
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
-        EventoUpdateDTO dto = EventoUpdateDTO.builder().nombre("Nombre nuevo").build();
+        EventoUpdateRequest dto = new EventoUpdateRequest().nombre("Nombre nuevo");
 
         assertThatThrownBy(() -> eventoService.actualizarEvento(1L, dto, 7L, false))
                 .isInstanceOf(ForbiddenException.class)
@@ -353,7 +406,7 @@ class EventoServiceTest {
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        eventoService.actualizarEvento(1L, EventoUpdateDTO.builder().nombre("Nombre nuevo").build(), 7L, true);
+        eventoService.actualizarEvento(1L, new EventoUpdateRequest().nombre("Nombre nuevo"), 7L, true);
 
         assertThat(evento.getNombre()).isEqualTo("Nombre nuevo");
     }
@@ -363,7 +416,7 @@ class EventoServiceTest {
         when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> eventoService.actualizarEvento(
-                99L, EventoUpdateDTO.builder().nombre("Nombre").build(), 7L, false))
+                99L, new EventoUpdateRequest().nombre("Nombre"), 7L, false))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("Evento no encontrado con id: 99");
     }

@@ -16,13 +16,15 @@ import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
-import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
@@ -40,6 +42,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -63,7 +66,7 @@ class EventoControllerTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .nombre("Festival de Verano")
-                .tipo("FESTIVAL")
+                .tipo(TipoEvento.FESTIVAL)
                 .fecha(LocalDate.of(2026, 12, 1))
                 .estado(EstadoEvento.CONFIRMADO)
                 .build();
@@ -88,15 +91,35 @@ class EventoControllerTest {
     }
 
     @Test
+    void crearEventoBorrador_devuelve201ConElOrganizadorYEstado() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.crearEventoBorrador(any(EventoBorradorCreateRequest.class), eq(7L)))
+                .thenReturn(new EventoResponse(1L, "Recital", TipoEvento.RECITAL,
+                        LocalDate.now().plusDays(10), EstadoEvento.BORRADOR, 7L));
+
+        mvc.perform(post("/api/eventos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Recital",
+                                  "descripcion": "Fecha de prueba",
+                                  "tipo": "RECITAL",
+                                  "fecha": "%s",
+                                  "lugarId": 10
+                                }
+                                """.formatted(LocalDate.now().plusDays(10))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("BORRADOR"))
+                .andExpect(jsonPath("$.organizadorId").value(7));
+    }
+
+    @Test
     void definirPrecioSector_devuelve200() throws Exception {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.definirPrecioSector(eq(1L), eq(2L), eq(15000.0), eq(7L), eq(false)))
-                .thenReturn(PrecioEventoSectorResponseDTO.builder()
-                        .eventoId(1L)
-                        .sectorId(2L)
-                        .precio(15000.0)
-                        .build());
+                .thenReturn(new PrecioEventoSectorResponse(1L, 2L, 15000.0));
 
         mvc.perform(put("/api/eventos/1/sectores/2/precio")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -189,11 +212,7 @@ class EventoControllerTest {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.actualizarEvento(eq(1L), any(), eq(7L), eq(false)))
-                .thenReturn(EventoResponseDTO.builder()
-                        .id(1L)
-                        .nombre("Nombre nuevo")
-                        .estado(EstadoEvento.BORRADOR)
-                        .build());
+                .thenReturn(new EventoResponse().id(1L).nombre("Nombre nuevo").estado(EstadoEvento.BORRADOR));
 
         mvc.perform(put("/api/eventos/1")
                         .contentType(MediaType.APPLICATION_JSON)

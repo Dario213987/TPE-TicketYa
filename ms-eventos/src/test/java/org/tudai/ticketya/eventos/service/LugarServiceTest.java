@@ -15,9 +15,9 @@ import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.config.ModelMapperConfig;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
-import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
+import org.tudai.ticketya.contract.eventos.model.LugarCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.LugarDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.LugarResponse;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.util.List;
@@ -46,22 +46,21 @@ class LugarServiceTest {
 
     @Test
     void crearLugar_mapeaUbicacionYDevuelveElIdGenerado() {
-        LugarCreateDTO dto = LugarCreateDTO.builder()
+        LugarCreateRequest dto = new LugarCreateRequest()
                 .nombre("Estadio Municipal")
                 .tipo("ESTADIO")
                 .direccion("Av. Siempre Viva 742")
                 .ciudad("Rosario")
                 .latitud(-32.95)
                 .longitud(-60.64)
-                .capacidad(30000)
-                .build();
+                .capacidad(30000);
         when(lugarRepository.save(any(Lugar.class))).thenAnswer(invocation -> {
             Lugar lugar = invocation.getArgument(0);
             lugar.setId(7L);
             return lugar;
         });
 
-        LugarResponseDTO response = lugarService.crearLugar(dto);
+        LugarResponse response = lugarService.crearLugar(dto);
 
         assertThat(response.getId()).isEqualTo(7L);
         assertThat(response.getNombre()).isEqualTo("Estadio Municipal");
@@ -81,7 +80,7 @@ class LugarServiceTest {
         Lugar lugar = lugar(1L, "Estadio Municipal", "Rosario");
         when(lugarRepository.findAll(pageable)).thenReturn(new PageImpl<>(List.of(lugar)));
 
-        Page<LugarDetalleResponseDTO> result = lugarService.listarLugares(null, pageable);
+        Page<LugarDetalleResponse> result = lugarService.listarLugares(null, pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().getNombre()).isEqualTo("Estadio Municipal");
@@ -97,7 +96,7 @@ class LugarServiceTest {
         when(lugarRepository.findByCiudadIgnoreCase("Rosario", pageable))
                 .thenReturn(new PageImpl<>(List.of(lugar)));
 
-        Page<LugarDetalleResponseDTO> result = lugarService.listarLugares("  Rosario  ", pageable);
+        Page<LugarDetalleResponse> result = lugarService.listarLugares("  Rosario  ", pageable);
 
         assertThat(result.getContent()).hasSize(1);
         assertThat(result.getContent().getFirst().getCiudad()).isEqualTo("Rosario");
@@ -121,7 +120,7 @@ class LugarServiceTest {
         Lugar lugar = lugar(3L, "Estadio Municipal", "Rosario");
         when(lugarRepository.findById(3L)).thenReturn(java.util.Optional.of(lugar));
 
-        LugarDetalleResponseDTO response = lugarService.obtenerLugar(3L);
+        LugarDetalleResponse response = lugarService.obtenerLugar(3L);
 
         assertThat(response.getId()).isEqualTo(3L);
         assertThat(response.getSectores()).isEmpty();
