@@ -40,6 +40,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=create-drop",
         "spring.liquibase.enabled=false",
+        "ticketya.eventos.finalizacion.enabled=false",
+        "ticketya.eventos.notificaciones.enabled=false",
         "ticketya.logging.dir=target/test-logs"
 })
 @AutoConfigureMockMvc

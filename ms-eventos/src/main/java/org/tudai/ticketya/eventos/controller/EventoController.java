@@ -106,6 +106,19 @@ public class EventoController {
         return eventoService.cancelarEvento(id);
     }
 
+    // Endpoints internos: los consume ms-tickets servicio-a-servicio.
+    // No llevan @Authorize porque no hay usuario en esas llamadas; el gateway
+    // bloquea /api/eventos/internal/** para que no queden expuestos externamente.
+    @PutMapping("/internal/{id}/estado/agotado")
+    public EventoEstadoResponse marcarAgotado(@PathVariable Long id){
+        return eventoService.marcarAgotado(id);
+    }
+
+    @PutMapping("/internal/{id}/estado/publicar")
+    public EventoEstadoResponse marcarPublicado(@PathVariable Long id){
+        return eventoService.marcarPublicado(id);
+    }
+
     @Authorize("hasRole('ADMINISTRADOR')")
     @PutMapping("/{id}/suspender")
     public EventoEstadoResponse suspenderEvento(@PathVariable Long id) {

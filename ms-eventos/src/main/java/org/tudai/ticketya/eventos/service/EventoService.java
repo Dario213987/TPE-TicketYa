@@ -33,6 +33,7 @@ import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
+import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
@@ -40,6 +41,7 @@ import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.time.LocalDate;
 import java.util.Comparator;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -54,12 +56,18 @@ public class EventoService {
             EstadoEvento.PUBLICADO, EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO,
             EstadoEvento.AGOTADO);
 
+    private static final Set<EstadoEvento> ESTADOS_FINALIZABLES = EnumSet.of(
+            EstadoEvento.PUBLICADO,
+            EstadoEvento.AGOTADO,
+            EstadoEvento.SUSPENDIDO);
+
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
     private final LugarRepository lugarRepository;
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
     private final ParticipanteService participanteService;
+    private final NotificacionTicketsService notificacionTicketsService;
     private final TransactionTemplate transactionTemplate;
 
 
@@ -310,6 +318,100 @@ public class EventoService {
 
         if (evento.getEstado() != EstadoEvento.SUSPENDIDO) {
             throw new ConflictException("El evento debe estar suspendido para poder ser reactivado");
+        }
+
+        evento.setEstado(EstadoEvento.PUBLICADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    /**
+     * Finaliza los eventos cuya fecha ya pasó.
+     * <p>
+     * Pasa a FINALIZADO los eventos con fecha anterior a hoy que estén en estado
+     * PUBLICADO, AGOTADO o SUSPENDIDO. Un evento se finaliza al día siguiente de su
+     * fecha, ya que la comparación es estrictamente anterior a hoy.
+     * <p>
+     * El cambio de estado y el alta de la notificación pendiente se guardan en la
+     * misma transacción. El envío a ms-tickets lo hace {@link NotificacionTicketsService}
+     * después del commit, con reintentos, para no perder el aviso si ms-tickets no
+     * está disponible.
+     * <p>
+     * Es idempotente: si se ejecuta dos veces seguidas, la segunda no modifica nada.
+     */
+    @Transactional
+    public void finalizarEventosVencidos() {
+        LocalDate hoy = LocalDate.now();
+        List<Long> ids = eventoRepository.findIdsEventosVencidos(hoy, ESTADOS_FINALIZABLES);
+
+        if (ids.isEmpty()) {
+            return;
+        }
+
+        eventoRepository.finalizarEventosVencidos(hoy, EstadoEvento.FINALIZADO, ESTADOS_FINALIZABLES);
+
+        for (Long id : ids) {
+            notificacionTicketsService.encolar(id, TipoNotificacionTickets.FINALIZAR);
+        }
+    }
+
+    /**
+     * Marca un evento publicado como AGOTADO.
+     * <p>
+     * Valida que el evento exista y que esté en estado PUBLICADO. Si las validaciones pasan,
+     * cambia el estado a AGOTADO.
+     * <p>
+     * Es idempotente: si el evento ya estaba agotado, devuelve su información
+     * sin volver a modificarlo.
+     *
+     * @param id id del evento a marcar como agotado
+     *
+     * @return DTO con la información del evento agotado
+     *
+     * @throws NotFoundException si el evento no existe
+     * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
+     */
+    @Transactional
+    public EventoEstadoResponse marcarAgotado(Long id) {
+        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+
+        if (evento.getEstado() == EstadoEvento.AGOTADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+        evento.setEstado(EstadoEvento.AGOTADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    /**
+     * Vuelve a poner en venta un evento que estaba AGOTADO, pasándolo a PUBLICADO.
+     * <p>
+     * Valida que el evento exista y que esté en estado AGOTADO. No vuelve a crear el inventario
+     * en ms-tickets, porque ya fue creado cuando el evento se publicó por primera vez.
+     * <p>
+     * Es idempotente: si el evento ya estaba publicado, devuelve su información
+     * sin volver a modificarlo.
+     *
+     * @param id id del evento a reabrir
+     *
+     * @return DTO con la información del evento publicado
+     *
+     * @throws NotFoundException si el evento no existe
+     * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
+     */
+    @Transactional
+    public EventoEstadoResponse marcarPublicado(Long id) {
+        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("Solo un evento agotado puede pasar a publicado");
         }
 
         evento.setEstado(EstadoEvento.PUBLICADO);

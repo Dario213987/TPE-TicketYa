@@ -26,3 +26,12 @@ databaseChangeLog:
   - include:
       file: 00008-agregar-estado-suspendido.xml
       relativeToChangelogFile: true
+  - include:
+      file: 00009-eliminar-estado-confirmado.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00010-crear-tabla-shedlock.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00011-crear-tabla-evento-notificacion.xml
+      relativeToChangelogFile: true

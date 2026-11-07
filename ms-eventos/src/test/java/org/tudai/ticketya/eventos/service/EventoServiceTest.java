@@ -82,6 +82,9 @@ class EventoServiceTest {
     @Mock
     private ParticipanteService participanteService;
 
+    @Mock
+    private NotificacionTicketsService notificacionTicketsService;
+
     @Spy
     private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
 
