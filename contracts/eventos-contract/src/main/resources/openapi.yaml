@@ -15,7 +15,7 @@ paths:
       tags: [eventos]
       operationId: listarEventos
       summary: Lista los eventos publicados
-      description: Paginado. Devuelve únicamente eventos confirmados o finalizados. Ordenado por fecha por defecto.
+      description: Paginado. Devuelve únicamente eventos publicados o agotados. Ordenado por fecha por defecto.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
@@ -295,7 +295,7 @@ components:
       enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
     EstadoEvento:
       type: string
-      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, AGOTADO]
+      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, PUBLICADO, AGOTADO]
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]

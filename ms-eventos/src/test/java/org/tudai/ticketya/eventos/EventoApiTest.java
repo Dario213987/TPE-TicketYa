@@ -8,6 +8,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
+import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
@@ -18,6 +21,7 @@ import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -136,6 +140,27 @@ class EventoApiTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(eventoRepository.count()).isZero();
+    }
+
+    @Test
+    void listarEventos_soloDevuelvePublicadosYAgotados() throws Exception {
+        for (EstadoEvento estado : EstadoEvento.values()) {
+            eventoRepository.save(Evento.builder()
+                    .nombre("Evento " + estado)
+                    .descripcion("Listado por estado")
+                    .tipo(TipoEvento.RECITAL)
+                    .fecha(LocalDate.now().plusDays(10))
+                    .lugar(lugar)
+                    .organizadorId(7L)
+                    .estado(estado)
+                    .build());
+        }
+
+        mvc.perform(get("/api/eventos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.content[*].estado",
+                        containsInAnyOrder("PUBLICADO", "AGOTADO")));
     }
 
     private MockHttpServletRequestBuilder crearEvento(LocalDate fecha, String participantes) {

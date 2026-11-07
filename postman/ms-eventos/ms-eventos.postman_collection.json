@@ -1,0 +1,161 @@
+{
+	"info": {
+		"_postman_id": "b0893b5f-6543-4660-98b3-a283b5cb0075",
+		"name": "ms-eventos",
+		"description": "Listado público de eventos (TKY-45). No requiere headers de usuario.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. listar eventos",
+			"item": [
+				{
+					"name": "Listar eventos publicados",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"const j = pm.response.json();",
+									"pm.test(\"trae content y page\", () => { pm.expect(j.content).to.be.an(\"array\"); pm.expect(j.page).to.exist; });",
+									"pm.test(\"solo PUBLICADO o AGOTADO\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar con paginación",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"size 5\", () => pm.expect(pm.response.json().page.size).to.eql(5));",
+									"pm.test(\"solo PUBLICADO o AGOTADO\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?page=0&size=5",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "page",
+									"value": "0"
+								},
+								{
+									"key": "size",
+									"value": "5"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar ordenado por nombre",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"solo PUBLICADO o AGOTADO\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?sort=nombre,asc",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "sort",
+									"value": "nombre,asc"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Sort inválido devuelve 400",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?sort=organizadorId",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "sort",
+									"value": "organizadorId"
+								}
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		}
+	]
+}

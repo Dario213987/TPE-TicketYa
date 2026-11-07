@@ -64,10 +64,9 @@ class EventoServiceTest {
     private EventoService eventoService;
 
     @Test
-    void losEventosAgotadosSiguenSiendoVisibles() {
+    void soloLosEventosPublicadosYAgotadosSonVisibles() {
         assertThat(EventoService.ESTADOS_VISIBLES)
-                .containsExactlyInAnyOrder(EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO)
-                .doesNotContain(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO);
+                .containsExactlyInAnyOrder(EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO);
     }
 
     @Test

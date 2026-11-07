@@ -65,7 +65,7 @@ class EventoControllerTest {
                 .nombre("Festival de Verano")
                 .tipo(TipoEvento.FESTIVAL)
                 .fecha(LocalDate.of(2026, 12, 1))
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .build();
         Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
         when(eventoService.listarPublicados(pageable))
@@ -76,7 +76,7 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.content", hasSize(1)))
                 .andExpect(jsonPath("$.content[0].nombre").value("Festival de Verano"))
                 .andExpect(jsonPath("$.content[0].tipo").value("FESTIVAL"))
-                .andExpect(jsonPath("$.content[0].estado").value("CONFIRMADO"))
+                .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
     }
 

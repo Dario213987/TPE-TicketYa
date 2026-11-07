@@ -34,7 +34,7 @@ import java.util.Set;
 public class EventoService {
 
     static final Set<EstadoEvento> ESTADOS_VISIBLES = Set.of(
-            EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
+            EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO);
 
     private final EventoRepository eventoRepository;
     private final LugarRepository lugarRepository;
