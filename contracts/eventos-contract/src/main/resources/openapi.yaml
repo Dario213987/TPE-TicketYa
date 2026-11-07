@@ -163,6 +163,28 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/reactivar:
+    put:
+      tags: [eventos]
+      operationId: reactivarEvento
+      summary: Reactiva un evento suspendido
+      description: |
+        Solo administradores. Pasa el evento de SUSPENDIDO a PUBLICADO y habilita nuevamente
+        reservas y compras en ms-tickets. Es idempotente si el evento ya está publicado.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: El evento reactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
   /api/lugares:
     get:
       tags: [lugares]

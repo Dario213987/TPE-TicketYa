@@ -2,19 +2,20 @@ package org.tudai.ticketya.eventos.service;
 
 import feign.FeignException;
 import feign.RetryableException;
-import jakarta.persistence.EntityNotFoundException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
@@ -32,7 +33,6 @@ import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
-import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
@@ -51,7 +51,8 @@ import java.util.Set;
 public class EventoService {
 
     static final Set<EstadoEvento> ESTADOS_VISIBLES = Set.of(
-            EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
+            EstadoEvento.PUBLICADO, EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO,
+            EstadoEvento.AGOTADO);
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
@@ -59,6 +60,7 @@ public class EventoService {
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
     private final ParticipanteService participanteService;
+    private final TransactionTemplate transactionTemplate;
 
 
     @Transactional(readOnly = true)
@@ -93,8 +95,77 @@ public class EventoService {
      * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
      * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
-    @Transactional
-    public EventoPublicadoDTO publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
+    public EventoEstadoResponse publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
+        PublicacionPendiente pendiente = transactionTemplate.execute(
+                status -> prepararPublicacion(idEvento, organizadorId, esAdmin));
+
+        if (pendiente.yaPublicado() != null) {
+            return pendiente.yaPublicado();
+        }
+
+        ejecutarTickets(() -> ticketsClient.crearDisponibilidad(idEvento, pendiente.request()));
+
+        return transactionTemplate.execute(status -> confirmarPublicacion(idEvento));
+    }
+
+    /**
+     * Cancela un evento publicado. La autorización de administrador se valida en el controller.
+     * <p>
+     * Valida que el evento exista y que esté en estado PUBLICADO o SUSPENDIDO. Si las validaciones
+     * pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién después cambia
+     * el estado a CANCELADO.
+     * <p>
+     * Es idempotente: si el evento ya estaba cancelado, devuelve su información
+     * sin volver a modificarlo ni a llamar a ms-tickets.
+     *
+     * @param id id del evento a cancelar
+     *
+     * @return DTO con la información del evento cancelado
+     *
+     * @throws NotFoundException      si el evento no existe
+     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO ni CANCELADO
+     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     */
+    public EventoEstadoResponse cancelarEvento(Long id) {
+        EventoEstadoResponse yaCancelado = transactionTemplate.execute(
+                status -> validarCancelacion(id));
+
+        if (yaCancelado != null) {
+            return yaCancelado;
+        }
+
+        ejecutarTickets(() -> ticketsClient.cancelarEvento(id));
+
+        return transactionTemplate.execute(status -> confirmarCancelacion(id));
+    }
+
+    public EventoEstadoResponse suspenderEvento(Long id) {
+        EventoEstadoResponse yaSuspendido = transactionTemplate.execute(
+                status -> validarSuspension(id));
+
+        if (yaSuspendido != null) {
+            return yaSuspendido;
+        }
+
+        ejecutarTickets(() -> ticketsClient.suspenderEvento(id));
+
+        return transactionTemplate.execute(status -> confirmarSuspension(id));
+    }
+
+    public EventoEstadoResponse reactivarEvento(Long id) {
+        EventoEstadoResponse yaPublicado = transactionTemplate.execute(
+                status -> validarReactivacion(id));
+
+        if (yaPublicado != null) {
+            return yaPublicado;
+        }
+
+        ejecutarTickets(() -> ticketsClient.reactivarEvento(id));
+
+        return transactionTemplate.execute(status -> confirmarReactivacion(id));
+    }
+
+    private PublicacionPendiente prepararPublicacion(Long idEvento, Long organizadorId, boolean esAdmin) {
         Evento evento = eventoRepository.findById(idEvento)
                 .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
 
@@ -102,9 +173,8 @@ public class EventoService {
             throw new ForbiddenException("No podés publicar un evento que no te pertenece");
         }
 
-        EstadoEvento estadoPublicado = estadoPublicado();
-        if (evento.getEstado() == estadoPublicado) {
-            return toPublicadoDTO(evento);
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return new PublicacionPendiente(toEstadoDTO(evento), null);
         }
 
         if (evento.getEstado() != EstadoEvento.BORRADOR) {
@@ -136,55 +206,44 @@ public class EventoService {
             throw new SectoresSinPrecioException(faltantes);
         }
 
-        try {
-            ticketsClient.crearDisponibilidad(evento.getId(), buildInventarioRequest(evento, sectores));
-
-        }  catch (RetryableException e) {
-            throw new RemoteServiceException(502, "ms-tickets no disponible");
-
-        } catch (FeignException e) {
-            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
-        }
-
-        evento.setEstado(estadoPublicado);
-        Evento guardado = eventoRepository.save(evento);
-        return toPublicadoDTO(guardado);
+        return new PublicacionPendiente(null, buildInventarioRequest(evento, sectores));
     }
 
-    /**
-     * Cancela un evento publicado. Solo puede ser realizado por un administrador.
-     * <p>
-     * Valida que el usuario sea administrador, que el evento exista y que esté en estado
-     * PUBLICADO o SUSPENDIDO. Si las validaciones pasan, avisa a ms-tickets para que bloquee
-     * nuevas reservas y compras, y recién después cambia el estado a CANCELADO.
-     * <p>
-     * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo ni a llamar a ms-tickets.
-     *
-     * @param id      id del evento a cancelar
-     * @param esAdmin {@code true} si el usuario es administrador
-     *
-     * @return DTO con la información del evento cancelado
-     *
-     * @throws ForbiddenException     si el usuario no es administrador
-     * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
-     */
-    @Transactional
-    public EventoPublicadoDTO cancelarEvento(Long id, boolean esAdmin) {
+    private EventoEstadoResponse confirmarPublicacion(Long idEvento) {
+        Evento evento = buscarEventoParaCambioEstado(idEvento, "Evento " + idEvento + " no existe");
 
-        if (!esAdmin) {
-            throw new ForbiddenException("Solo administradores pueden cancelar un evento");
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
         }
 
-        Evento evento = eventoRepository.findById(id).orElseThrow(
-                () -> {
-                   return new NotFoundException("No se encontró el evento solicitado");
-                });
+        if (evento.getEstado() != EstadoEvento.BORRADOR) {
+            throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
+        }
+
+        evento.setEstado(EstadoEvento.PUBLICADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    private EventoEstadoResponse validarCancelacion(Long id) {
+        Evento evento = buscarEventoParaValidacion(id);
 
         if (evento.getEstado() == EstadoEvento.CANCELADO) {
-            return toPublicadoDTO(evento);
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO
+                && evento.getEstado() != EstadoEvento.SUSPENDIDO) {
+            throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarCancelacion(Long id) {
+        Evento evento = buscarEventoParaCambioEstado(id);
+
+        if (evento.getEstado() == EstadoEvento.CANCELADO) {
+            return toEstadoDTO(evento);
         }
 
         if (evento.getEstado() != EstadoEvento.PUBLICADO
@@ -193,36 +252,31 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.CANCELADO);
-        evento = eventoRepository.save(evento);
-
-        try {
-            ticketsClient.cancelarEvento(evento.getId());
-
-        }  catch (RetryableException e) {
-            throw new RemoteServiceException(502, "ms-tickets no disponible");
-
-        } catch (FeignException e) {
-            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
-        }
 
         //TO DO : REINTEGRO MASIVO
 
-        return toPublicadoDTO(evento);
-
+        return toEstadoDTO(eventoRepository.save(evento));
     }
 
-    @Transactional
-    public EventoPublicadoDTO suspenderEvento(Long id, boolean esAdmin) {
-
-        if (!esAdmin) {
-            throw new ForbiddenException("Solo administradores pueden suspender un evento");
-        }
-
-        Evento evento = eventoRepository.findById(id).orElseThrow(
-                () -> new NotFoundException("No se encontró el evento solicitado"));
+    private EventoEstadoResponse validarSuspension(Long id) {
+        Evento evento = buscarEventoParaValidacion(id);
 
         if (evento.getEstado() == EstadoEvento.SUSPENDIDO) {
-            return toPublicadoDTO(evento);
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("El evento debe ser publicado para poder ser suspendido");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarSuspension(Long id) {
+        Evento evento = buscarEventoParaCambioEstado(id);
+
+        if (evento.getEstado() == EstadoEvento.SUSPENDIDO) {
+            return toEstadoDTO(evento);
         }
 
         if (evento.getEstado() != EstadoEvento.PUBLICADO) {
@@ -230,19 +284,60 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.SUSPENDIDO);
-        evento = eventoRepository.save(evento);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
 
+    private EventoEstadoResponse validarReactivacion(Long id) {
+        Evento evento = buscarEventoParaValidacion(id);
+
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.SUSPENDIDO) {
+            throw new ConflictException("El evento debe estar suspendido para poder ser reactivado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarReactivacion(Long id) {
+        Evento evento = buscarEventoParaCambioEstado(id);
+
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.SUSPENDIDO) {
+            throw new ConflictException("El evento debe estar suspendido para poder ser reactivado");
+        }
+
+        evento.setEstado(EstadoEvento.PUBLICADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    private Evento buscarEventoParaValidacion(Long id) {
+        return eventoRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("No se encontró el evento solicitado"));
+    }
+
+    private Evento buscarEventoParaCambioEstado(Long id) {
+        return buscarEventoParaCambioEstado(id, "No se encontró el evento solicitado");
+    }
+
+    private Evento buscarEventoParaCambioEstado(Long id, String mensaje) {
+        return eventoRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException(mensaje));
+    }
+
+    private void ejecutarTickets(Runnable llamada) {
         try {
-            ticketsClient.suspenderEvento(evento.getId());
-
+            llamada.run();
         } catch (RetryableException e) {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
-
         } catch (FeignException e) {
             throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
         }
-
-        return toPublicadoDTO(evento);
     }
 
     @Transactional
@@ -386,15 +481,6 @@ public class EventoService {
         return new PrecioEventoSectorResponse(eventoId, sectorId, precio);
     }
 
-    private EstadoEvento estadoPublicado() {
-        try {
-            return EstadoEvento.valueOf("PUBLICADO");
-        } catch (IllegalArgumentException e) {
-            throw new IllegalStateException(
-                    "El enum EstadoEvento no tiene PUBLICADO", e);
-        }
-    }
-
     /**
      * Arma el request de inventario para ms-tickets a partir de los sectores del evento.
      * Los sectores se ordenan por id para que el payload sea determinista.
@@ -464,12 +550,8 @@ public class EventoService {
      *
      * @return DTO con la información básica del evento
      */
-    private EventoPublicadoDTO toPublicadoDTO(Evento evento) {
-        return EventoPublicadoDTO.builder()
-                .id(evento.getId())
-                .nombre(evento.getNombre())
-                .estado(evento.getEstado().name())
-                .build();
+    private EventoEstadoResponse toEstadoDTO(Evento evento) {
+        return new EventoEstadoResponse(evento.getId(), evento.getNombre(), evento.getEstado());
     }
 
     private boolean sectorPerteneceAlLugar(Evento evento, Long sectorId) {
@@ -530,6 +612,9 @@ public class EventoService {
         }
 
         return participanteService.crearParticipante(request);
+    }
+
+    private record PublicacionPendiente(EventoEstadoResponse yaPublicado, PublicarEventoRequest request) {
     }
 
 }
