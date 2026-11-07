@@ -25,4 +25,7 @@ public interface TicketsClient {
     @PutMapping("/api/tickets/eventos/{eventoId}/finalizar")
     void finalizarEvento(@PathVariable("eventoId") Long eventoId);
 
+    @PutMapping("/api/tickets/eventos/{eventoId}/reactivar")
+    void reactivarEvento(@PathVariable("eventoId") Long eventoId);
+
 }

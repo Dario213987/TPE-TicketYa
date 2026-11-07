@@ -7,10 +7,10 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -106,11 +106,7 @@ class EventoControllerEstadosInternosTest {
                 .andExpect(jsonPath("$.detail").value("Evento no encontrado con id: 99"));
     }
 
-    private EventoResponseDTO eventoEnEstado(EstadoEvento estado) {
-        return EventoResponseDTO.builder()
-                .id(1L)
-                .nombre("Festival")
-                .estado(estado)
-                .build();
+    private EventoEstadoResponse eventoEnEstado(EstadoEvento estado) {
+        return new EventoEstadoResponse(1L, "Festival", estado);
     }
 }

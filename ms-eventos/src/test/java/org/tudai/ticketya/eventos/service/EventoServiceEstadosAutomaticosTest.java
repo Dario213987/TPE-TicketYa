@@ -7,13 +7,13 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
@@ -86,10 +86,10 @@ class EventoServiceEstadosAutomaticosTest {
     @Test
     void marcarAgotado_enEventoPublicado_loPasaAAgotado() {
         Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
-        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        EventoResponseDTO response = eventoService.marcarAgotado(1L);
+        EventoEstadoResponse response = eventoService.marcarAgotado(1L);
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
         assertThat(response.getId()).isEqualTo(1L);
@@ -102,9 +102,9 @@ class EventoServiceEstadosAutomaticosTest {
     @Test
     void marcarAgotado_yaAgotado_esIdempotenteYNoGuarda() {
         Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
-        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
 
-        EventoResponseDTO response = eventoService.marcarAgotado(1L);
+        EventoEstadoResponse response = eventoService.marcarAgotado(1L);
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getNombre()).isEqualTo("Festival");
@@ -120,7 +120,7 @@ class EventoServiceEstadosAutomaticosTest {
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO)) {
             Evento evento = eventoEnEstado(estado);
-            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+            when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
 
             assertThatThrownBy(() -> eventoService.marcarAgotado(1L))
                     .isInstanceOf(ConflictException.class)
@@ -132,7 +132,7 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void marcarAgotado_conEventoInexistente_lanzaNotFound() {
-        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+        when(eventoRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> eventoService.marcarAgotado(99L))
                 .isInstanceOf(NotFoundException.class)
@@ -144,10 +144,10 @@ class EventoServiceEstadosAutomaticosTest {
     @Test
     void marcarPublicado_enEventoAgotado_loPasaAPublicado() {
         Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
-        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
-        EventoResponseDTO response = eventoService.marcarPublicado(1L);
+        EventoEstadoResponse response = eventoService.marcarPublicado(1L);
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
         assertThat(response.getId()).isEqualTo(1L);
@@ -160,9 +160,9 @@ class EventoServiceEstadosAutomaticosTest {
     @Test
     void marcarPublicado_yaPublicado_esIdempotenteYNoGuarda() {
         Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
-        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
 
-        EventoResponseDTO response = eventoService.marcarPublicado(1L);
+        EventoEstadoResponse response = eventoService.marcarPublicado(1L);
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
@@ -177,7 +177,7 @@ class EventoServiceEstadosAutomaticosTest {
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO)) {
             Evento evento = eventoEnEstado(estado);
-            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+            when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
 
             assertThatThrownBy(() -> eventoService.marcarPublicado(1L))
                     .isInstanceOf(ConflictException.class)
@@ -189,7 +189,7 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void marcarPublicado_conEventoInexistente_lanzaNotFound() {
-        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+        when(eventoRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> eventoService.marcarPublicado(99L))
                 .isInstanceOf(NotFoundException.class)

@@ -16,13 +16,15 @@ import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
-import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
-import org.tudai.ticketya.eventos.dto.evento.EventoResponseDTO;
-import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
@@ -40,6 +42,7 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -63,7 +66,7 @@ class EventoControllerTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .nombre("Festival de Verano")
-                .tipo("FESTIVAL")
+                .tipo(TipoEvento.FESTIVAL)
                 .fecha(LocalDate.of(2026, 12, 1))
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
@@ -88,15 +91,35 @@ class EventoControllerTest {
     }
 
     @Test
+    void crearEventoBorrador_devuelve201ConElOrganizadorYEstado() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.crearEventoBorrador(any(EventoBorradorCreateRequest.class), eq(7L)))
+                .thenReturn(new EventoResponse(1L, "Recital", TipoEvento.RECITAL,
+                        LocalDate.now().plusDays(10), EstadoEvento.BORRADOR, 7L));
+
+        mvc.perform(post("/api/eventos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Recital",
+                                  "descripcion": "Fecha de prueba",
+                                  "tipo": "RECITAL",
+                                  "fecha": "%s",
+                                  "lugarId": 10
+                                }
+                                """.formatted(LocalDate.now().plusDays(10))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("BORRADOR"))
+                .andExpect(jsonPath("$.organizadorId").value(7));
+    }
+
+    @Test
     void definirPrecioSector_devuelve200() throws Exception {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.definirPrecioSector(eq(1L), eq(2L), eq(15000.0), eq(7L), eq(false)))
-                .thenReturn(PrecioEventoSectorResponseDTO.builder()
-                        .eventoId(1L)
-                        .sectorId(2L)
-                        .precio(15000.0)
-                        .build());
+                .thenReturn(new PrecioEventoSectorResponse(1L, 2L, 15000.0));
 
         mvc.perform(put("/api/eventos/1/sectores/2/precio")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -189,11 +212,7 @@ class EventoControllerTest {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.actualizarEvento(eq(1L), any(), eq(7L), eq(false)))
-                .thenReturn(EventoResponseDTO.builder()
-                        .id(1L)
-                        .nombre("Nombre nuevo")
-                        .estado(EstadoEvento.BORRADOR)
-                        .build());
+                .thenReturn(new EventoResponse().id(1L).nombre("Nombre nuevo").estado(EstadoEvento.BORRADOR));
 
         mvc.perform(put("/api/eventos/1")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -355,7 +374,7 @@ class EventoControllerTest {
     void cancelarEvento_comoAdministrador_devuelve200() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.cancelarEvento(1L, true))
+        when(eventoService.cancelarEvento(1L))
                 .thenReturn(eventoCancelado());
 
         mvc.perform(put("/api/eventos/1/cancelar"))
@@ -364,7 +383,7 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.nombre").value("Festival"))
                 .andExpect(jsonPath("$.estado").value("CANCELADO"));
 
-        verify(eventoService).cancelarEvento(1L, true);
+        verify(eventoService).cancelarEvento(1L);
     }
 
     @Test
@@ -385,7 +404,7 @@ class EventoControllerTest {
     void cancelarEvento_conEventoInexistente_devuelve404() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.cancelarEvento(99L, true))
+        when(eventoService.cancelarEvento(99L))
                 .thenThrow(new NotFoundException("No se encontró el evento solicitado"));
 
         mvc.perform(put("/api/eventos/99/cancelar"))
@@ -397,7 +416,7 @@ class EventoControllerTest {
     void cancelarEvento_enEstadoNoCancelable_devuelve409() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.cancelarEvento(1L, true))
+        when(eventoService.cancelarEvento(1L))
                 .thenThrow(new ConflictException("El evento debe ser publicado para poder ser cancelado"));
 
         mvc.perform(put("/api/eventos/1/cancelar"))
@@ -410,7 +429,7 @@ class EventoControllerTest {
     void cancelarEvento_conMsTicketsNoDisponible_devuelve502() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.cancelarEvento(1L, true))
+        when(eventoService.cancelarEvento(1L))
                 .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
 
         mvc.perform(put("/api/eventos/1/cancelar"))
@@ -422,7 +441,7 @@ class EventoControllerTest {
     void suspenderEvento_comoAdministrador_devuelve200() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.suspenderEvento(1L, true))
+        when(eventoService.suspenderEvento(1L))
                 .thenReturn(eventoSuspendido());
 
         mvc.perform(put("/api/eventos/1/suspender"))
@@ -431,7 +450,7 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.nombre").value("Festival"))
                 .andExpect(jsonPath("$.estado").value("SUSPENDIDO"));
 
-        verify(eventoService).suspenderEvento(1L, true);
+        verify(eventoService).suspenderEvento(1L);
     }
 
     @Test
@@ -452,7 +471,7 @@ class EventoControllerTest {
     void suspenderEvento_conEventoInexistente_devuelve404() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.suspenderEvento(99L, true))
+        when(eventoService.suspenderEvento(99L))
                 .thenThrow(new NotFoundException("No se encontró el evento solicitado"));
 
         mvc.perform(put("/api/eventos/99/suspender"))
@@ -464,7 +483,7 @@ class EventoControllerTest {
     void suspenderEvento_enEstadoNoSuspendible_devuelve409() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.suspenderEvento(1L, true))
+        when(eventoService.suspenderEvento(1L))
                 .thenThrow(new ConflictException("El evento debe ser publicado para poder ser suspendido"));
 
         mvc.perform(put("/api/eventos/1/suspender"))
@@ -477,10 +496,77 @@ class EventoControllerTest {
     void suspenderEvento_conMsTicketsNoDisponible_devuelve502() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
-        when(eventoService.suspenderEvento(1L, true))
+        when(eventoService.suspenderEvento(1L))
                 .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
 
         mvc.perform(put("/api/eventos/1/suspender"))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
+    }
+
+    @Test
+    void reactivarEvento_comoAdministrador_devuelve200() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.reactivarEvento(1L))
+                .thenReturn(eventoPublicado());
+
+        mvc.perform(put("/api/eventos/1/reactivar"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.nombre").value("Festival"))
+                .andExpect(jsonPath("$.estado").value("PUBLICADO"));
+
+        verify(eventoService).reactivarEvento(1L);
+    }
+
+    @Test
+    void reactivarEvento_conRolNoAdministrador_devuelve403SinLlamarAlServicio() throws Exception {
+        when(userContext.userId()).thenReturn(7L);
+
+        for (Role rol : List.of(Role.ORGANIZADOR, Role.CLIENTE, Role.PERSONAL_ACCESO)) {
+            when(userContext.role()).thenReturn(rol);
+
+            mvc.perform(put("/api/eventos/1/reactivar"))
+                    .andExpect(status().isForbidden());
+        }
+
+        verifyNoInteractions(eventoService);
+    }
+
+    @Test
+    void reactivarEvento_conEventoInexistente_devuelve404() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.reactivarEvento(99L))
+                .thenThrow(new NotFoundException("No se encontró el evento solicitado"));
+
+        mvc.perform(put("/api/eventos/99/reactivar"))
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.detail").value("No se encontró el evento solicitado"));
+    }
+
+    @Test
+    void reactivarEvento_enEstadoNoSuspendido_devuelve409() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.reactivarEvento(1L))
+                .thenThrow(new ConflictException("El evento debe estar suspendido para poder ser reactivado"));
+
+        mvc.perform(put("/api/eventos/1/reactivar"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("El evento debe estar suspendido para poder ser reactivado"));
+    }
+
+    @Test
+    void reactivarEvento_conMsTicketsNoDisponible_devuelve502() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.reactivarEvento(1L))
+                .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
+
+        mvc.perform(put("/api/eventos/1/reactivar"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
     }
@@ -493,27 +579,15 @@ class EventoControllerTest {
                 .build();
     }
 
-    private EventoPublicadoDTO eventoPublicado() {
-        return EventoPublicadoDTO.builder()
-                .id(1L)
-                .nombre("Festival")
-                .estado("PUBLICADO")
-                .build();
+    private EventoEstadoResponse eventoPublicado() {
+        return new EventoEstadoResponse(1L, "Festival", EstadoEvento.PUBLICADO);
     }
 
-    private EventoPublicadoDTO eventoCancelado() {
-        return EventoPublicadoDTO.builder()
-                .id(1L)
-                .nombre("Festival")
-                .estado("CANCELADO")
-                .build();
+    private EventoEstadoResponse eventoCancelado() {
+        return new EventoEstadoResponse(1L, "Festival", EstadoEvento.CANCELADO);
     }
 
-    private EventoPublicadoDTO eventoSuspendido() {
-        return EventoPublicadoDTO.builder()
-                .id(1L)
-                .nombre("Festival")
-                .estado("SUSPENDIDO")
-                .build();
+    private EventoEstadoResponse eventoSuspendido() {
+        return new EventoEstadoResponse(1L, "Festival", EstadoEvento.SUSPENDIDO);
     }
 }

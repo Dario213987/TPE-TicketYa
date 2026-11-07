@@ -2,6 +2,8 @@ package org.tudai.ticketya.eventos.domain;
 
 import jakarta.persistence.*;
 import lombok.*;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -19,7 +21,8 @@ public class Evento {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
-    private String tipo;
+    @Enumerated(EnumType.STRING)
+    private TipoEvento tipo;
 	private LocalDate fecha;
 	@ManyToOne
 	@JoinColumn(name = "lugar_id")
@@ -30,7 +33,7 @@ public class Evento {
     private EstadoEvento estado = EstadoEvento.BORRADOR;
     private String nombre;
 	private String descripcion;
-	@ManyToMany
+	@ManyToMany(cascade = CascadeType.PERSIST)
 	@JoinTable(
 			name = "evento_participante",
 			joinColumns = @JoinColumn(name = "evento_id"),
@@ -38,7 +41,7 @@ public class Evento {
 	)
 	@Builder.Default
 	@Setter(AccessLevel.NONE)
-	private Set<Participante> artistas = new HashSet<>();
+	private Set<Participante> participantes = new HashSet<>();
 
 	@ElementCollection
 	@CollectionTable(
@@ -54,11 +57,11 @@ public class Evento {
 		this.preciosSectores.put(sectorId, precio);
 	}
 
-	public void addArtista(Participante part) {
-		this.artistas.add(part);
+	public void addParticipante(Participante part) {
+		this.participantes.add(part);
 	}
 
-	public void removeArtista(Participante part) {this.artistas.remove(part);
+	public void removeParticipante(Participante part) {this.participantes.remove(part);
 	}
 
     @Override
