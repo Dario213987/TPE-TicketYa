@@ -13,12 +13,12 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
-import org.tudai.ticketya.eventos.dto.evento.EventoPublicadoDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.util.Set;
@@ -44,7 +44,7 @@ public class EventoController {
 
     @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
     @PutMapping("/{id}/publicar")
-    public EventoPublicadoDTO publicarEvento(@PathVariable Long id) {
+    public EventoEstadoResponse publicarEvento(@PathVariable Long id) {
         boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
         return eventoService.publicarEvento(id, organizadorIdActual(), esAdmin);
     }
@@ -100,4 +100,21 @@ public class EventoController {
         return eventoService.crearEventoBorrador(request, userContext.userId());
     }
 
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/cancelar")
+    public EventoEstadoResponse cancelarEvento(@PathVariable Long id) {
+        return eventoService.cancelarEvento(id);
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/suspender")
+    public EventoEstadoResponse suspenderEvento(@PathVariable Long id) {
+        return eventoService.suspenderEvento(id);
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/reactivar")
+    public EventoEstadoResponse reactivarEvento(@PathVariable Long id) {
+        return eventoService.reactivarEvento(id);
+    }
 }

@@ -1,23 +1,33 @@
 package org.tudai.ticketya.eventos;
 
+import feign.FeignException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.TicketsClient;
+import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
+import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.time.LocalDate;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -46,6 +56,12 @@ class EventoApiTest {
 
     @Autowired
     ParticipanteRepository participanteRepository;
+
+    @Autowired
+    EventoService eventoService;
+
+    @MockitoBean
+    TicketsClient ticketsClient;
 
     private Lugar lugar;
 
@@ -136,6 +152,25 @@ class EventoApiTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(eventoRepository.count()).isZero();
+    }
+
+    @Test
+    void cancelarEvento_cuandoMsTicketsFalla_noPersisteElCambioDeEstado() {
+        Evento evento = eventoRepository.save(Evento.builder()
+                .nombre("Festival de integración")
+                .fecha(LocalDate.now().plusDays(10))
+                .estado(EstadoEvento.PUBLICADO)
+                .organizadorId(7L)
+                .lugar(lugar)
+                .build());
+        doThrow(mock(FeignException.class)).when(ticketsClient).cancelarEvento(evento.getId());
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(evento.getId()))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-tickets respondió con error");
+
+        assertThat(eventoRepository.findById(evento.getId()).orElseThrow().getEstado())
+                .isEqualTo(EstadoEvento.PUBLICADO);
     }
 
     private MockHttpServletRequestBuilder crearEvento(LocalDate fecha, String participantes) {
