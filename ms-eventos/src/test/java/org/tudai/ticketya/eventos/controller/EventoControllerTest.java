@@ -16,9 +16,12 @@ import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
-import org.tudai.ticketya.eventos.domain.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
-import org.tudai.ticketya.eventos.dto.evento.PrecioEventoSectorResponseDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 
@@ -29,8 +32,11 @@ import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -57,7 +63,7 @@ class EventoControllerTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .nombre("Festival de Verano")
-                .tipo("FESTIVAL")
+                .tipo(TipoEvento.FESTIVAL)
                 .fecha(LocalDate.of(2026, 12, 1))
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
@@ -82,15 +88,35 @@ class EventoControllerTest {
     }
 
     @Test
+    void crearEventoBorrador_devuelve201ConElOrganizadorYEstado() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.crearEventoBorrador(any(EventoBorradorCreateRequest.class), eq(7L)))
+                .thenReturn(new EventoResponse(1L, "Recital", TipoEvento.RECITAL,
+                        LocalDate.now().plusDays(10), EstadoEvento.BORRADOR, 7L));
+
+        mvc.perform(post("/api/eventos")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Recital",
+                                  "descripcion": "Fecha de prueba",
+                                  "tipo": "RECITAL",
+                                  "fecha": "%s",
+                                  "lugarId": 10
+                                }
+                                """.formatted(LocalDate.now().plusDays(10))))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("BORRADOR"))
+                .andExpect(jsonPath("$.organizadorId").value(7));
+    }
+
+    @Test
     void definirPrecioSector_devuelve200() throws Exception {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.definirPrecioSector(eq(1L), eq(2L), eq(15000.0), eq(7L), eq(false)))
-                .thenReturn(PrecioEventoSectorResponseDTO.builder()
-                        .eventoId(1L)
-                        .sectorId(2L)
-                        .precio(15000.0)
-                        .build());
+                .thenReturn(new PrecioEventoSectorResponse(1L, 2L, 15000.0));
 
         mvc.perform(put("/api/eventos/1/sectores/2/precio")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -173,5 +199,70 @@ class EventoControllerTest {
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.detail")
                         .value("No podés definir precios en un evento que no te pertenece"));
+    }
+
+    @Test
+    void actualizarEvento_devuelveElEventoActualizado() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.actualizarEvento(eq(1L), any(), eq(7L), eq(false)))
+                .thenReturn(new EventoResponse().id(1L).nombre("Nombre nuevo").estado(EstadoEvento.BORRADOR));
+
+        mvc.perform(put("/api/eventos/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "nombre": "Nombre nuevo"
+                                }
+                                """))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.nombre").value("Nombre nuevo"))
+                .andExpect(jsonPath("$.estado").value("BORRADOR"));
+    }
+
+    @Test
+    void actualizarEvento_publicadoConCambioEstructural_devuelve409() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.actualizarEvento(eq(1L), any(), eq(7L), eq(false)))
+                .thenThrow(new ConflictException(
+                        "No se puede modificar la fecha de un evento ya publicado. Cancelalo o reprogramalo."));
+
+        mvc.perform(put("/api/eventos/1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {
+                                  "fecha": "2026-12-15"
+                                }
+                                """))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("No se puede modificar la fecha de un evento ya publicado. Cancelalo o reprogramalo."));
+    }
+
+    @Test
+    void eliminarEvento_borrador_devuelve204() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+
+        mvc.perform(delete("/api/eventos/1"))
+                .andExpect(status().isNoContent());
+
+        verify(eventoService).eliminarEvento(1L, 7L, false);
+    }
+
+    @Test
+    void eliminarEvento_publicado_devuelve409() throws Exception {
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(userContext.userId()).thenReturn(7L);
+        org.mockito.Mockito.doThrow(new ConflictException(
+                        "Solo se pueden eliminar eventos en estado BORRADOR"))
+                .when(eventoService).eliminarEvento(1L, 7L, false);
+
+        mvc.perform(delete("/api/eventos/1"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail")
+                        .value("Solo se pueden eliminar eventos en estado BORRADOR"));
     }
 }
