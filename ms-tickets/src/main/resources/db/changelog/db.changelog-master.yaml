@@ -1,1 +1,4 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: 00001-crear-tablas-tickets.xml
+      relativeToChangelogFile: true
