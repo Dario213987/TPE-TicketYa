@@ -14,11 +14,13 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.contract.devoluciones.model.DevolucionResponse;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
+import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -67,6 +69,19 @@ public class DevolucionController {
     @Authorize("hasAnyRole('ADMINISTRADOR', 'CLIENTE')")
     public DevolucionResponse obtenerDevolucionPorTicket(@PathVariable Long ticketId) {
         return toResponseDTO(devolucionService.findByTicketId(ticketId));
+    }
+
+    @RequestMapping(
+            value = {"/{id}/rechazar"},
+            method = {RequestMethod.POST, RequestMethod.PATCH, RequestMethod.PUT}
+    )
+    @ResponseStatus(HttpStatus.OK)
+    @Authorize("hasRole('ADMINISTRADOR')")
+    public DevolucionResponse rechazarDevolucion(
+            @PathVariable Long id,
+            @Valid @RequestBody RechazarDevolucionRequest request) {
+        Devolucion devolucion = devolucionService.rechazarDevolucion(id, request);
+        return toResponseDTO(devolucion);
     }
 
     private static Pageable ordenable(Pageable pageable) {

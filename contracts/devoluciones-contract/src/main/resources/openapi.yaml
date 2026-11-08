@@ -87,6 +87,39 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/{id}/rechazar:
+    post:
+      tags: [devoluciones]
+      operationId: rechazarDevolucion
+      summary: Rechaza una solicitud de devolución
+      description: |
+        Pasa una solicitud de devolución en estado PENDIENTE a DENEGADA indicando el motivo.
+        El ticket asociado sigue VENDIDO.
+        Si la solicitud ya fue resuelta, responde 409 Conflict.
+        Solo accesible por administradores.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechazarDevolucionRequest'
+      responses:
+        '200':
+          description: Solicitud de devolución rechazada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/devoluciones/ticket/{ticketId}:
     get:
       tags: [devoluciones]
@@ -145,6 +178,12 @@ components:
         clienteId:
           type: integer
           format: int64
+        motivo:
+          type: string
+    RechazarDevolucionRequest:
+      type: object
+      required: [motivo]
+      properties:
         motivo:
           type: string
     DevolucionResponse:

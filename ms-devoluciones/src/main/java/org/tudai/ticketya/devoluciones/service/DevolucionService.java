@@ -9,9 +9,11 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
+import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
@@ -178,5 +180,38 @@ public class DevolucionService {
             throw new NotFoundException("No existe devolución para el ticket " + ticketId);
         }
         return devolucion;
+    }
+
+    public Devolucion rechazarDevolucion(Long id, RechazarDevolucionRequest request) {
+        if (request == null || request.getMotivo() == null || request.getMotivo().trim().isEmpty()) {
+            throw new BadRequestException("El motivo de rechazo es obligatorio");
+        }
+        return rechazarDevolucion(id, request.getMotivo().trim());
+    }
+
+    public Devolucion rechazarDevolucion(Long id, String motivo) {
+        if (motivo == null || motivo.trim().isEmpty()) {
+            throw new BadRequestException("El motivo de rechazo es obligatorio");
+        }
+
+        if (userContext.isPresent() && userContext.role() != Role.ADMINISTRADOR) {
+            throw new ForbiddenException("No tenés permisos para realizar esta operación.");
+        }
+
+        Devolucion devolucion = devolucionRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("La devolución " + id + " no existe"));
+
+        if (devolucion.getEstado() != EstadoDevolucion.PENDIENTE) {
+            throw new ConflictException("La solicitud de devolución ya fue resuelta (estado actual: " + devolucion.getEstado() + ")");
+        }
+
+        devolucion.setEstado(EstadoDevolucion.DENEGADA);
+        devolucion.setMotivo(motivo.trim());
+
+        try {
+            return devolucionRepository.saveAndFlush(devolucion);
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException("Ya existe una devolución en estado DENEGADA para este ticket");
+        }
     }
 }
