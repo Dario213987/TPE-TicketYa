@@ -20,7 +20,7 @@
 									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
 									"const j = pm.response.json();",
 									"pm.test(\"trae content y page\", () => { pm.expect(j.content).to.be.an(\"array\"); pm.expect(j.page).to.exist; });",
-									"pm.test(\"solo estados visibles\", () => j.content.forEach(e => pm.expect([\"PUBLICADO\",\"FINALIZADO\",\"AGOTADO\"]).to.include(e.estado)));"
+									"pm.test(\"solo estados visibles\", () => j.content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
 								]
 							}
 						}
@@ -50,7 +50,7 @@
 								"exec": [
 									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
 									"pm.test(\"size 5\", () => pm.expect(pm.response.json().page.size).to.eql(5));",
-									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"FINALIZADO\",\"AGOTADO\"]).to.include(e.estado)));"
+									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
 								]
 							}
 						}
@@ -89,7 +89,7 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"FINALIZADO\",\"AGOTADO\"]).to.include(e.estado)));"
+									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
 								]
 							}
 						}

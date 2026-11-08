@@ -81,7 +81,10 @@ public class NotificacionTicketsService {
     private void enviar(EventoNotificacion notificacion) {
         MDC.put(MdcKeys.CORRELATION_ID, UUID.randomUUID().toString());
         try {
-            ticketsClient.finalizarEvento(notificacion.getEventoId());
+            Runnable envio = switch (notificacion.getTipo()) {
+                case FINALIZAR -> () -> ticketsClient.finalizarEvento(notificacion.getEventoId());
+            };
+            envio.run();
         } catch (Exception e) {
             registrarFallo(notificacion, e);
             return;

@@ -57,7 +57,7 @@ import java.util.function.Supplier;
 public class EventoService {
 
     static final Set<EstadoEvento> ESTADOS_VISIBLES = Set.of(
-            EstadoEvento.PUBLICADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
+            EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO);
 
     private static final Set<EstadoEvento> ESTADOS_FINALIZABLES = EnumSet.of(
             EstadoEvento.PUBLICADO,

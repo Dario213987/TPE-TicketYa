@@ -38,6 +38,20 @@ class EventosInternalPathBlockWebFilterTest {
     }
 
     @Test
+    void bloqueaLaRutaInternaExacta() {
+        MockServerWebExchange exchange = exchange("/api/eventos/internal");
+        AtomicBoolean chainCalled = new AtomicBoolean(false);
+
+        filter.filter(exchange, ex -> {
+            chainCalled.set(true);
+            return Mono.empty();
+        }).block();
+
+        assertThat(chainCalled).isFalse();
+        assertThat(exchange.getResponse().getStatusCode()).isEqualTo(HttpStatus.NOT_FOUND);
+    }
+
+    @Test
     void dejaPasarLasRutasPublicasDeEventos() {
         MockServerWebExchange exchange = exchange("/api/eventos/1/publicar");
         AtomicBoolean chainCalled = new AtomicBoolean(false);

@@ -1,6 +1,6 @@
 # ms-eventos: endpoints internos y finalización automática
 
-Los endpoints internos de `ms-eventos` son llamados servicio-a-servicio (por ejemplo, desde `ms-tickets`) y no requieren autenticación de usuario. El `api-gateway` bloquea `/api/eventos/internal/**`, por lo que no deben consumirse a través del puerto público del gateway. Para pruebas manuales usar la URL directa de `ms-eventos` (variable `internalBaseUrl` de la colección Postman).
+Los endpoints internos de `ms-eventos` son llamados servicio-a-servicio (por ejemplo, desde `ms-tickets`) y no requieren autenticación de usuario. El `api-gateway` bloquea `/api/eventos/internal` y `/api/eventos/internal/**`, por lo que no deben consumirse a través del puerto público del gateway. Para pruebas manuales usar la URL directa de `ms-eventos` (variable `internalBaseUrl` de la colección Postman).
 
 ## Endpoints
 
@@ -34,6 +34,7 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
 - Estados finalizables: `PUBLICADO`, `AGOTADO`, `SUSPENDIDO`.
 - ShedLock evita ejecuciones concurrentes entre instancias de `ms-eventos`.
 - Al finalizar, se encola una notificación `FINALIZAR` en el outbox para `ms-tickets`.
+- Las transiciones `cancelar`, `suspender` y `reactivar` se notifican a `ms-tickets` de forma síncrona, antes de confirmar el nuevo estado. Si `ms-tickets` falla, la operación devuelve `502` y el estado no cambia.
 
 ### Configuración
 
@@ -49,14 +50,16 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
 
 `fecha` pasó de `date` a `date-time` en el contrato (`LocalDateTime` en Java). La migración `00012-cambiar-fecha-evento-a-timestamp.xml` convierte los datos existentes:
 
-- PostgreSQL/H2: `fecha + TIME '23:59:59'` (los eventos viejos se consideran vencidos al final de su día).
+- PostgreSQL: `fecha + TIME '23:59:59'` (los eventos viejos se consideran vencidos al final de su día).
 - MySQL: `TIMESTAMP(DATE(fecha), '23:59:59')`.
 
-La tabla `evento_notificacion` también usa `timestamp with time zone` en PostgreSQL/H2 y `datetime(6)` en MySQL.
+La tabla `evento_notificacion` también usa `timestamp with time zone` en PostgreSQL y `datetime(6)` en MySQL. Los tests de integración de migraciones se ejecutan contra PostgreSQL con Testcontainers; MySQL no está cubierto por esos tests.
 
 ## Outbox e idempotencia
 
-El envío de notificaciones a `ms-tickets` es at-least-once. `ms-tickets` debe ser idempotente al recibir una notificación. La tabla de outbox tiene una restricción única `(evento_id, tipo)`: si una notificación quedó en estado `FALLIDO`, no se vuelve a encolar automáticamente. Para reintentarla hay que hacerlo de forma operativa (por ejemplo, cambiar su estado o reprocesarla), no esperar que el job la vuelva a crear.
+El outbox se usa únicamente para la notificación `FINALIZAR`, porque nace de un proceso programado y no de una request de usuario. `cancelar`, `suspender` y `reactivar` son llamadas síncronas a `ms-tickets`.
+
+El envío de notificaciones del outbox es at-least-once. `ms-tickets` debe ser idempotente al recibir una notificación. La tabla de outbox tiene una restricción única `(evento_id, tipo)`: si una notificación quedó en estado `FALLIDO`, no se vuelve a encolar automáticamente. Para reintentarla hay que hacerlo de forma operativa (por ejemplo, cambiar su estado o reprocesarla), no esperar que el job la vuelva a crear.
 
 ## Prueba manual
 
