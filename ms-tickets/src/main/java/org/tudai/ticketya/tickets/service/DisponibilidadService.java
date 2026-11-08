@@ -180,54 +180,6 @@ public class DisponibilidadService {
                 .build();
     }
 
-    @Transactional(readOnly = true)
-    public DisponibilidadEventoResponseDTO consultar(Long eventoId) {
-        List<DisponibilidadSector> sectores = sectorRepository.findByEvento_EventoIdOrderByIdAsc(eventoId);
-
-        if (sectores.isEmpty()) {
-            throw new NotFoundException("No hay disponibilidad para el evento " + eventoId);
-        }
-
-        List<SectorDisponibilidadResponseDTO> respuesta = sectores.stream()
-                .map(this::mapearSector)
-                .toList();
-
-        return DisponibilidadEventoResponseDTO.builder()
-                .eventoId(eventoId)
-                .sectores(respuesta)
-                .build();
-    }
-
-    private SectorDisponibilidadResponseDTO mapearSector(DisponibilidadSector sector) {
-        List<AsientoDisponibilidadDTO> asientos = null;
-        int disponibles = sector.getDisponibles();
-
-        if (sector.getTipo() == TipoSector.NUMERADO) {
-            List<DisponibilidadAsiento> entidades =
-                    asientoRepository.findBySector_IdOrderByFilaAscNumeroAsc(sector.getId());
-
-            asientos = entidades.stream()
-                    .map(asiento -> AsientoDisponibilidadDTO.builder()
-                            .fila(asiento.getFila())
-                            .numero(asiento.getNumero())
-                            .estado(asiento.getEstado())
-                            .build())
-                    .toList();
-
-            disponibles = (int) entidades.stream()
-                    .filter(asiento -> asiento.getEstado() == EstadoDisponibilidad.LIBRE)
-                    .count();
-        }
-
-        return SectorDisponibilidadResponseDTO.builder()
-                .sectorId(sector.getSectorIdExterno())
-                .tipoSector(sector.getTipo())
-                .capacidadTotal(sector.getCapacidadTotal())
-                .disponibles(disponibles)
-                .asientos(asientos)
-                .build();
-    }
-
     private List<AsientoDTO> obtenerAsientos(SectorDisponibilidadDTO dto) {
         Map<String, AsientoDTO> unicos = new LinkedHashMap<>();
 
