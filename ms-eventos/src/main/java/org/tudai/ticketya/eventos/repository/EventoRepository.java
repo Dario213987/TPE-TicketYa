@@ -12,7 +12,7 @@ import org.springframework.stereotype.Repository;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
@@ -25,20 +25,20 @@ public interface EventoRepository extends JpaRepository<Evento, Long> {
     @Query("""
             SELECT e.id
               FROM Evento e
-             WHERE e.fecha < :hoy
+             WHERE e.fecha < :limite
                AND e.estado IN :estadosFinalizables
             """)
-    List<Long> findIdsEventosVencidos(@Param("hoy") LocalDate hoy,
+    List<Long> findIdsEventosVencidos(@Param("limite") LocalDateTime limite,
                                       @Param("estadosFinalizables") Collection<EstadoEvento> estadosFinalizables);
 
     @Modifying(clearAutomatically = true, flushAutomatically = true)
     @Query("""
             UPDATE Evento e
                SET e.estado = :estadoFinalizado
-             WHERE e.fecha < :hoy
+             WHERE e.fecha < :limite
                AND e.estado IN :estadosFinalizables
             """)
-    int finalizarEventosVencidos(@Param("hoy") LocalDate hoy,
+    int finalizarEventosVencidos(@Param("limite") LocalDateTime limite,
                                  @Param("estadoFinalizado") EstadoEvento estadoFinalizado,
                                  @Param("estadosFinalizables") Collection<EstadoEvento> estadosFinalizables);
 

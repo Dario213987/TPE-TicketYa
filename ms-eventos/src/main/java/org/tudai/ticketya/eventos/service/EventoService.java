@@ -4,6 +4,7 @@ import feign.FeignException;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
@@ -39,7 +40,7 @@ import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
@@ -53,8 +54,7 @@ import java.util.Set;
 public class EventoService {
 
     static final Set<EstadoEvento> ESTADOS_VISIBLES = Set.of(
-            EstadoEvento.PUBLICADO, EstadoEvento.CONFIRMADO, EstadoEvento.FINALIZADO,
-            EstadoEvento.AGOTADO);
+            EstadoEvento.PUBLICADO, EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO);
 
     private static final Set<EstadoEvento> ESTADOS_FINALIZABLES = EnumSet.of(
             EstadoEvento.PUBLICADO,
@@ -70,6 +70,9 @@ public class EventoService {
     private final NotificacionTicketsService notificacionTicketsService;
     private final TransactionTemplate transactionTemplate;
 
+    @Value("${ticketya.eventos.finalizacion.horas-gracia:6}")
+    private long horasGraciaFinalizacion = 6;
+
 
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(Pageable pageable) {
@@ -81,7 +84,7 @@ public class EventoService {
      * Publica un evento que está en estado BORRADOR.
      * <p>
      * Valida que el evento exista, que el usuario tenga permiso (organizador dueño o administrador),
-     * que la fecha sea posterior a hoy(momento en que se solicita el cambio),
+     * que la fecha/hora sea posterior al momento en que se solicita el cambio,
      * que tenga un lugar con sectores y que todos los sectores
      * tengan precio. Si las validaciones pasan, crea el inventario en ms-tickets y recién después
      * cambia el estado a PUBLICADO.
@@ -98,8 +101,8 @@ public class EventoService {
      * @throws NotFoundException           si el evento no existe
      * @throws ForbiddenException          si el usuario no es admin y el evento no le pertenece
      * @throws ConflictException           si el evento no está en estado BORRADOR
-     * @throws BadRequestException         si la fecha no es posterior a hoy, o si el evento no tiene
-     *                                     lugar o el lugar no tiene sectores
+     * @throws BadRequestException         si la fecha/hora no es posterior al momento actual, o si el
+     *                                     evento no tiene lugar o el lugar no tiene sectores
      * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
      * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
@@ -189,7 +192,7 @@ public class EventoService {
             throw new ConflictException("Solo se pueden publicar eventos en estado BORRADOR");
         }
 
-        if (evento.getFecha() == null || !evento.getFecha().isAfter(LocalDate.now())) {
+        if (evento.getFecha() == null || !evento.getFecha().isAfter(LocalDateTime.now())) {
             throw new BadRequestException("La fecha del evento debe ser posterior a hoy");
         }
 
@@ -325,11 +328,12 @@ public class EventoService {
     }
 
     /**
-     * Finaliza los eventos cuya fecha ya pasó.
+     * Finaliza los eventos cuya fecha/hora ya pasó hace más de
+     * {@code ticketya.eventos.finalizacion.horas-gracia} horas (6 por defecto).
      * <p>
-     * Pasa a FINALIZADO los eventos con fecha anterior a hoy que estén en estado
-     * PUBLICADO, AGOTADO o SUSPENDIDO. Un evento se finaliza al día siguiente de su
-     * fecha, ya que la comparación es estrictamente anterior a hoy.
+     * Pasa a FINALIZADO los eventos cuya fecha/hora sea estrictamente anterior al
+     * momento actual menos las horas de gracia, siempre que estén en estado
+     * PUBLICADO, AGOTADO o SUSPENDIDO.
      * <p>
      * El cambio de estado y el alta de la notificación pendiente se guardan en la
      * misma transacción. El envío a ms-tickets lo hace {@link NotificacionTicketsService}
@@ -340,14 +344,14 @@ public class EventoService {
      */
     @Transactional
     public void finalizarEventosVencidos() {
-        LocalDate hoy = LocalDate.now();
-        List<Long> ids = eventoRepository.findIdsEventosVencidos(hoy, ESTADOS_FINALIZABLES);
+        LocalDateTime limite = LocalDateTime.now().minusHours(horasGraciaFinalizacion);
+        List<Long> ids = eventoRepository.findIdsEventosVencidos(limite, ESTADOS_FINALIZABLES);
 
         if (ids.isEmpty()) {
             return;
         }
 
-        eventoRepository.finalizarEventosVencidos(hoy, EstadoEvento.FINALIZADO, ESTADOS_FINALIZABLES);
+        eventoRepository.finalizarEventosVencidos(limite, EstadoEvento.FINALIZADO, ESTADOS_FINALIZABLES);
 
         for (Long id : ids) {
             notificacionTicketsService.encolar(id, TipoNotificacionTickets.FINALIZAR);
@@ -485,7 +489,7 @@ public class EventoService {
                 throw new ConflictException(
                         "No se puede modificar la fecha de un evento ya publicado. Cancelalo o reprogramalo.");
             }
-            if (!dto.getFecha().isAfter(LocalDate.now())) {
+            if (!dto.getFecha().isAfter(LocalDateTime.now())) {
                 throw new BadRequestException("La fecha del evento debe ser posterior a hoy");
             }
         }
@@ -668,7 +672,7 @@ public class EventoService {
     @Transactional
     public EventoResponse crearEventoBorrador(EventoBorradorCreateRequest request, Long organizadorId) {
 
-        if (request.getFecha() == null || !request.getFecha().isAfter(LocalDate.now())) {
+        if (request.getFecha() == null || !request.getFecha().isAfter(LocalDateTime.now())) {
             throw new FechaEventoInvalidaException("La fecha del evento debe ser posterior a hoy");
         }
         if (request.getNombre() == null || request.getNombre().isBlank()
@@ -679,7 +683,7 @@ public class EventoService {
 
         Lugar lugar = lugarService.obtenerPorId(request.getLugarId());
 
-        LocalDate fecha = request.getFecha();
+        LocalDateTime fecha = request.getFecha();
 
         Evento evento = Evento.builder()
                 .nombre(request.getNombre())

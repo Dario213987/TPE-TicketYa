@@ -2,6 +2,7 @@ package org.tudai.ticketya.eventos.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -17,7 +18,7 @@ import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -57,16 +58,24 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void finalizarEventosVencidos_finalizaYEncolaUnaNotificacionPorEvento() {
-        LocalDate hoy = LocalDate.now();
-        when(eventoRepository.findIdsEventosVencidos(eq(hoy), any()))
+        when(eventoRepository.findIdsEventosVencidos(any(LocalDateTime.class), any()))
                 .thenReturn(List.of(10L, 20L));
 
+        LocalDateTime antes = LocalDateTime.now();
         eventoService.finalizarEventosVencidos();
+        LocalDateTime despues = LocalDateTime.now();
 
+        ArgumentCaptor<LocalDateTime> limiteCaptor = ArgumentCaptor.forClass(LocalDateTime.class);
+        verify(eventoRepository).findIdsEventosVencidos(
+                limiteCaptor.capture(),
+                eq(Set.of(EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO, EstadoEvento.SUSPENDIDO)));
         verify(eventoRepository).finalizarEventosVencidos(
-                eq(hoy),
+                eq(limiteCaptor.getValue()),
                 eq(EstadoEvento.FINALIZADO),
                 eq(Set.of(EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO, EstadoEvento.SUSPENDIDO)));
+
+        assertThat(limiteCaptor.getValue())
+                .isBetween(antes.minusHours(6), despues.minusHours(6));
         verify(notificacionTicketsService).encolar(10L, TipoNotificacionTickets.FINALIZAR);
         verify(notificacionTicketsService).encolar(20L, TipoNotificacionTickets.FINALIZAR);
         verifyNoInteractions(ticketsClient);
@@ -74,7 +83,7 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void finalizarEventosVencidos_sinEventosVencidos_noActualizaNiEncola() {
-        when(eventoRepository.findIdsEventosVencidos(eq(LocalDate.now()), any()))
+        when(eventoRepository.findIdsEventosVencidos(any(LocalDateTime.class), any()))
                 .thenReturn(List.of());
 
         eventoService.finalizarEventosVencidos();

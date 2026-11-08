@@ -30,7 +30,7 @@ import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 
 import static org.hamcrest.Matchers.hasSize;
@@ -67,7 +67,7 @@ class EventoControllerTest {
                 .id(1L)
                 .nombre("Festival de Verano")
                 .tipo(TipoEvento.FESTIVAL)
-                .fecha(LocalDate.of(2026, 12, 1))
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
         Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
@@ -96,7 +96,7 @@ class EventoControllerTest {
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.crearEventoBorrador(any(EventoBorradorCreateRequest.class), eq(7L)))
                 .thenReturn(new EventoResponse(1L, "Recital", TipoEvento.RECITAL,
-                        LocalDate.now().plusDays(10), EstadoEvento.BORRADOR, 7L));
+                        LocalDateTime.now().plusDays(10), EstadoEvento.BORRADOR, 7L));
 
         mvc.perform(post("/api/eventos")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -108,7 +108,7 @@ class EventoControllerTest {
                                   "fecha": "%s",
                                   "lugarId": 10
                                 }
-                                """.formatted(LocalDate.now().plusDays(10))))
+                                """.formatted(LocalDateTime.now().plusDays(10))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estado").value("BORRADOR"))
                 .andExpect(jsonPath("$.organizadorId").value(7));
@@ -239,7 +239,7 @@ class EventoControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("""
                                 {
-                                  "fecha": "2026-12-15"
+                                  "fecha": "2026-12-15T20:00:00"
                                 }
                                 """))
                 .andExpect(status().isConflict())

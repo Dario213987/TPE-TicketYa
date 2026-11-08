@@ -23,7 +23,7 @@ public class EventoFinalizacionScheduler {
 
     private final EventoService eventoService;
 
-    @Scheduled(cron = "${ticketya.eventos.finalizacion.cron:0 0 * * * *}")
+    @Scheduled(cron = "${ticketya.eventos.finalizacion.cron:0 */15 * * * *}")
     @SchedulerLock(
             name = "eventoFinalizacionScheduler",
             lockAtMostFor = "${ticketya.eventos.finalizacion.lock-at-most-for:PT15M}",

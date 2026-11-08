@@ -4,6 +4,10 @@
                    xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
                    https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
 
+    <property name="tipoTimestamp" value="timestamp with time zone" dbms="postgresql"/>
+    <property name="tipoTimestamp" value="datetime(6)" dbms="mysql"/>
+    <property name="tipoTimestamp" value="timestamp with time zone" dbms="h2"/>
+
     <changeSet id="00011-crear-tabla-evento-notificacion" author="ticketya">
         <createTable tableName="evento_notificacion">
             <column name="id" type="bigint" autoIncrement="true">
@@ -21,11 +25,11 @@
             <column name="intentos" type="int" defaultValueNumeric="0">
                 <constraints nullable="false"/>
             </column>
-            <column name="proximo_intento" type="timestamp with time zone"/>
-            <column name="creado_el" type="timestamp with time zone">
+            <column name="proximo_intento" type="${tipoTimestamp}"/>
+            <column name="creado_el" type="${tipoTimestamp}">
                 <constraints nullable="false"/>
             </column>
-            <column name="actualizado_el" type="timestamp with time zone"/>
+            <column name="actualizado_el" type="${tipoTimestamp}"/>
         </createTable>
 
         <addUniqueConstraint tableName="evento_notificacion"

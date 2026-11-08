@@ -67,6 +67,14 @@ class EventoControllerEstadosInternosTest {
     }
 
     @Test
+    void finalizarVencidos_devuelve204() throws Exception {
+        mvc.perform(put("/api/eventos/internal/finalizar-vencidos"))
+                .andExpect(status().isNoContent());
+
+        verify(eventoService).finalizarEventosVencidos();
+    }
+
+    @Test
     void marcarAgotado_enEstadoNoPublicado_devuelve409() throws Exception {
         when(eventoService.marcarAgotado(1L))
                 .thenThrow(new ConflictException("Solo un evento publicado puede pasar a agotado"));

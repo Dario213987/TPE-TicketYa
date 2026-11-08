@@ -233,6 +233,19 @@ paths:
                 $ref: '#/components/schemas/EventoEstadoResponse'
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/finalizar-vencidos:
+    put:
+      tags: [eventos]
+      operationId: finalizarEventosVencidos
+      summary: Finaliza los eventos vencidos
+      description: |
+        Endpoint interno para disparar manualmente el proceso de finalización.
+        Pasa a FINALIZADO los eventos PUBLICADO, AGOTADO o SUSPENDIDO cuya
+        fecha/hora sea anterior al momento actual menos 6 horas.
+        No requiere autenticación.
+      responses:
+        '204':
+          description: Proceso ejecutado
   /api/lugares:
     get:
       tags: [lugares]
@@ -435,7 +448,7 @@ components:
       enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
     EstadoEvento:
       type: string
-      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
+      enum: [BORRADOR, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]
@@ -444,7 +457,7 @@ components:
         nombre: { type: string }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
     EventoUpdateRequest:
@@ -457,7 +470,7 @@ components:
         descripcion: { type: string, maxLength: 255 }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
         sectores:
           type: array
@@ -471,7 +484,7 @@ components:
         descripcion: { type: string, minLength: 1, maxLength: 255, pattern: '.*\S.*' }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
         participantes:
           type: array
@@ -486,7 +499,7 @@ components:
         descripcion: { type: string }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
         organizadorId: { type: integer, format: int64 }

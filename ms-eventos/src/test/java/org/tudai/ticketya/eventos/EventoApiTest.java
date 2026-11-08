@@ -22,7 +22,7 @@ import org.tudai.ticketya.eventos.repository.LugarRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 import org.tudai.ticketya.eventos.service.EventoService;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -83,7 +83,7 @@ class EventoApiTest {
 
     @Test
     void crearEventoBorrador_devuelve201ConEstadoYOrganizadorYNoSeLista() throws Exception {
-        mvc.perform(crearEvento(LocalDate.now().plusDays(10), """
+        mvc.perform(crearEvento(LocalDateTime.now().plusDays(10), """
                 "participantes": []
                 """))
                 .andExpect(status().isCreated())
@@ -102,7 +102,7 @@ class EventoApiTest {
 
     @Test
     void crearEventoBorrador_conFechaPasada_devuelve400() throws Exception {
-        mvc.perform(crearEvento(LocalDate.now().minusDays(1), ""))
+        mvc.perform(crearEvento(LocalDateTime.now().minusDays(1), ""))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail").value("La fecha del evento debe ser posterior a hoy"));
 
@@ -111,7 +111,7 @@ class EventoApiTest {
 
     @Test
     void crearEventoBorrador_conLugarInexistente_devuelve404() throws Exception {
-        mvc.perform(crearEvento(LocalDate.now().plusDays(1), "", 999999L))
+        mvc.perform(crearEvento(LocalDateTime.now().plusDays(1), "", 999999L))
                 .andExpect(status().isNotFound());
 
         assertThat(eventoRepository.count()).isZero();
@@ -122,7 +122,7 @@ class EventoApiTest {
         Participante existente = participanteRepository.save(
                 Participante.builder().nombre("Artista existente").build());
 
-        mvc.perform(crearEvento(LocalDate.now().plusDays(3), """
+        mvc.perform(crearEvento(LocalDateTime.now().plusDays(3), """
                 "participantes": [
                   {"id": %d},
                   {"nombre": "Artista nuevo"}
@@ -150,7 +150,7 @@ class EventoApiTest {
                                   "fecha": "%s",
                                   "lugarId": %d
                                 }
-                                """.formatted(LocalDate.now().plusDays(2), lugar.getId())))
+                                """.formatted(LocalDateTime.now().plusDays(2), lugar.getId())))
                 .andExpect(status().isBadRequest());
 
         assertThat(eventoRepository.count()).isZero();
@@ -160,7 +160,7 @@ class EventoApiTest {
     void cancelarEvento_cuandoMsTicketsFalla_noPersisteElCambioDeEstado() {
         Evento evento = eventoRepository.save(Evento.builder()
                 .nombre("Festival de integración")
-                .fecha(LocalDate.now().plusDays(10))
+                .fecha(LocalDateTime.now().plusDays(10))
                 .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .lugar(lugar)
@@ -175,11 +175,11 @@ class EventoApiTest {
                 .isEqualTo(EstadoEvento.PUBLICADO);
     }
 
-    private MockHttpServletRequestBuilder crearEvento(LocalDate fecha, String participantes) {
+    private MockHttpServletRequestBuilder crearEvento(LocalDateTime fecha, String participantes) {
         return crearEvento(fecha, participantes, lugar.getId());
     }
 
-    private MockHttpServletRequestBuilder crearEvento(LocalDate fecha, String participantes, Long lugarId) {
+    private MockHttpServletRequestBuilder crearEvento(LocalDateTime fecha, String participantes, Long lugarId) {
         return post("/api/eventos")
                 .header("X-User-Id", "7")
                 .header("X-User-Role", "ORGANIZADOR")

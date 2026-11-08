@@ -48,7 +48,7 @@ import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
 
@@ -98,7 +98,7 @@ class EventoServiceTest {
     @Test
     void losEventosAgotadosSiguenSiendoVisibles() {
         assertThat(EventoService.ESTADOS_VISIBLES)
-                .containsExactlyInAnyOrder(EstadoEvento.PUBLICADO, EstadoEvento.CONFIRMADO,
+                .containsExactlyInAnyOrder(EstadoEvento.PUBLICADO,
                         EstadoEvento.FINALIZADO, EstadoEvento.AGOTADO)
                 .doesNotContain(EstadoEvento.BORRADOR, EstadoEvento.CANCELADO, EstadoEvento.SUSPENDIDO);
     }
@@ -127,7 +127,7 @@ class EventoServiceTest {
             return evento;
         });
         EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
-                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().plusDays(5), 10L)
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDateTime.now().plusDays(5), 10L)
                 .addParticipantesItem(new ParticipanteRequest().id(3L))
                 .addParticipantesItem(new ParticipanteRequest().nombre("Artista nuevo"));
 
@@ -143,7 +143,7 @@ class EventoServiceTest {
     @Test
     void crearEventoBorrador_conFechaPasada_rechazaSinGuardar() {
         EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
-                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().minusDays(1), 10L);
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDateTime.now().minusDays(1), 10L);
 
         assertThatThrownBy(() -> eventoService.crearEventoBorrador(request, 7L))
                 .isInstanceOf(FechaEventoInvalidaException.class);
@@ -154,7 +154,7 @@ class EventoServiceTest {
     void crearEventoBorrador_conLugarInexistente_propagaNotFound() {
         when(lugarService.obtenerPorId(999L)).thenThrow(new NotFoundException("Lugar no encontrado"));
         EventoBorradorCreateRequest request = new EventoBorradorCreateRequest(
-                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDate.now().plusDays(1), 999L);
+                "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDateTime.now().plusDays(1), 999L);
 
         assertThatThrownBy(() -> eventoService.crearEventoBorrador(request, 7L))
                 .isInstanceOf(NotFoundException.class);
@@ -228,7 +228,7 @@ class EventoServiceTest {
     void definirPrecioSector_enEventoPublicado_lanzaConflict() {
         Evento evento = Evento.builder()
                 .id(1L)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -303,7 +303,7 @@ class EventoServiceTest {
                 .nombre("Nombre viejo")
                 .descripcion("Descripción vieja")
                 .tipo(TipoEvento.RECITAL)
-                .fecha(LocalDate.of(2026, 12, 1))
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
                 .estado(EstadoEvento.BORRADOR)
                 .organizadorId(7L)
                 .build();
@@ -330,7 +330,7 @@ class EventoServiceTest {
         Lugar lugarNuevo = Lugar.builder().id(20L).nombre("Nuevo").build();
         Evento evento = Evento.builder()
                 .id(1L)
-                .fecha(LocalDate.of(2026, 12, 1))
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
                 .lugar(lugarViejo)
                 .estado(EstadoEvento.BORRADOR)
                 .organizadorId(7L)
@@ -340,27 +340,27 @@ class EventoServiceTest {
         when(eventoRepository.save(evento)).thenReturn(evento);
 
         EventoUpdateRequest dto = new EventoUpdateRequest()
-                .fecha(LocalDate.of(2026, 12, 15))
+                .fecha(LocalDateTime.of(2026, 12, 15, 20, 0))
                 .lugarId(20L);
 
         eventoService.actualizarEvento(1L, dto, 7L, false);
 
-        assertThat(evento.getFecha()).isEqualTo(LocalDate.of(2026, 12, 15));
+        assertThat(evento.getFecha()).isEqualTo(LocalDateTime.of(2026, 12, 15, 20, 0));
         assertThat(evento.getLugar()).isEqualTo(lugarNuevo);
     }
 
     @Test
     void actualizarEvento_enEventoPublicado_rechazaCambioDeFecha() {
-        LocalDate fechaOriginal = LocalDate.of(2026, 12, 1);
+        LocalDateTime fechaOriginal = LocalDateTime.of(2026, 12, 1, 20, 0);
         Evento evento = Evento.builder()
                 .id(1L)
                 .fecha(fechaOriginal)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
-        EventoUpdateRequest dto = new EventoUpdateRequest().fecha(LocalDate.of(2026, 12, 15));
+        EventoUpdateRequest dto = new EventoUpdateRequest().fecha(LocalDateTime.of(2026, 12, 15, 20, 0));
 
         assertThatThrownBy(() -> eventoService.actualizarEvento(1L, dto, 7L, false))
                 .isInstanceOf(ConflictException.class)
@@ -374,7 +374,7 @@ class EventoServiceTest {
         Evento evento = Evento.builder()
                 .id(1L)
                 .nombre("Nombre viejo")
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -449,7 +449,7 @@ class EventoServiceTest {
     void eliminarEvento_enEventoPublicado_lanzaConflict() {
         Evento evento = Evento.builder()
                 .id(1L)
-                .estado(EstadoEvento.CONFIRMADO)
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(7L)
                 .build();
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -617,7 +617,6 @@ class EventoServiceTest {
     @Test
     void publicarEvento_enEstadoNoBorrador_lanzaConflict() {
         for (EstadoEvento estado : List.of(
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
@@ -649,7 +648,7 @@ class EventoServiceTest {
     @Test
     void publicarEvento_conFechaDeHoy_lanzaBadRequest() {
         Evento evento = eventoPublicable();
-        evento.setFecha(LocalDate.now());
+        evento.setFecha(LocalDateTime.now());
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
         assertThatThrownBy(() -> eventoService.publicarEvento(1L, 7L, false))
@@ -766,7 +765,6 @@ class EventoServiceTest {
     void cancelarEvento_enEstadoNoCancelable_lanzaConflictYNoAvisaATickets() {
         for (EstadoEvento estado : List.of(
                 EstadoEvento.BORRADOR,
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
             Evento evento = eventoCancelable(estado);
@@ -877,7 +875,6 @@ class EventoServiceTest {
     void suspenderEvento_enEstadoNoSuspendible_lanzaConflictYNoAvisaATickets() {
         for (EstadoEvento estado : List.of(
                 EstadoEvento.BORRADOR,
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
@@ -971,7 +968,6 @@ class EventoServiceTest {
     void reactivarEvento_enEstadoNoSuspendido_lanzaConflictYNoAvisaATickets() {
         for (EstadoEvento estado : List.of(
                 EstadoEvento.BORRADOR,
-                EstadoEvento.CONFIRMADO,
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO,
                 EstadoEvento.AGOTADO)) {
@@ -1020,7 +1016,7 @@ class EventoServiceTest {
         return Evento.builder()
                 .id(1L)
                 .nombre("Festival")
-                .fecha(LocalDate.now().plusDays(1))
+                .fecha(LocalDateTime.now().plusDays(1))
                 .estado(EstadoEvento.BORRADOR)
                 .organizadorId(7L)
                 .lugar(lugar)

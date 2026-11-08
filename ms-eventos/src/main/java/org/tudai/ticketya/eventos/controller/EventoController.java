@@ -119,6 +119,12 @@ public class EventoController {
         return eventoService.marcarPublicado(id);
     }
 
+    @PutMapping("/internal/finalizar-vencidos")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void finalizarEventosVencidos() {
+        eventoService.finalizarEventosVencidos();
+    }
+
     @Authorize("hasRole('ADMINISTRADOR')")
     @PutMapping("/{id}/suspender")
     public EventoEstadoResponse suspenderEvento(@PathVariable Long id) {

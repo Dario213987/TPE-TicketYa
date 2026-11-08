@@ -35,3 +35,6 @@ databaseChangeLog:
   - include:
       file: 00011-crear-tabla-evento-notificacion.xml
       relativeToChangelogFile: true
+  - include:
+      file: 00012-cambiar-fecha-evento-a-timestamp.xml
+      relativeToChangelogFile: true
