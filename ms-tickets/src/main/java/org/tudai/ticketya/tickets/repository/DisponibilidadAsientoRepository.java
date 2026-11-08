@@ -13,4 +13,6 @@ public interface DisponibilidadAsientoRepository extends JpaRepository<Disponibi
 
     long countBySector_IdAndEstado(Long sectorId, EstadoDisponibilidad estado);
     List<DisponibilidadAsiento> findBySector_IdOrderByFilaAscNumeroAsc(Long sectorId);
+    List<DisponibilidadAsiento> findBySector_IdAndEstadoOrderByFilaAscNumeroAsc(
+            Long sectorId, EstadoDisponibilidad estado);
 }

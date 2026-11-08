@@ -1,0 +1,532 @@
+openapi: 3.0.3
+info:
+  title: ms-eventos
+  version: 1.0.0
+  description: |
+    Administración de lugares, sectores y eventos. Requiere los headers X-User-Id y X-User-Role.
+    Los endpoints de consulta de lugares requieren rol ORGANIZADOR y los de creación rol ADMINISTRADOR.
+tags:
+  - name: eventos
+  - name: lugares
+  - name: sectores
+paths:
+  /api/eventos:
+    get:
+      tags: [eventos]
+      operationId: listarEventos
+      summary: Lista los eventos publicados
+      description: Paginado. Devuelve únicamente eventos confirmados o finalizados. Ordenado por fecha por defecto.
+      parameters:
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Página de eventos publicados
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedEventos'
+        '400': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [eventos]
+      operationId: crearEventoBorrador
+      summary: Crea un evento en estado BORRADOR
+      description: El organizador del evento se obtiene del header X-User-Id. Los borradores no aparecen en la consulta pública.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoBorradorCreateRequest'
+      responses:
+        '201':
+          description: El evento creado en estado BORRADOR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}:
+    put:
+      tags: [eventos]
+      operationId: actualizarEvento
+      summary: Modifica un evento
+      description: |
+        Permite corregir los datos de un borrador propio (o de cualquier borrador si el usuario
+        es administrador). En eventos ya publicados solo se pueden modificar los campos no
+        estructurales; para cambiar lugar, fecha o sectores hay que cancelar o reprogramar.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/EventoUpdateRequest'
+      responses:
+        '200':
+          description: El evento actualizado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [eventos]
+      operationId: eliminarEvento
+      summary: Elimina un borrador
+      description: Solo se pueden eliminar eventos en estado BORRADOR. Un evento publicado no se elimina.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '204':
+          description: Evento eliminado
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/lugares:
+    get:
+      tags: [lugares]
+      operationId: listarLugares
+      summary: Lista los lugares, opcionalmente filtrados por ciudad
+      description: Paginado. Ordenado por nombre por defecto.
+      parameters:
+        - name: ciudad
+          in: query
+          required: false
+          schema:
+            type: string
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Página de lugares con sus sectores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedLugares'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [lugares]
+      operationId: crearLugar
+      summary: Crea un lugar
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LugarCreateRequest'
+      responses:
+        '201':
+          description: El lugar creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LugarResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/lugares/{id}:
+    get:
+      tags: [lugares]
+      operationId: obtenerLugar
+      summary: Obtiene un lugar por id
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: El lugar con sus sectores
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LugarDetalleResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/lugares/{lugarId}/sectores/numerados:
+    post:
+      tags: [sectores]
+      operationId: crearSectorNumerado
+      summary: Crea un sector numerado en un lugar
+      description: Genera los asientos a partir de la cantidad de filas y asientos por fila.
+      parameters:
+        - name: lugarId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SectorNumeradoRequest'
+      responses:
+        '201':
+          description: El sector creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SectorResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/lugares/{lugarId}/sectores/no-numerados:
+    post:
+      tags: [sectores]
+      operationId: crearSectorNoNumerado
+      summary: Crea un sector no numerado en un lugar
+      parameters:
+        - name: lugarId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SectorNoNumeradoRequest'
+      responses:
+        '201':
+          description: El sector creado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SectorResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/sectores/{sectorId}/precio:
+    put:
+      tags: [eventos]
+      operationId: definirPrecioSector
+      summary: Define el precio de un sector para un evento
+      description: |
+        Solo se pueden definir precios en eventos en estado BORRADOR y sobre sectores
+        que pertenezcan al lugar del evento. El organizador debe ser dueño del evento.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: sectorId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PrecioEventoSectorRequest'
+      responses:
+        '200':
+          description: El precio guardado para el evento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PrecioEventoSectorResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Número de página, desde 0
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      description: Elementos por página (máximo 100)
+      schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+    Sort:
+      name: sort
+      in: query
+      description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos válidos: lugares (id, nombre, tipo, ciudad); eventos (id, nombre, fecha, tipo). Por defecto nombre,asc en lugares y fecha,asc en eventos"
+      schema: { type: string }
+    EventoId:
+      name: eventoId
+      in: path
+      required: true
+      schema:
+        type: integer
+        format: int64
+  responses:
+    Error:
+      description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    TipoEvento:
+      type: string
+      enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
+    EstadoEvento:
+      type: string
+      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, AGOTADO]
+    EventoResumen:
+      type: object
+      required: [id, nombre, tipo, fecha, estado]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        estado:
+          $ref: '#/components/schemas/EstadoEvento'
+    EventoUpdateRequest:
+      type: object
+      description: |
+        Todos los campos son opcionales; se aplican solo los enviados. `fecha`, `lugarId` y
+        `sectores` son estructurales y no pueden modificarse si el evento ya fue publicado.
+      properties:
+        nombre: { type: string, maxLength: 200 }
+        descripcion: { type: string, maxLength: 255 }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        lugarId: { type: integer, format: int64 }
+        sectores:
+          type: array
+          description: "IDs de sectores. Alias aceptado: sectorIds."
+          items: { type: integer, format: int64 }
+    EventoBorradorCreateRequest:
+      type: object
+      required: [nombre, descripcion, tipo, fecha, lugarId]
+      properties:
+        nombre: { type: string, minLength: 1, maxLength: 200, pattern: '.*\S.*' }
+        descripcion: { type: string, minLength: 1, maxLength: 255, pattern: '.*\S.*' }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        lugarId: { type: integer, format: int64 }
+        participantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipanteRequest'
+    EventoResponse:
+      type: object
+      required: [id, nombre, tipo, fecha, estado, organizadorId]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        descripcion: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date }
+        estado:
+          $ref: '#/components/schemas/EstadoEvento'
+        organizadorId: { type: integer, format: int64 }
+        lugar:
+          $ref: '#/components/schemas/LugarResponse'
+        participantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipanteResponse'
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorResponse'
+        preciosSectores:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+    ParticipanteRequest:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+    ParticipanteResponse:
+      type: object
+      required: [id, nombre]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+    TipoSector:
+      type: string
+      enum: [NUMERADO, NO_NUMERADO]
+    LugarCreateRequest:
+      type: object
+      required: [nombre, tipo, direccion, ciudad, latitud, longitud]
+      properties:
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+        tipo: { type: string, minLength: 1, pattern: '.*\S.*' }
+        direccion: { type: string, minLength: 1, pattern: '.*\S.*' }
+        ciudad: { type: string, minLength: 1, pattern: '.*\S.*' }
+        latitud:
+          type: number
+          format: double
+          minimum: -90
+          maximum: 90
+        longitud:
+          type: number
+          format: double
+          minimum: -180
+          maximum: 180
+        capacidad:
+          type: integer
+          minimum: 0
+    LugarResponse:
+      type: object
+      required: [id, nombre, tipo, direccion, ciudad, latitud, longitud]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        tipo: { type: string }
+        direccion: { type: string }
+        ciudad: { type: string }
+        latitud: { type: number, format: double }
+        longitud: { type: number, format: double }
+        capacidad: { type: integer }
+    LugarDetalleResponse:
+      type: object
+      required: [id, nombre, tipo, direccion, ciudad, latitud, longitud, sectores]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+        tipo: { type: string }
+        direccion: { type: string }
+        ciudad: { type: string }
+        latitud: { type: number, format: double }
+        longitud: { type: number, format: double }
+        capacidad: { type: integer }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorResponse'
+    SectorNumeradoRequest:
+      type: object
+      required: [nombre, precio, filas, asientosPorFila]
+      properties:
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+        precio:
+          type: number
+          format: double
+          minimum: 0
+        filas:
+          type: integer
+          minimum: 1
+        asientosPorFila:
+          type: integer
+          minimum: 1
+    SectorNoNumeradoRequest:
+      type: object
+      required: [nombre, precio, capacidadMaxima]
+      properties:
+        nombre: { type: string, minLength: 1, pattern: '.*\S.*' }
+        precio:
+          type: number
+          format: double
+          minimum: 0
+        capacidadMaxima:
+          type: integer
+          minimum: 1
+    SectorResponse:
+      type: object
+      required: [id, nombre, precio, tipoSector]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        precio: { type: number, format: double }
+        tipoSector:
+          $ref: '#/components/schemas/TipoSector'
+        capacidad: { type: integer }
+        capacidadMaxima: { type: integer }
+        filas: { type: integer }
+        asientosPorFila: { type: integer }
+    PrecioEventoSectorRequest:
+      type: object
+      required: [precio]
+      properties:
+        precio:
+          type: number
+          format: double
+          minimum: 0
+          exclusiveMinimum: true
+    PrecioEventoSectorResponse:
+      type: object
+      required: [eventoId, sectorId, precio]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        sectorId: { type: integer, format: int64 }
+        precio: { type: number, format: double }
+    PagedLugares:
+      type: object
+      description: Página en el formato de Spring Data (Page serializada como DTO)
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/LugarDetalleResponse'
+        page:
+          type: object
+          properties:
+            size: { type: integer }
+            number: { type: integer }
+            totalElements: { type: integer, format: int64 }
+            totalPages: { type: integer }
+    PagedEventos:
+      type: object
+      description: Página en el formato de Spring Data (Page serializada como DTO)
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/EventoResumen'
+        page:
+          type: object
+          properties:
+            size: { type: integer }
+            number: { type: integer }
+            totalElements: { type: integer, format: int64 }
+            totalPages: { type: integer }
+    Problema:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }

@@ -41,7 +41,7 @@ public class DisponibilidadAsiento {
     private Integer numero;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "estado", nullable = false)
+    @Column(name = "estado", nullable = false, length = 20)
     @Builder.Default
     private EstadoDisponibilidad estado = EstadoDisponibilidad.LIBRE;
 }

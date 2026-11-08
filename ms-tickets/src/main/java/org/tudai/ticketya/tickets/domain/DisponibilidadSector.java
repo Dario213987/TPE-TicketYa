@@ -34,7 +34,7 @@ public class DisponibilidadSector {
     private Long sectorIdExterno;
 
     @Enumerated(EnumType.STRING)
-    @Column(name = "tipo", nullable = false)
+    @Column(name = "tipo", nullable = false, length = 20)
     private TipoSector tipo;
 
     @Column(name = "capacidad_total", nullable = false)

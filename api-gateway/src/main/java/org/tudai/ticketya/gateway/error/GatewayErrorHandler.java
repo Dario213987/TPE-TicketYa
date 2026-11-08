@@ -4,6 +4,7 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.slf4j.MDC;
 import org.springframework.core.annotation.Order;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
@@ -13,6 +14,8 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.server.ResponseStatusException;
 import org.springframework.web.server.ServerWebExchange;
 import org.springframework.boot.web.reactive.error.ErrorWebExceptionHandler;
+import org.tudai.ticketya.core.MdcKeys;
+import org.tudai.ticketya.gateway.filter.CorrelationIdWebFilter;
 import reactor.core.publisher.Mono;
 
 import java.net.ConnectException;
@@ -38,14 +41,26 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
 
         HttpStatus status = resolveStatus(ex);
         String path = exchange.getRequest().getPath().value();
-        if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
-            log.error("Error no controlado en {}", path, ex);
-        } else {
-            log.warn("{} {} -> {} ({})", exchange.getRequest().getMethod(), path, status.value(), ex.getMessage());
+        String correlationId = exchange.getAttribute(CorrelationIdWebFilter.ATTRIBUTE);
+
+        if (correlationId != null) {
+            MDC.put(MdcKeys.CORRELATION_ID, correlationId);
+        }
+        try {
+            if (status == HttpStatus.INTERNAL_SERVER_ERROR) {
+                log.error("Error no controlado en {}", path, ex);
+            } else {
+                log.warn("{} {} -> {} ({})", exchange.getRequest().getMethod(), path, status.value(), ex.getMessage());
+            }
+        } finally {
+            MDC.remove(MdcKeys.CORRELATION_ID);
         }
 
         ProblemDetail problem = ProblemDetail.forStatusAndDetail(status, detailFor(status));
         problem.setTitle(titleFor(status));
+        if (correlationId != null) {
+            problem.setProperty("correlationId", correlationId);
+        }
 
         byte[] body;
         try {
@@ -58,7 +73,7 @@ public class GatewayErrorHandler implements ErrorWebExceptionHandler {
         return response.writeWith(Mono.just(response.bufferFactory().wrap(body)));
     }
 
-    private static HttpStatus resolveStatus(Throwable ex) {
+    public static HttpStatus resolveStatus(Throwable ex) {
         for (Throwable t = ex; t != null; t = t.getCause()) {
             if (t instanceof ResponseStatusException rse) {
                 HttpStatus status = HttpStatus.resolve(rse.getStatusCode().value());

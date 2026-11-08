@@ -14,7 +14,17 @@
     <dependencies>
         <dependency>
             <groupId>org.tudai</groupId>
+            <artifactId>ticketya-logging</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tudai</groupId>
             <artifactId>ticketya-web-starter</artifactId>
+            <version>${project.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>org.tudai</groupId>
+            <artifactId>ticketya-persistence</artifactId>
             <version>${project.version}</version>
         </dependency>
         <dependency>
@@ -46,6 +56,11 @@
         <dependency>
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+        <dependency>
+            <groupId>com.h2database</groupId>
+            <artifactId>h2</artifactId>
             <scope>test</scope>
         </dependency>
         <dependency>

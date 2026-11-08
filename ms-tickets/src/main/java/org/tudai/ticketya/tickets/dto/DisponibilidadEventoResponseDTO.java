@@ -11,5 +11,6 @@ import java.util.List;
 @Builder
 public class DisponibilidadEventoResponseDTO {
     private Long eventoId;
+    private Integer limiteEntradasPorCliente;
     private List<SectorDisponibilidadResponseDTO> sectores;
 }

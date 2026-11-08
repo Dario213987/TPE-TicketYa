@@ -1,6 +1,7 @@
 package org.tudai.ticketya.tickets.dto;
 
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import lombok.*;
@@ -16,6 +17,9 @@ public class PublicarEventoRequestDTO {
 
     @NotNull(message = "El id del evento es obligatorio")
     private Long eventoId;
+
+    @Min(value = 1, message = "El limite de entradas por cliente debe ser mayor a 0")
+    private Integer limiteEntradasPorCliente;
 
     @NotEmpty(message = "El evento debe tener al menos un sector")
     @Valid

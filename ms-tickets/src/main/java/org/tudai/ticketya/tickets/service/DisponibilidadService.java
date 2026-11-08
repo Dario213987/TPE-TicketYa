@@ -6,6 +6,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.*;
 import org.tudai.ticketya.tickets.dto.*;
 import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoBatchRepository;
@@ -27,6 +28,8 @@ public class DisponibilidadService {
     private final DisponibilidadSectorRepository sectorRepository;
     private final DisponibilidadAsientoRepository asientoRepository;
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
+    private final ReservaProperties reservaProperties;
+    private final ReservaVencidaService reservaVencidaService;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
     private int batchSize;
@@ -34,21 +37,26 @@ public class DisponibilidadService {
     @Transactional
     public DisponibilidadResponseDTO publicar(PublicarEventoRequestDTO request) {
         Instant ahora = Instant.now();
+        int limite = limiteEntradasPorCliente(request.getLimiteEntradasPorCliente());
 
-        int eventoInsertado = eventoRepository.insertarSiNoExiste(request.getEventoId(), ahora);
-        if (eventoInsertado == 0) {
-            Instant creadoEl = eventoRepository.findById(request.getEventoId())
-                    .map(DisponibilidadEvento::getCreadoEl)
-                    .orElse(ahora);
+        int eventoInsertado = eventoRepository.insertarSiNoExiste(
+                request.getEventoId(), ahora, limite);
+        boolean yaExistia = eventoInsertado == 0;
 
-            return DisponibilidadResponseDTO.builder()
-                    .eventoId(request.getEventoId())
-                    .yaExistia(true)
-                    .creadoEl(creadoEl)
-                    .build();
+        DisponibilidadEvento evento = yaExistia
+                ? eventoRepository.findById(request.getEventoId())
+                        .orElseGet(() -> eventoRepository.getReferenceById(request.getEventoId()))
+                : eventoRepository.getReferenceById(request.getEventoId());
+
+        Instant creadoEl = yaExistia && evento.getCreadoEl() != null
+                ? evento.getCreadoEl()
+                : ahora;
+
+        if (yaExistia && request.getLimiteEntradasPorCliente() != null
+                && !Integer.valueOf(limite).equals(evento.getLimiteEntradasPorCliente())) {
+            evento.setLimiteEntradasPorCliente(limite);
+            eventoRepository.save(evento);
         }
-
-        DisponibilidadEvento evento = eventoRepository.getReferenceById(request.getEventoId());
 
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
@@ -101,11 +109,74 @@ public class DisponibilidadService {
 
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
-                .yaExistia(false)
+                .yaExistia(yaExistia)
                 .sectoresProcesados(sectoresProcesados)
                 .asientosInsertados(asientosInsertados)
                 .asientosOmitidos(asientosOmitidos)
-                .creadoEl(ahora)
+                .creadoEl(creadoEl)
+                .build();
+    }
+
+    @Transactional
+    public DisponibilidadEventoResponseDTO consultar(Long eventoId) {
+        List<DisponibilidadSector> sectores = sectorRepository.findByEvento_EventoIdOrderByIdAsc(eventoId);
+
+        if (sectores.isEmpty()) {
+            throw new NotFoundException("No hay disponibilidad para el evento " + eventoId);
+        }
+
+        reservaVencidaService.liberarVencidas(eventoId, Instant.now());
+
+        List<SectorDisponibilidadResponseDTO> respuesta = sectores.stream()
+                .map(this::mapearSector)
+                .toList();
+
+        Integer limite = eventoRepository.findById(eventoId)
+                .map(DisponibilidadEvento::getLimiteEntradasPorCliente)
+                .filter(valor -> valor != null && valor >= 1)
+                .orElseGet(reservaProperties::getLimitePorCliente);
+
+        return DisponibilidadEventoResponseDTO.builder()
+                .eventoId(eventoId)
+                .limiteEntradasPorCliente(limite)
+                .sectores(respuesta)
+                .build();
+    }
+
+    private int limiteEntradasPorCliente(Integer limiteConfigurado) {
+        if (limiteConfigurado == null || limiteConfigurado < 1) {
+            return reservaProperties.getLimitePorCliente();
+        }
+        return limiteConfigurado;
+    }
+
+    private SectorDisponibilidadResponseDTO mapearSector(DisponibilidadSector sector) {
+        List<AsientoDisponibilidadDTO> asientos = null;
+        int disponibles = sector.getDisponibles();
+
+        if (sector.getTipo() == TipoSector.NUMERADO) {
+            List<DisponibilidadAsiento> entidades =
+                    asientoRepository.findBySector_IdOrderByFilaAscNumeroAsc(sector.getId());
+
+            asientos = entidades.stream()
+                    .map(asiento -> AsientoDisponibilidadDTO.builder()
+                            .fila(asiento.getFila())
+                            .numero(asiento.getNumero())
+                            .estado(asiento.getEstado())
+                            .build())
+                    .toList();
+
+            disponibles = (int) entidades.stream()
+                    .filter(asiento -> asiento.getEstado() == EstadoDisponibilidad.LIBRE)
+                    .count();
+        }
+
+        return SectorDisponibilidadResponseDTO.builder()
+                .sectorId(sector.getSectorIdExterno())
+                .tipoSector(sector.getTipo())
+                .capacidadTotal(sector.getCapacidadTotal())
+                .disponibles(disponibles)
+                .asientos(asientos)
                 .build();
     }
 

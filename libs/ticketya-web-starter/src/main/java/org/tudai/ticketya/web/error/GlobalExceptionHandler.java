@@ -74,6 +74,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         return handleExceptionInternal(ex, problem, headers, status, request);
     }
 
+    @ExceptionHandler(InvalidUserContextException.class)
+    ResponseEntity<Object> handleInvalidUserContext(InvalidUserContextException ex, WebRequest request) {
+        return respond(ex, HttpStatus.UNAUTHORIZED, "No autenticado", ex.getMessage(), request);
+    }
     @ExceptionHandler(RemoteServiceException.class)
     ResponseEntity<Object> handleRemote(RemoteServiceException ex, WebRequest request) {
         log.error("Error en servicio remoto (status {}): {}", ex.getRemoteStatus(), ex.getMessage());
