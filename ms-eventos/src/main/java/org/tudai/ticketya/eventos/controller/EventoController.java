@@ -101,7 +101,8 @@ public class EventoController {
     }
 
     @Authorize("hasRole('ADMINISTRADOR')")
-    @PutMapping("/{id}/cancelar")
+    @PostMapping("/{id}/cancelar")
+    @ResponseStatus(HttpStatus.ACCEPTED)
     public EventoEstadoResponse cancelarEvento(@PathVariable Long id) {
         return eventoService.cancelarEvento(id);
     }

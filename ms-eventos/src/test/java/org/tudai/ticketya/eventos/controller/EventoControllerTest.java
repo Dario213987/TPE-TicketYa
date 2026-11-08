@@ -371,14 +371,14 @@ class EventoControllerTest {
     }
 
     @Test
-    void cancelarEvento_comoAdministrador_devuelve200() throws Exception {
+    void cancelarEvento_comoAdministrador_devuelve202() throws Exception {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.cancelarEvento(1L))
                 .thenReturn(eventoCancelado());
 
-        mvc.perform(put("/api/eventos/1/cancelar"))
-                .andExpect(status().isOk())
+        mvc.perform(post("/api/eventos/1/cancelar"))
+                .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.id").value(1))
                 .andExpect(jsonPath("$.nombre").value("Festival"))
                 .andExpect(jsonPath("$.estado").value("CANCELADO"));
@@ -393,7 +393,7 @@ class EventoControllerTest {
         for (Role rol : List.of(Role.ORGANIZADOR, Role.CLIENTE, Role.PERSONAL_ACCESO)) {
             when(userContext.role()).thenReturn(rol);
 
-            mvc.perform(put("/api/eventos/1/cancelar"))
+            mvc.perform(post("/api/eventos/1/cancelar"))
                     .andExpect(status().isForbidden());
         }
 
@@ -407,7 +407,7 @@ class EventoControllerTest {
         when(eventoService.cancelarEvento(99L))
                 .thenThrow(new NotFoundException("No se encontró el evento solicitado"));
 
-        mvc.perform(put("/api/eventos/99/cancelar"))
+        mvc.perform(post("/api/eventos/99/cancelar"))
                 .andExpect(status().isNotFound())
                 .andExpect(jsonPath("$.detail").value("No se encontró el evento solicitado"));
     }
@@ -417,12 +417,13 @@ class EventoControllerTest {
         when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
         when(userContext.userId()).thenReturn(7L);
         when(eventoService.cancelarEvento(1L))
-                .thenThrow(new ConflictException("El evento debe ser publicado para poder ser cancelado"));
+                .thenThrow(new ConflictException(
+                        "El evento debe estar publicado, suspendido o agotado para poder ser cancelado"));
 
-        mvc.perform(put("/api/eventos/1/cancelar"))
+        mvc.perform(post("/api/eventos/1/cancelar"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail")
-                        .value("El evento debe ser publicado para poder ser cancelado"));
+                        .value("El evento debe estar publicado, suspendido o agotado para poder ser cancelado"));
     }
 
     @Test
@@ -432,7 +433,7 @@ class EventoControllerTest {
         when(eventoService.cancelarEvento(1L))
                 .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
 
-        mvc.perform(put("/api/eventos/1/cancelar"))
+        mvc.perform(post("/api/eventos/1/cancelar"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
     }

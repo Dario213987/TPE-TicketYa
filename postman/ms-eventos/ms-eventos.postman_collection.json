@@ -202,14 +202,14 @@
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"Status 202\", () => pm.response.to.have.status(202));",
 									"pm.test(\"estado CANCELADO\", () => pm.expect(pm.response.json().estado).to.eql(\"CANCELADO\"));"
 								]
 							}
 						}
 					],
 					"request": {
-						"method": "PUT",
+						"method": "POST",
 						"header": [
 							{
 								"key": "X-User-Id",
@@ -283,7 +283,7 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-									"pm.test(\"estado PUBLICADO\", () => pm.expect(pm.response.json().estado).to.eql(\"PUBLICADO\"));"
+									"pm.test(\"estado reactivado\", () => pm.expect(pm.response.json().estado).to.be.oneOf([\"PUBLICADO\", \"AGOTADO\"]));"
 								]
 							}
 						}

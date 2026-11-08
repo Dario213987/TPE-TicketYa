@@ -24,8 +24,10 @@ import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
+import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
 import org.tudai.ticketya.eventos.client.dto.PublicarEventoRequest;
 import org.tudai.ticketya.eventos.client.dto.SectorDisponibilidadRequest;
+import org.tudai.ticketya.eventos.client.dto.SectorDisponibilidadResponse;
 import org.tudai.ticketya.eventos.client.dto.TipoSectorRequest;
 import org.tudai.ticketya.eventos.domain.Asiento;
 import org.tudai.ticketya.eventos.domain.Evento;
@@ -48,6 +50,7 @@ import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Objects;
 import java.util.Set;
+import java.util.function.Supplier;
 
 @Service
 @RequiredArgsConstructor
@@ -122,9 +125,9 @@ public class EventoService {
     /**
      * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
-     * Valida que el evento exista y que esté en estado PUBLICADO o SUSPENDIDO. Si las validaciones
-     * pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién después cambia
-     * el estado a CANCELADO.
+     * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
+     * después cambia el estado a CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
@@ -134,7 +137,7 @@ public class EventoService {
      * @return DTO con la información del evento cancelado
      *
      * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO ni CANCELADO
+     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
@@ -164,16 +167,34 @@ public class EventoService {
     }
 
     public EventoEstadoResponse reactivarEvento(Long id) {
-        EventoEstadoResponse yaPublicado = transactionTemplate.execute(
+        EventoEstadoResponse yaReactivado = transactionTemplate.execute(
                 status -> validarReactivacion(id));
 
-        if (yaPublicado != null) {
-            return yaPublicado;
+        if (yaReactivado != null) {
+            return yaReactivado;
         }
+
+        EstadoEvento estadoDestino = estadoSegunDisponibilidad(id);
 
         ejecutarTickets(() -> ticketsClient.reactivarEvento(id));
 
-        return transactionTemplate.execute(status -> confirmarReactivacion(id));
+        return transactionTemplate.execute(status -> confirmarReactivacion(id, estadoDestino));
+    }
+
+    private EstadoEvento estadoSegunDisponibilidad(Long id) {
+        DisponibilidadEventoResponse disponibilidad = ejecutarTicketsConResultado(
+                () -> ticketsClient.consultarDisponibilidad(id));
+
+        if (disponibilidad == null || disponibilidad.getSectores() == null
+                || disponibilidad.getSectores().isEmpty()) {
+            return EstadoEvento.AGOTADO;
+        }
+
+        boolean hayDisponibles = disponibilidad.getSectores().stream()
+                .map(SectorDisponibilidadResponse::getDisponibles)
+                .anyMatch(disponibles -> disponibles != null && disponibles > 0);
+
+        return hayDisponibles ? EstadoEvento.PUBLICADO : EstadoEvento.AGOTADO;
     }
 
     private PublicacionPendiente prepararPublicacion(Long idEvento, Long organizadorId, boolean esAdmin) {
@@ -243,8 +264,9 @@ public class EventoService {
         }
 
         if (evento.getEstado() != EstadoEvento.PUBLICADO
-                && evento.getEstado() != EstadoEvento.SUSPENDIDO) {
-            throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
+                && evento.getEstado() != EstadoEvento.SUSPENDIDO
+                && evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("El evento debe estar publicado, suspendido o agotado para poder ser cancelado");
         }
 
         return null;
@@ -258,8 +280,9 @@ public class EventoService {
         }
 
         if (evento.getEstado() != EstadoEvento.PUBLICADO
-                && evento.getEstado() != EstadoEvento.SUSPENDIDO) {
-            throw new ConflictException("El evento debe ser publicado para poder ser cancelado");
+                && evento.getEstado() != EstadoEvento.SUSPENDIDO
+                && evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("El evento debe estar publicado, suspendido o agotado para poder ser cancelado");
         }
 
         evento.setEstado(EstadoEvento.CANCELADO);
@@ -276,8 +299,9 @@ public class EventoService {
             return toEstadoDTO(evento);
         }
 
-        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
-            throw new ConflictException("El evento debe ser publicado para poder ser suspendido");
+        if (evento.getEstado() != EstadoEvento.PUBLICADO
+                && evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("El evento debe estar publicado o agotado para poder ser suspendido");
         }
 
         return null;
@@ -290,8 +314,9 @@ public class EventoService {
             return toEstadoDTO(evento);
         }
 
-        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
-            throw new ConflictException("El evento debe ser publicado para poder ser suspendido");
+        if (evento.getEstado() != EstadoEvento.PUBLICADO
+                && evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("El evento debe estar publicado o agotado para poder ser suspendido");
         }
 
         evento.setEstado(EstadoEvento.SUSPENDIDO);
@@ -301,7 +326,8 @@ public class EventoService {
     private EventoEstadoResponse validarReactivacion(Long id) {
         Evento evento = buscarEventoParaValidacion(id);
 
-        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+        if (evento.getEstado() == EstadoEvento.PUBLICADO
+                || evento.getEstado() == EstadoEvento.AGOTADO) {
             return toEstadoDTO(evento);
         }
 
@@ -312,10 +338,11 @@ public class EventoService {
         return null;
     }
 
-    private EventoEstadoResponse confirmarReactivacion(Long id) {
+    private EventoEstadoResponse confirmarReactivacion(Long id, EstadoEvento estadoDestino) {
         Evento evento = buscarEventoParaCambioEstado(id);
 
-        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+        if (evento.getEstado() == EstadoEvento.PUBLICADO
+                || evento.getEstado() == EstadoEvento.AGOTADO) {
             return toEstadoDTO(evento);
         }
 
@@ -323,7 +350,7 @@ public class EventoService {
             throw new ConflictException("El evento debe estar suspendido para poder ser reactivado");
         }
 
-        evento.setEstado(EstadoEvento.PUBLICADO);
+        evento.setEstado(estadoDestino);
         return toEstadoDTO(eventoRepository.save(evento));
     }
 
@@ -442,7 +469,17 @@ public class EventoService {
         } catch (RetryableException e) {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
-            throw new RemoteServiceException(e.status(), "ms-tickets respondió con error");
+            throw new RemoteServiceException(502, "ms-tickets respondió con error");
+        }
+    }
+
+    private <T> T ejecutarTicketsConResultado(Supplier<T> llamada) {
+        try {
+            return llamada.get();
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-tickets no disponible");
+        } catch (FeignException e) {
+            throw new RemoteServiceException(502, "ms-tickets respondió con error");
         }
     }
 
