@@ -118,18 +118,19 @@ paths:
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
   /api/eventos/{eventoId}/cancelar:
-    put:
+    post:
       tags: [eventos]
       operationId: cancelarEvento
       summary: Cancela un evento
       description: |
-        Solo administradores. El evento puede estar PUBLICADO o SUSPENDIDO. Pasa el evento
-        a CANCELADO, bloquea nuevas reservas y compras en ms-tickets y dispara el reintegro
-        masivo (US-07.05). Es idempotente si el evento ya está cancelado.
+        Solo administradores. El evento puede estar PUBLICADO, SUSPENDIDO o AGOTADO. Pasa el
+        evento a CANCELADO y bloquea nuevas reservas y compras en ms-tickets. El reintegro
+        masivo corresponde a US-07.05 y no lo ejecuta este endpoint.
+        Es idempotente si el evento ya está cancelado.
       parameters:
         - $ref: '#/components/parameters/EventoId'
       responses:
-        '200':
+        '202':
           description: El evento cancelado
           content:
             application/json:
@@ -146,9 +147,9 @@ paths:
       operationId: suspenderEvento
       summary: Suspende un evento
       description: |
-        Solo administradores. Pasa el evento a SUSPENDIDO y bloquea nuevas reservas
-        y compras en ms-tickets. No dispara el reintegro masivo.
-        Es idempotente si el evento ya está suspendido.
+        Solo administradores. El evento puede estar PUBLICADO o AGOTADO. Pasa el evento a
+        SUSPENDIDO y bloquea nuevas reservas y compras en ms-tickets. No dispara el reintegro
+        masivo. Es idempotente si el evento ya está suspendido.
       parameters:
         - $ref: '#/components/parameters/EventoId'
       responses:
@@ -169,8 +170,9 @@ paths:
       operationId: reactivarEvento
       summary: Reactiva un evento suspendido
       description: |
-        Solo administradores. Pasa el evento de SUSPENDIDO a PUBLICADO y habilita nuevamente
-        reservas y compras en ms-tickets. Es idempotente si el evento ya está publicado.
+        Solo administradores. Pasa el evento de SUSPENDIDO a PUBLICADO o AGOTADO según la
+        disponibilidad informada por ms-tickets y habilita nuevamente reservas y compras.
+        Es idempotente si el evento ya está publicado o agotado.
       parameters:
         - $ref: '#/components/parameters/EventoId'
       responses:
