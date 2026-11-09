@@ -44,6 +44,7 @@ class ReservaControllerTest {
     void reservar_respondeCreatedConElClienteDelContexto() throws Exception {
         when(reservaService.reservar(eq(7L), eq(42L), any(ReservaRequestDTO.class)))
                 .thenReturn(ReservaResponseDTO.builder()
+                        .idReserva(99L)
                         .eventoId(7L)
                         .clienteId(42L)
                         .sectorId(3L)
@@ -58,9 +59,39 @@ class ReservaControllerTest {
                         .contentType(MediaType.APPLICATION_JSON)
                         .content("{\"sectorId\":3,\"cantidad\":2}"))
                 .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idReserva").value(99))
                 .andExpect(jsonPath("$.clienteId").value(42))
                 .andExpect(jsonPath("$.limiteEntradasPorCliente").value(4))
                 .andExpect(jsonPath("$.codigosQr[0]").value("qr-1"));
+
+        verify(reservaService).reservar(eq(7L), eq(42L), any(ReservaRequestDTO.class));
+    }
+
+    @Test
+    void reservar_asientosEspecificos_respondeCreatedConElIdDeReserva() throws Exception {
+        when(reservaService.reservar(eq(7L), eq(42L), any(ReservaRequestDTO.class)))
+                .thenReturn(ReservaResponseDTO.builder()
+                        .idReserva(99L)
+                        .eventoId(7L)
+                        .clienteId(42L)
+                        .sectorId(3L)
+                        .cantidad(2)
+                        .limiteEntradasPorCliente(4)
+                        .entradasVigentes(2)
+                        .expiraEl(Instant.now())
+                        .codigosQr(List.of("qr-1", "qr-2"))
+                        .build());
+
+        mvc.perform(post("/api/tickets/eventos/7/reservas")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"sectorId":3,"asientos":[
+                                  {"fila":1,"numero":1},
+                                  {"fila":1,"numero":2}
+                                ]}
+                                """))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.idReserva").value(99));
 
         verify(reservaService).reservar(eq(7L), eq(42L), any(ReservaRequestDTO.class));
     }

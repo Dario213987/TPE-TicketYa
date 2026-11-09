@@ -21,12 +21,21 @@ paths:
     post:
       tags: [reservas]
       operationId: reservarEntradas
-      summary: Reserva entradas de un sector para el cliente autenticado
+      summary: Reserva asientos de un sector para el cliente autenticado
       description: |
         Solo el rol CLIENTE puede reservar. El cliente se toma de X-User-Id, nunca del cuerpo.
         Respeta el limite de entradas por cliente del evento (o el configurado por defecto).
-        En sectores numerados asigna los primeros asientos libres; en no numerados descuenta
-        los disponibles. Las reservas quedan vigentes hasta expiraEl.
+
+        Se puede reservar asientos especificos enviando asientos (fila y numero). En ese caso
+        la reserva es todo o nada: si alguno de los asientos ya no esta LIBRE responde 409 y
+        no reserva ninguno. La restriccion unica sobre tickets.asiento_id garantiza que, ante
+        reservas concurrentes del mismo asiento, solo una pueda completarse.
+
+        Si no se envian asientos, se mantiene el comportamiento por cantidad: en sectores
+        numerados asigna los primeros asientos libres; en no numerados descuenta los disponibles.
+
+        El evento debe tener la disponibilidad publicada; si no, responde 409. Las reservas
+        quedan vigentes durante 10 minutos (hasta expiraEl) y devuelven el idReserva.
       parameters:
         - name: eventoId
           in: path
@@ -219,16 +228,25 @@ components:
             $ref: '#/components/schemas/SectorDisponibilidadResponseDTO'
     ReservaRequestDTO:
       type: object
-      required: [sectorId, cantidad]
+      required: [sectorId]
+      description: |
+        Se debe informar asientos, o bien cantidad. Si se informan asientos, cantidad es
+        opcional y se calcula a partir de la lista.
       properties:
         sectorId: { type: integer, format: int64 }
         cantidad:
           type: integer
           minimum: 1
+        asientos:
+          type: array
+          minItems: 1
+          items:
+            $ref: '#/components/schemas/AsientoDTO'
     ReservaResponseDTO:
       type: object
-      required: [eventoId, clienteId, sectorId, cantidad, limiteEntradasPorCliente, entradasVigentes, expiraEl, codigosQr]
+      required: [idReserva, eventoId, clienteId, sectorId, cantidad, limiteEntradasPorCliente, entradasVigentes, expiraEl, codigosQr]
       properties:
+        idReserva: { type: integer, format: int64 }
         eventoId: { type: integer, format: int64 }
         clienteId: { type: integer, format: int64 }
         sectorId: { type: integer, format: int64 }
@@ -239,6 +257,12 @@ components:
         codigosQr:
           type: array
           items: { type: string }
+        asientos:
+          type: array
+          nullable: true
+          description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
+          items:
+            $ref: '#/components/schemas/AsientoDisponibilidadDTO'
     Problema:
       type: object
       properties:

@@ -12,6 +12,7 @@ import java.util.List;
 @Builder
 public class ReservaResponseDTO {
 
+    private Long idReserva;
     private Long eventoId;
     private Long clienteId;
     private Long sectorId;
@@ -20,4 +21,9 @@ public class ReservaResponseDTO {
     private long entradasVigentes;
     private Instant expiraEl;
     private List<String> codigosQr;
+    private List<AsientoDisponibilidadDTO> asientos;
+
+    public Long getReservaId() {
+        return idReserva;
+    }
 }

@@ -43,6 +43,10 @@ public class Ticket {
     @Column(name = "expira_el")
     private Instant expiraEl;
 
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reserva_id")
+    private Reserva reserva;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "evento_id", nullable = false)
     private DisponibilidadEvento evento;

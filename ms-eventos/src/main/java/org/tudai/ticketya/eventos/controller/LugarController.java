@@ -9,9 +9,9 @@ import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
+import org.tudai.ticketya.contract.eventos.model.LugarCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.LugarDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.LugarResponse;
 import org.tudai.ticketya.eventos.service.LugarService;
 
 import java.util.Set;
@@ -27,7 +27,7 @@ public class LugarController {
 
     @GetMapping
     @Authorize("hasAnyRole('ORGANIZADOR')")
-    public PagedModel<LugarDetalleResponseDTO> listarLugares(
+    public PagedModel<LugarDetalleResponse> listarLugares(
             @RequestParam(required = false) String ciudad,
             @PageableDefault(size = 10, sort = "nombre") Pageable pageable) {
 
@@ -36,14 +36,14 @@ public class LugarController {
 
     @GetMapping("/{id}")
     @Authorize("hasAnyRole('ORGANIZADOR')")
-    public LugarDetalleResponseDTO obtenerLugar(@PathVariable Long id) {
+    public LugarDetalleResponse obtenerLugar(@PathVariable Long id) {
         return lugarService.obtenerLugar(id);
     }
 
     @PostMapping
     @ResponseStatus(HttpStatus.CREATED)
     @Authorize("hasAnyRole('ADMINISTRADOR')")
-    public LugarResponseDTO crearLugar(@Valid @RequestBody LugarCreateDTO dto) {
+    public LugarResponse crearLugar(@Valid @RequestBody LugarCreateRequest dto) {
         return lugarService.crearLugar(dto);
     }
 

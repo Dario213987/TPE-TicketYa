@@ -1,6 +1,7 @@
 package org.tudai.ticketya.tickets.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -8,17 +9,23 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.*;
+import org.tudai.ticketya.tickets.dto.AsientoDisponibilidadDTO;
+import org.tudai.ticketya.tickets.dto.AsientoDTO;
 import org.tudai.ticketya.tickets.dto.ReservaRequestDTO;
 import org.tudai.ticketya.tickets.dto.ReservaResponseDTO;
 import org.tudai.ticketya.tickets.repository.DisponibilidadAsientoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
+import org.tudai.ticketya.tickets.repository.ReservaRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 
 @Service
@@ -34,6 +41,7 @@ public class ReservaService {
     private final TicketRepository ticketRepository;
     private final ReservaVencidaService reservaVencidaService;
     private final ReservaProperties properties;
+    private final ReservaRepository reservaRepository;
 
     @Transactional
     public ReservaResponseDTO reservar(Long eventoId, Long clienteId, ReservaRequestDTO request) {
@@ -46,15 +54,17 @@ public class ReservaService {
         if (request.getSectorId() == null) {
             throw new BadRequestException("El id del sector es obligatorio");
         }
-        if (request.getCantidad() == null || request.getCantidad() < 1) {
-            throw new BadRequestException("La cantidad de entradas debe ser mayor a 0");
-        }
+
+        List<AsientoDTO> asientosSolicitados = asientosSolicitados(request);
+        int cantidad = asientosSolicitados == null
+                ? cantidadSolicitada(request)
+                : asientosSolicitados.size();
 
         Instant ahora = Instant.now();
 
         DisponibilidadEvento evento = eventoRepository.findByIdForUpdate(eventoId)
-                .orElseThrow(() -> new NotFoundException(
-                        "No hay disponibilidad para el evento " + eventoId));
+                .orElseThrow(() -> new ConflictException(
+                        "El evento " + eventoId + " no está publicado"));
 
         reservaVencidaService.liberarVencidas(eventoId, ahora);
 
@@ -64,7 +74,6 @@ public class ReservaService {
                         "No existe el sector " + request.getSectorId()
                                 + " para el evento " + eventoId));
 
-        int cantidad = request.getCantidad();
         int limite = limiteDe(evento);
 
         long vendidas = ticketRepository.countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
@@ -80,8 +89,19 @@ public class ReservaService {
                             + " (vigentes: " + vigentes + ", nuevas: " + cantidad + ")");
         }
 
-        List<DisponibilidadAsiento> asientos = reservarCapacidad(sector, cantidad);
+        List<DisponibilidadAsiento> asientos = asientosSolicitados == null
+                ? reservarCapacidad(sector, cantidad)
+                : reservarAsientosEspecificos(sector, asientosSolicitados);
+
         Instant expiraEl = ahora.plus(expiracion());
+
+        Reserva reserva = reservaRepository.save(Reserva.builder()
+                .eventoId(eventoId)
+                .clienteId(clienteId)
+                .sectorIdExterno(request.getSectorId())
+                .expiraEl(expiraEl)
+                .creadoEl(ahora)
+                .build());
 
         List<Ticket> tickets = new ArrayList<>(cantidad);
         for (int i = 0; i < cantidad; i++) {
@@ -94,11 +114,20 @@ public class ReservaService {
                     .evento(evento)
                     .sector(sector)
                     .asiento(asiento)
+                    .reserva(reserva)
                     .build());
         }
-        ticketRepository.saveAll(tickets);
+
+        try {
+            ticketRepository.saveAll(tickets);
+            ticketRepository.flush();
+        } catch (DataIntegrityViolationException e) {
+            throw new ConflictException(
+                    "Alguno de los asientos solicitados ya no está disponible");
+        }
 
         return ReservaResponseDTO.builder()
+                .idReserva(reserva.getId())
                 .eventoId(eventoId)
                 .clienteId(clienteId)
                 .sectorId(request.getSectorId())
@@ -107,7 +136,52 @@ public class ReservaService {
                 .entradasVigentes(vigentes + cantidad)
                 .expiraEl(expiraEl)
                 .codigosQr(tickets.stream().map(Ticket::getCodigo_qr).toList())
+                .asientos(asientos == null ? null : asientos.stream()
+                        .map(asiento -> AsientoDisponibilidadDTO.builder()
+                                .fila(asiento.getFila())
+                                .numero(asiento.getNumero())
+                                .estado(asiento.getEstado())
+                                .build())
+                        .toList())
                 .build();
+    }
+
+    private int cantidadSolicitada(ReservaRequestDTO request) {
+        if (request.getCantidad() == null || request.getCantidad() < 1) {
+            throw new BadRequestException("La cantidad de entradas debe ser mayor a 0");
+        }
+        return request.getCantidad();
+    }
+
+    private List<AsientoDTO> asientosSolicitados(ReservaRequestDTO request) {
+        if (!request.tieneAsientosEspecificos()) {
+            return null;
+        }
+
+        Set<String> unicos = new HashSet<>();
+        List<AsientoDTO> resultado = new ArrayList<>(request.getAsientos().size());
+
+        for (AsientoDTO asiento : request.getAsientos()) {
+            if (asiento == null || asiento.getFila() == null || asiento.getFila() < 1
+                    || asiento.getNumero() == null || asiento.getNumero() < 1) {
+                throw new BadRequestException(
+                        "La fila y el numero de asiento deben ser mayores a 0");
+            }
+            if (!unicos.add(asiento.getFila() + "-" + asiento.getNumero())) {
+                throw new BadRequestException(
+                        "El asiento " + asiento.getFila() + "-" + asiento.getNumero()
+                                + " está repetido en la reserva");
+            }
+            resultado.add(AsientoDTO.builder()
+                    .fila(asiento.getFila())
+                    .numero(asiento.getNumero())
+                    .build());
+        }
+
+        resultado.sort(Comparator
+                .comparing(AsientoDTO::getFila)
+                .thenComparing(AsientoDTO::getNumero));
+        return resultado;
     }
 
     private int limiteDe(DisponibilidadEvento evento) {
@@ -121,9 +195,44 @@ public class ReservaService {
     private Duration expiracion() {
         Duration expiracion = properties.getExpiracion();
         if (expiracion == null || expiracion.isZero() || expiracion.isNegative()) {
-            return Duration.ofMinutes(15);
+            return Duration.ofMinutes(10);
         }
         return expiracion;
+    }
+
+    private List<DisponibilidadAsiento> reservarAsientosEspecificos(
+            DisponibilidadSector sector, List<AsientoDTO> solicitados) {
+        if (sector.getTipo() != TipoSector.NUMERADO) {
+            throw new BadRequestException(
+                    "El sector " + sector.getSectorIdExterno() + " no es numerado");
+        }
+
+        List<DisponibilidadAsiento> asientos = new ArrayList<>(solicitados.size());
+        for (AsientoDTO solicitado : solicitados) {
+            DisponibilidadAsiento asiento = asientoRepository
+                    .findBySector_IdAndFilaAndNumero(
+                            sector.getId(), solicitado.getFila(), solicitado.getNumero())
+                    .orElseThrow(() -> new ConflictException(
+                            "El asiento " + solicitado.getFila() + "-" + solicitado.getNumero()
+                                    + " no está disponible"));
+
+            if (asiento.getEstado() != EstadoDisponibilidad.LIBRE) {
+                throw new ConflictException(
+                        "El asiento " + solicitado.getFila() + "-" + solicitado.getNumero()
+                                + " no está disponible");
+            }
+
+            asientos.add(asiento);
+        }
+
+        if (sector.getDisponibles() < asientos.size()) {
+            throw new ConflictException(
+                    "No hay asientos suficientes en el sector " + sector.getSectorIdExterno());
+        }
+
+        asientos.forEach(asiento -> asiento.setEstado(EstadoDisponibilidad.RESERVADO));
+        sector.setDisponibles(sector.getDisponibles() - asientos.size());
+        return asientos;
     }
 
     private List<DisponibilidadAsiento> reservarCapacidad(DisponibilidadSector sector, int cantidad) {
