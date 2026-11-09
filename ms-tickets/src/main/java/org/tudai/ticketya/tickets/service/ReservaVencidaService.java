@@ -74,7 +74,7 @@ public class ReservaVencidaService {
                 continue;
             }
 
-            ticket.setEstadoTicket(EstadoTicket.EXPIRADO);
+            ticket.setEstadoTicket(EstadoTicket.LIBERADO);
             if (ticket.getAsiento() != null) {
                 ticket.getAsiento().setEstado(EstadoDisponibilidad.LIBRE);
                 ticket.setAsiento(null);

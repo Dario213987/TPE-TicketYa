@@ -6,7 +6,6 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.jdbc.core.JdbcTemplate;
-import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadAsiento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
@@ -28,7 +27,6 @@ import java.util.Optional;
 import java.util.UUID;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:tickets-liberacion;MODE=PostgreSQL;DB_CLOSE_DELAY=-1",
@@ -46,9 +44,6 @@ class ReservaLiberacionIntegrationTest {
 
     @Autowired
     private ReservaVencidaService reservaVencidaService;
-
-    @Autowired
-    private ReservaService reservaService;
 
     @Autowired
     private BloqueoDistribuidoService bloqueoDistribuidoService;
@@ -90,7 +85,7 @@ class ReservaLiberacionIntegrationTest {
         assertThat(liberadas).isEqualTo(1);
 
         assertThat(ticketRepository.findById(contexto.ticket().getId()).orElseThrow()
-                .getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
+                .getEstadoTicket()).isEqualTo(EstadoTicket.LIBERADO);
         assertThat(asientoRepository.findById(contexto.asiento().getId()).orElseThrow()
                 .getEstado()).isEqualTo(EstadoDisponibilidad.LIBRE);
         assertThat(sectorRepository.findById(contexto.sector().getId()).orElseThrow()
@@ -104,16 +99,9 @@ class ReservaLiberacionIntegrationTest {
     }
 
     @Test
-    void noLiberaUnaReservaLuegoDeIniciarElPago() {
+    void noLiberaUnaReservaConPagoEnCurso() {
         Instant ahora = Instant.now();
-        Contexto contexto = crearContextoNumerado(9102L, ahora.plus(Duration.ofMinutes(10)), false);
-
-        reservaService.iniciarPago(contexto.reserva().getId(), contexto.reserva().getClienteId());
-
-        jdbcTemplate.update("update reservas set expira_el = ? where id = ?",
-                ahora.minusSeconds(60), contexto.reserva().getId());
-        jdbcTemplate.update("update tickets set expira_el = ? where id = ?",
-                ahora.minusSeconds(60), contexto.ticket().getId());
+        Contexto contexto = crearContextoNumerado(9102L, ahora.minus(Duration.ofMinutes(1)), true);
 
         assertThat(reservaVencidaService.liberarVencidas(ahora)).isZero();
         assertThat(ticketRepository.findById(contexto.ticket().getId()).orElseThrow()
@@ -123,47 +111,16 @@ class ReservaLiberacionIntegrationTest {
         assertThat(sectorRepository.findById(contexto.sector().getId()).orElseThrow()
                 .getDisponibles()).isZero();
 
-        reservaService.confirmarPago(contexto.reserva().getId());
-
-        assertThat(ticketRepository.findById(contexto.ticket().getId()).orElseThrow()
-                .getEstadoTicket()).isEqualTo(EstadoTicket.EMITIDO);
-        assertThat(asientoRepository.findById(contexto.asiento().getId()).orElseThrow()
-                .getEstado()).isEqualTo(EstadoDisponibilidad.VENDIDO);
-        assertThat(reservaVencidaService.liberarVencidas(ahora)).isZero();
-    }
-
-    @Test
-    void alRechazarElPagoSeLiberaLaReservaVencida() {
-        Instant ahora = Instant.now();
-        Contexto contexto = crearContextoNumerado(9103L, ahora.plus(Duration.ofMinutes(10)), false);
-
-        reservaService.iniciarPago(contexto.reserva().getId(), contexto.reserva().getClienteId());
-        jdbcTemplate.update("update reservas set expira_el = ? where id = ?",
-                ahora.minusSeconds(60), contexto.reserva().getId());
-        jdbcTemplate.update("update tickets set expira_el = ? where id = ?",
-                ahora.minusSeconds(60), contexto.ticket().getId());
-
-        reservaService.rechazarPago(contexto.reserva().getId());
+        jdbcTemplate.update("update reservas set pago_en_curso = false where id = ?",
+                contexto.reserva().getId());
+        jdbcTemplate.update("update tickets set pago_en_curso = false where id = ?",
+                contexto.ticket().getId());
 
         assertThat(reservaVencidaService.liberarVencidas(ahora)).isEqualTo(1);
         assertThat(ticketRepository.findById(contexto.ticket().getId()).orElseThrow()
-                .getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
+                .getEstadoTicket()).isEqualTo(EstadoTicket.LIBERADO);
         assertThat(sectorRepository.findById(contexto.sector().getId()).orElseThrow()
                 .getDisponibles()).isEqualTo(contexto.sector().getCapacidadTotal());
-    }
-
-    @Test
-    void noPermitePagarUnaReservaVencida() {
-        Instant ahora = Instant.now();
-        Contexto contexto = crearContextoNumerado(9104L, ahora.minus(Duration.ofMinutes(1)), false);
-
-        assertThatThrownBy(() -> reservaService.iniciarPago(
-                contexto.reserva().getId(), contexto.reserva().getClienteId()))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("vencio");
-
-        assertThat(reservaRepository.findById(contexto.reserva().getId()).orElseThrow()
-                .isPagoEnCurso()).isFalse();
     }
 
     @Test

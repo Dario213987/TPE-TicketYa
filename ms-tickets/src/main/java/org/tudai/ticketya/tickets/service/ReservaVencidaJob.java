@@ -20,7 +20,7 @@ public class ReservaVencidaJob {
     private final BloqueoDistribuidoService bloqueoDistribuidoService;
     private final ReservaProperties properties;
 
-    @Scheduled(cron = "${tickets.reserva.liberacion-cron:0 * * * * *}")
+    @Scheduled(cron = "${tickets.reserva.liberacion-cron:*/30 * * * * *}")
     public void liberarReservasVencidas() {
         Optional<BloqueoDistribuidoService.Bloqueo> bloqueo =
                 bloqueoDistribuidoService.adquirir(BLOQUEO, properties.getBloqueoLiberacion());
