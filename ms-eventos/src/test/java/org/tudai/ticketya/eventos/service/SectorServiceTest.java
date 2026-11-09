@@ -11,10 +11,10 @@ import org.tudai.ticketya.eventos.config.ModelMapperConfig;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
-import org.tudai.ticketya.eventos.domain.TipoSector;
-import org.tudai.ticketya.eventos.dto.sector.SectorNoNumeradoRequestDTO;
-import org.tudai.ticketya.eventos.dto.sector.SectorNumeradoRequestDTO;
-import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
+import org.tudai.ticketya.contract.eventos.model.SectorNoNumeradoRequest;
+import org.tudai.ticketya.contract.eventos.model.SectorNumeradoRequest;
+import org.tudai.ticketya.contract.eventos.model.SectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoSector;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
 import java.util.Optional;
@@ -46,13 +46,12 @@ class SectorServiceTest {
         when(lugarRepository.findById(1L)).thenReturn(Optional.of(lugar));
         when(lugarRepository.save(any(Lugar.class))).thenReturn(lugar);
 
-        SectorNoNumeradoRequestDTO dto = SectorNoNumeradoRequestDTO.builder()
+        SectorNoNumeradoRequest dto = new SectorNoNumeradoRequest()
                 .nombre("Campo")
                 .precio(15000.0)
-                .capacidadMaxima(500)
-                .build();
+                .capacidadMaxima(500);
 
-        SectorResponseDTO response = sectorService.crearSectorNoNumerado(1L, dto);
+        SectorResponse response = sectorService.crearSectorNoNumerado(1L, dto);
 
         assertThat(response.getNombre()).isEqualTo("Campo");
         assertThat(response.getPrecio()).isEqualTo(15000.0);
@@ -70,14 +69,13 @@ class SectorServiceTest {
         when(lugarRepository.findById(1L)).thenReturn(Optional.of(lugar));
         when(lugarRepository.save(any(Lugar.class))).thenReturn(lugar);
 
-        SectorNumeradoRequestDTO dto = SectorNumeradoRequestDTO.builder()
+        SectorNumeradoRequest dto = new SectorNumeradoRequest()
                 .nombre("Platea Alta")
                 .precio(20000.0)
                 .filas(2)
-                .asientosPorFila(3)
-                .build();
+                .asientosPorFila(3);
 
-        SectorResponseDTO response = sectorService.crearSectorNumerado(1L, dto);
+        SectorResponse response = sectorService.crearSectorNumerado(1L, dto);
 
         assertThat(response.getNombre()).isEqualTo("Platea Alta");
         assertThat(response.getPrecio()).isEqualTo(20000.0);
@@ -95,11 +93,10 @@ class SectorServiceTest {
     void crearSectorNoNumerado_conLugarInexistente_lanzaNotFound() {
         when(lugarRepository.findById(99L)).thenReturn(Optional.empty());
 
-        SectorNoNumeradoRequestDTO dto = SectorNoNumeradoRequestDTO.builder()
+        SectorNoNumeradoRequest dto = new SectorNoNumeradoRequest()
                 .nombre("Campo")
                 .precio(15000.0)
-                .capacidadMaxima(500)
-                .build();
+                .capacidadMaxima(500);
 
         assertThatThrownBy(() -> sectorService.crearSectorNoNumerado(99L, dto))
                 .isInstanceOf(NotFoundException.class)
@@ -110,12 +107,11 @@ class SectorServiceTest {
     void crearSectorNumerado_conLugarInexistente_lanzaNotFound() {
         when(lugarRepository.findById(99L)).thenReturn(Optional.empty());
 
-        SectorNumeradoRequestDTO dto = SectorNumeradoRequestDTO.builder()
+        SectorNumeradoRequest dto = new SectorNumeradoRequest()
                 .nombre("Platea Alta")
                 .precio(20000.0)
                 .filas(2)
-                .asientosPorFila(3)
-                .build();
+                .asientosPorFila(3);
 
         assertThatThrownBy(() -> sectorService.crearSectorNumerado(99L, dto))
                 .isInstanceOf(NotFoundException.class)

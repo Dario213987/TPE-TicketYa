@@ -36,10 +36,6 @@ public class Reserva {
     @Column(name = "creado_el", nullable = false, updatable = false)
     private Instant creadoEl;
 
-    @Column(name = "pago_en_curso", nullable = false)
-    @Builder.Default
-    private boolean pagoEnCurso = false;
-
     @PrePersist
     void prePersist() {
         if (this.creadoEl == null) {

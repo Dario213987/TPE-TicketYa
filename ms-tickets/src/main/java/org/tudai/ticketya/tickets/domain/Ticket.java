@@ -43,10 +43,6 @@ public class Ticket {
     @Column(name = "expira_el")
     private Instant expiraEl;
 
-    @Column(name = "pago_en_curso", nullable = false)
-    @Builder.Default
-    private boolean pagoEnCurso = false;
-
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reserva_id")
     private Reserva reserva;

@@ -6,10 +6,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.eventos.domain.TipoSector;
-import org.tudai.ticketya.eventos.dto.sector.SectorNoNumeradoRequestDTO;
-import org.tudai.ticketya.eventos.dto.sector.SectorNumeradoRequestDTO;
-import org.tudai.ticketya.eventos.dto.sector.SectorResponseDTO;
+import org.tudai.ticketya.contract.eventos.model.SectorNoNumeradoRequest;
+import org.tudai.ticketya.contract.eventos.model.SectorNumeradoRequest;
+import org.tudai.ticketya.contract.eventos.model.SectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoSector;
 import org.tudai.ticketya.eventos.service.SectorService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 
@@ -36,16 +36,15 @@ class SectorControllerTest {
 
     @Test
     void crearSectorNumerado_devuelve201() throws Exception {
-        SectorResponseDTO response = SectorResponseDTO.builder()
+        SectorResponse response = new SectorResponse()
                 .id(10L)
                 .nombre("Platea Alta")
                 .precio(20000.0)
                 .tipoSector(TipoSector.NUMERADO)
                 .capacidad(6)
                 .filas(2)
-                .asientosPorFila(3)
-                .build();
-        when(sectorService.crearSectorNumerado(eq(1L), any(SectorNumeradoRequestDTO.class)))
+                .asientosPorFila(3);
+        when(sectorService.crearSectorNumerado(eq(1L), any(SectorNumeradoRequest.class)))
                 .thenReturn(response);
 
         mvc.perform(post("/api/lugares/1/sectores/numerados")
@@ -60,21 +59,20 @@ class SectorControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(10))
-                .andExpect(jsonPath("$.tipoSector").value(TipoSector.NUMERADO))
+                .andExpect(jsonPath("$.tipoSector").value(TipoSector.NUMERADO.toString()))
                 .andExpect(jsonPath("$.capacidad").value(6));
     }
 
     @Test
     void crearSectorNoNumerado_devuelve201() throws Exception {
-        SectorResponseDTO response = SectorResponseDTO.builder()
+        SectorResponse response = new SectorResponse()
                 .id(11L)
                 .nombre("Campo")
                 .precio(15000.0)
                 .tipoSector(TipoSector.NO_NUMERADO)
                 .capacidad(500)
-                .capacidadMaxima(500)
-                .build();
-        when(sectorService.crearSectorNoNumerado(eq(1L), any(SectorNoNumeradoRequestDTO.class)))
+                .capacidadMaxima(500);
+        when(sectorService.crearSectorNoNumerado(eq(1L), any(SectorNoNumeradoRequest.class)))
                 .thenReturn(response);
 
         mvc.perform(post("/api/lugares/1/sectores/no-numerados")
@@ -88,7 +86,7 @@ class SectorControllerTest {
                                 """))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.id").value(11))
-                .andExpect(jsonPath("$.tipoSector").value(TipoSector.NO_NUMERADO))
+                .andExpect(jsonPath("$.tipoSector").value(TipoSector.NO_NUMERADO.toString()))
                 .andExpect(jsonPath("$.capacidadMaxima").value(500));
     }
 
@@ -114,7 +112,7 @@ class SectorControllerTest {
 
     @Test
     void crearSectorNoNumerado_conLugarInexistente_devuelve404() throws Exception {
-        when(sectorService.crearSectorNoNumerado(eq(99L), any(SectorNoNumeradoRequestDTO.class)))
+        when(sectorService.crearSectorNoNumerado(eq(99L), any(SectorNoNumeradoRequest.class)))
                 .thenThrow(new NotFoundException("Lugar no encontrado con id: 99"));
 
         mvc.perform(post("/api/lugares/99/sectores/no-numerados")
