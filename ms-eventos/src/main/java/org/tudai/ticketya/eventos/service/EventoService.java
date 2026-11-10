@@ -539,6 +539,13 @@ public class EventoService {
             }
         }
 
+        if (dto.getAltaDemanda() != null
+                && !Objects.equals(dto.getAltaDemanda(), evento.isAltaDemanda())
+                && !esBorrador) {
+            throw new ConflictException(
+                    "No se puede modificar la condición de alta demanda de un evento ya publicado.");
+        }
+
         if (dto.getSectores() != null
                 && !Objects.equals(Set.copyOf(dto.getSectores()), sectoresDelEvento(evento))) {
             if (!esBorrador) {
@@ -567,6 +574,10 @@ public class EventoService {
 
         if (dto.getTipo() != null) {
             evento.setTipo(dto.getTipo());
+        }
+
+        if (dto.getAltaDemanda() != null) {
+            evento.setAltaDemanda(dto.getAltaDemanda());
         }
 
         if (dto.getFecha() != null) {
@@ -643,6 +654,7 @@ public class EventoService {
         return PublicarEventoRequest.builder()
                 .eventoId(evento.getId())
                 .organizadorId(evento.getOrganizadorId())
+                .altaDemanda(evento.isAltaDemanda())
                 .sectores(items)
                 .build();
     }
@@ -730,6 +742,7 @@ public class EventoService {
                 .lugar(lugar)
                 .fecha(fecha)
                 .estado(EstadoEvento.BORRADOR)
+                .altaDemanda(Boolean.TRUE.equals(request.getAltaDemanda()))
                 .build();
 
         if (request.getParticipantes() != null && !request.getParticipantes().isEmpty()) {

@@ -38,9 +38,10 @@ public class DisponibilidadService {
     public DisponibilidadResponseDTO publicar(PublicarEventoRequestDTO request) {
         Instant ahora = Instant.now();
         int limite = limiteEntradasPorCliente(request.getLimiteEntradasPorCliente());
+        boolean altaDemanda = Boolean.TRUE.equals(request.getAltaDemanda());
 
         int eventoInsertado = eventoRepository.insertarSiNoExiste(
-                request.getEventoId(), ahora, limite);
+                request.getEventoId(), ahora, limite, altaDemanda);
         boolean yaExistia = eventoInsertado == 0;
 
         DisponibilidadEvento evento = yaExistia
@@ -57,6 +58,14 @@ public class DisponibilidadService {
             evento.setLimiteEntradasPorCliente(limite);
             eventoRepository.save(evento);
         }
+
+        if (yaExistia && request.getAltaDemanda() != null
+                && request.getAltaDemanda() != evento.isAltaDemanda()) {
+            evento.setAltaDemanda(request.getAltaDemanda());
+            eventoRepository.save(evento);
+        }
+
+        boolean altaDemandaFinal = yaExistia ? evento.isAltaDemanda() : altaDemanda;
 
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
@@ -110,6 +119,7 @@ public class DisponibilidadService {
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
                 .yaExistia(yaExistia)
+                .altaDemanda(altaDemandaFinal)
                 .sectoresProcesados(sectoresProcesados)
                 .asientosInsertados(asientosInsertados)
                 .asientosOmitidos(asientosOmitidos)
@@ -131,7 +141,8 @@ public class DisponibilidadService {
                 .map(this::mapearSector)
                 .toList();
 
-        Integer limite = eventoRepository.findById(eventoId)
+        var evento = eventoRepository.findById(eventoId);
+        Integer limite = evento
                 .map(DisponibilidadEvento::getLimiteEntradasPorCliente)
                 .filter(valor -> valor != null && valor >= 1)
                 .orElseGet(reservaProperties::getLimitePorCliente);
@@ -139,6 +150,7 @@ public class DisponibilidadService {
         return DisponibilidadEventoResponseDTO.builder()
                 .eventoId(eventoId)
                 .limiteEntradasPorCliente(limite)
+                .altaDemanda(evento.map(DisponibilidadEvento::isAltaDemanda).orElse(false))
                 .sectores(respuesta)
                 .build();
     }

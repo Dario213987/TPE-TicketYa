@@ -132,12 +132,14 @@ class EventoServiceTest {
                 "Recital", "Presentación en vivo", TipoEvento.RECITAL, LocalDateTime.now().plusDays(5), 10L)
                 .addParticipantesItem(new ParticipanteRequest().id(3L))
                 .addParticipantesItem(new ParticipanteRequest().nombre("Artista nuevo"));
+        request.setAltaDemanda(true);
 
         EventoResponse response = eventoService.crearEventoBorrador(request, 7L);
 
         assertThat(response.getId()).isEqualTo(20L);
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.BORRADOR);
         assertThat(response.getOrganizadorId()).isEqualTo(7L);
+        assertThat(response.getAltaDemanda()).isTrue();
         assertThat(response.getParticipantes()).hasSize(2);
         verify(eventoRepository).save(any(Evento.class));
     }
@@ -324,6 +326,40 @@ class EventoServiceTest {
         assertThat(evento.getTipo()).isEqualTo(TipoEvento.TEATRO);
         assertThat(response.getNombre()).isEqualTo("Nombre nuevo");
         verify(eventoRepository).save(evento);
+    }
+
+    @Test
+    void actualizarEvento_enBorradorPropio_permiteCambiarAltaDemanda() {
+        Evento evento = Evento.builder()
+                .id(1L)
+                .estado(EstadoEvento.BORRADOR)
+                .organizadorId(7L)
+                .build();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        eventoService.actualizarEvento(1L, new EventoUpdateRequest().altaDemanda(true), 7L, false);
+
+        assertThat(evento.isAltaDemanda()).isTrue();
+        verify(eventoRepository).save(evento);
+    }
+
+    @Test
+    void actualizarEvento_enEventoPublicado_rechazaCambioDeAltaDemanda() {
+        Evento evento = Evento.builder()
+                .id(1L)
+                .estado(EstadoEvento.PUBLICADO)
+                .organizadorId(7L)
+                .build();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> eventoService.actualizarEvento(
+                1L, new EventoUpdateRequest().altaDemanda(true), 7L, false))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No se puede modificar la condición de alta demanda");
+
+        assertThat(evento.isAltaDemanda()).isFalse();
+        verify(eventoRepository, never()).save(any(Evento.class));
     }
 
     @Test
@@ -524,6 +560,7 @@ class EventoServiceTest {
         SectorNumerado sector10 = sectorNumerado(10L, "Platea", null,
                 asiento(2, 1), asiento(1, 2), asiento(1, 1));
         Evento evento = eventoBorrador(lugarConSectores(sector30, sector20, sector10));
+        evento.setAltaDemanda(true);
         evento.definirPrecioSector(10L, 1000.0);
         evento.definirPrecioSector(20L, 2000.0);
         evento.definirPrecioSector(30L, 3000.0);
@@ -539,6 +576,7 @@ class EventoServiceTest {
 
         assertThat(request.getEventoId()).isEqualTo(1L);
         assertThat(request.getOrganizadorId()).isEqualTo(7L);
+        assertThat(request.getAltaDemanda()).isTrue();
         assertThat(request.getSectores())
                 .extracting(SectorDisponibilidadRequest::getSectorId, SectorDisponibilidadRequest::getPrecio)
                 .containsExactly(

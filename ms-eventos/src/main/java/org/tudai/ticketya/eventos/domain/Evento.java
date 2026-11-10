@@ -31,6 +31,9 @@ public class Evento {
     @Builder.Default
     @Enumerated(EnumType.STRING)
     private EstadoEvento estado = EstadoEvento.BORRADOR;
+    @Builder.Default
+    @Column(name = "alta_demanda", nullable = false)
+    private boolean altaDemanda = false;
     private String nombre;
 	private String descripcion;
 	@ManyToMany(cascade = CascadeType.PERSIST)

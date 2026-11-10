@@ -31,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyBoolean;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -110,7 +112,7 @@ class DisponibilidadServiceTest {
                 .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
                 .limiteEntradasPorCliente(4)
                 .build();
-        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any()))
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any(), anyBoolean()))
                 .thenReturn(0);
         when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
         when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
@@ -130,6 +132,50 @@ class DisponibilidadServiceTest {
         assertThat(respuesta.getSectoresProcesados()).isEqualTo(1);
         assertThat(respuesta.getCreadoEl()).isEqualTo(existente.getCreadoEl());
         verify(sectorRepository).save(any(DisponibilidadSector.class));
+    }
+
+    @Test
+    void publicar_cuandoElEventoYaExiste_actualizaAltaDemanda() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .altaDemanda(false)
+                .build();
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any(), eq(true)))
+                .thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+
+        DisponibilidadResponseDTO respuesta = service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .limiteEntradasPorCliente(4)
+                .altaDemanda(true)
+                .sectores(List.of())
+                .build());
+
+        assertThat(respuesta.isYaExistia()).isTrue();
+        assertThat(respuesta.isAltaDemanda()).isTrue();
+        assertThat(existente.isAltaDemanda()).isTrue();
+        verify(eventoRepository).save(existente);
+    }
+
+    @Test
+    void publicar_cuandoEsNuevo_devuelveAltaDemandaDelRequest() {
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any(), eq(true)))
+                .thenReturn(1);
+        when(eventoRepository.getReferenceById(7L)).thenReturn(
+                DisponibilidadEvento.builder().eventoId(7L).build());
+
+        DisponibilidadResponseDTO respuesta = service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .limiteEntradasPorCliente(4)
+                .altaDemanda(true)
+                .sectores(List.of())
+                .build());
+
+        assertThat(respuesta.isYaExistia()).isFalse();
+        assertThat(respuesta.isAltaDemanda()).isTrue();
+        verify(eventoRepository, never()).save(any(DisponibilidadEvento.class));
     }
 
     @Test
@@ -204,6 +250,23 @@ class DisponibilidadServiceTest {
         DisponibilidadEventoResponseDTO respuesta = service.consultar(7L);
 
         assertThat(respuesta.getLimiteEntradasPorCliente()).isEqualTo(4);
+        assertThat(respuesta.isAltaDemanda()).isFalse();
+    }
+
+    @Test
+    void consultar_informaAltaDemandaDelEvento() {
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 500, 320);
+        when(sectorRepository.findByEvento_EventoIdOrderByIdAsc(7L)).thenReturn(List.of(sector));
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(
+                DisponibilidadEvento.builder()
+                        .eventoId(7L)
+                        .creadoEl(Instant.now())
+                        .altaDemanda(true)
+                        .build()));
+
+        DisponibilidadEventoResponseDTO respuesta = service.consultar(7L);
+
+        assertThat(respuesta.isAltaDemanda()).isTrue();
     }
 
     private DisponibilidadSector sector(Long id, Long sectorIdExterno, TipoSector tipo,

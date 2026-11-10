@@ -26,6 +26,10 @@ public class DisponibilidadEvento {
     @Column(name = "limite_entradas_por_cliente")
     private Integer limiteEntradasPorCliente;
 
+    @Builder.Default
+    @Column(name = "alta_demanda", nullable = false)
+    private boolean altaDemanda = false;
+
     @OneToMany(mappedBy = "evento", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<DisponibilidadSector> sectores = new HashSet<>();
