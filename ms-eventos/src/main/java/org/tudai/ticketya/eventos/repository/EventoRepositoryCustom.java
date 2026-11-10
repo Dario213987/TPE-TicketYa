@@ -28,4 +28,19 @@ public interface EventoRepositoryCustom {
      * @return una página con los eventos que cumplen los filtros, ordenados por precio mínimo
      */
     Page<Evento> buscarPorPrecio(Specification<Evento> specification, Pageable pageable);
+
+    /**
+     * Busca eventos aplicando la {@code Specification} recibida y los ordena por
+     * relevancia: primero los {@code PUBLICADO} y después los {@code AGOTADO}.
+     * Dentro de cada estado ordena por fecha ascendente y desempata por id para
+     * que la paginación sea estable.
+     *
+     * Ignora el orden del {@code Pageable}: el criterio lo define la propia consulta.
+     *
+     * @param specification filtros a aplicar sobre los eventos
+     * @param pageable página y tamaño solicitados (su orden se ignora)
+     *
+     * @return una página con los eventos que cumplen los filtros, ordenados por relevancia
+     */
+    Page<Evento> buscarPorRelevancia(Specification<Evento> specification, Pageable pageable);
 }

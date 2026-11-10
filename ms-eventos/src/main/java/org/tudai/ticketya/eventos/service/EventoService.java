@@ -102,8 +102,10 @@ public class EventoService {
      * El orden se elige con {@code filtro.orden}:
      * <ul>
      *   <li>{@code precio}: ordena por el precio mínimo de los sectores, directamente en la base.</li>
+     *   <li>{@code relevancia}: ordena los eventos PUBLICADO antes que los AGOTADO (dentro de estados visibles);
+     *   dentro de cada estado, por fecha ascendente y luego por id.</li>
      *   <li>{@code fecha}: ordena por fecha ascendente (desempata por id).</li>
-     *   <li>sin valor: respeta el orden del {@code Pageable} y, si no trae ninguno, ordena por fecha.</li>
+     *   <li>sin valor: ordena por fecha ascendente (desempata por id).</li>
      * </ul>
      *
      * @param filtro   filtros opcionales: tipo, organizador, participante, ciudad, rango de fechas y orden
@@ -124,7 +126,12 @@ public class EventoService {
             return eventoRepository.buscarPorPrecio(specification, sinOrden(pageable));
         }
 
-        //Por defencto siempre ordena por fecha
+        //Si el orden es por relevancia, prioriza PUBLICADO sobre AGOTADO
+        if (orden == OrdenEvento.RELEVANCIA) {
+            return eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable));
+        }
+
+        //Por defecto siempre ordena por fecha
         return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
     }
 
@@ -137,8 +144,8 @@ public class EventoService {
      *
      * @return el orden correspondiente, o {@code null} si no se indicó ninguno
      *
-     * @throws BadRequestException si el orden es "relevancia" (todavía no definido)
-     *                             o no es uno de los valores permitidos (fecha, precio)
+     * @throws BadRequestException si el orden no es uno de los valores permitidos
+     *                             (fecha, precio, relevancia)
      */
     private OrdenEvento resolverOrden(String orden) {
         if (!StringUtils.hasText(orden)) {
@@ -148,11 +155,9 @@ public class EventoService {
         return switch (orden.trim().toLowerCase(Locale.ROOT)) {
             case "fecha" -> OrdenEvento.FECHA;
             case "precio" -> OrdenEvento.PRECIO;
-            //PENDIENTE A RESOLVER
-            case "relevancia" -> throw new BadRequestException(
-                    "El orden por relevancia aún no está definido");
+            case "relevancia" -> OrdenEvento.RELEVANCIA;
             default -> throw new BadRequestException(
-                    "Orden inválido: '" + orden + "'. Valores permitidos: fecha, precio");
+                    "Orden inválido: '" + orden + "'. Valores permitidos: fecha, precio, relevancia");
         };
     }
 
@@ -194,7 +199,8 @@ public class EventoService {
     /** Criterios de orden admitidos para el listado de eventos. */
     private enum OrdenEvento {
         FECHA,
-        PRECIO
+        PRECIO,
+        RELEVANCIA
     }
 
     /**
@@ -277,30 +283,30 @@ public class EventoService {
 
 
     /**
-     * Publica un evento que est├í en estado BORRADOR.
+     * Publica un evento que está en estado BORRADOR.
      * <p>
-     * Valida que el evento exista, que el usuario tenga permiso (organizador due├▒o o administrador),
+     * Valida que el evento exista, que el usuario tenga permiso (organizador dueño o administrador),
      * que la fecha/hora sea posterior al momento en que se solicita el cambio,
      * que tenga un lugar con sectores y que todos los sectores
-     * tengan precio. Si las validaciones pasan, crea el inventario en ms-tickets y reci├®n despu├®s
+     * tengan precio. Si las validaciones pasan, crea el inventario en ms-tickets y recién después
      * cambia el estado a PUBLICADO.
      * <p>
-     * Es idempotente: si el evento ya estaba publicado, devuelve su informaci├│n sin volver
+     * Es idempotente: si el evento ya estaba publicado, devuelve su información sin volver
      * a llamar a ms-tickets.
      *
      * @param idEvento       id del evento a publicar
      * @param organizadorId  id del usuario que realiza la solicitud
      * @param esAdmin        {@code true} si el usuario es administrador (puede publicar cualquier evento)
      *
-     * @return DTO con la informaci├│n del evento publicado
+     * @return DTO con la información del evento publicado
      *
      * @throws NotFoundException           si el evento no existe
      * @throws ForbiddenException          si el usuario no es admin y el evento no le pertenece
-     * @throws ConflictException           si el evento no est├í en estado BORRADOR
+     * @throws ConflictException           si el evento no está en estado BORRADOR
      * @throws BadRequestException         si la fecha/hora no es posterior al momento actual, o si el
      *                                     evento no tiene lugar o el lugar no tiene sectores
-     * @throws SectoresSinPrecioException  si alg├║n sector no tiene precio asignado
-     * @throws RemoteServiceException      si ms-tickets no est├í disponible o responde con error
+     * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
+     * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
     public EventoEstadoResponse publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
         PublicacionPendiente pendiente = transactionTemplate.execute(
@@ -316,22 +322,22 @@ public class EventoService {
     }
 
     /**
-     * Cancela un evento publicado. La autorizaci├│n de administrador se valida en el controller.
+     * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
-     * Valida que el evento exista y que est├® en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
-     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y reci├®n
-     * despu├®s cambia el estado a CANCELADO.
+     * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
+     * después cambia el estado a CANCELADO.
      * <p>
-     * Es idempotente: si el evento ya estaba cancelado, devuelve su informaci├│n
+     * Es idempotente: si el evento ya estaba cancelado, devuelve su información
      * sin volver a modificarlo ni a llamar a ms-tickets.
      *
      * @param id id del evento a cancelar
      *
-     * @return DTO con la informaci├│n del evento cancelado
+     * @return DTO con la información del evento cancelado
      *
      * @throws NotFoundException      si el evento no existe
-     * @throws ConflictException      si el evento no est├í en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no est├í disponible o responde con error
+     * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
+     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
@@ -395,7 +401,7 @@ public class EventoService {
                 .orElseThrow(() -> new NotFoundException("Evento " + idEvento + " no existe"));
 
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
-            throw new ForbiddenException("No pod├®s publicar un evento que no te pertenece");
+            throw new ForbiddenException("No podés publicar un evento que no te pertenece");
         }
 
         if (evento.getEstado() == EstadoEvento.PUBLICADO) {
@@ -548,17 +554,17 @@ public class EventoService {
     }
 
     /**
-     * Finaliza los eventos cuya fecha/hora ya pas├│ hace m├ís de
+     * Finaliza los eventos cuya fecha/hora ya pasó hace más de
      * {@code ticketya.eventos.finalizacion.horas-gracia} horas (6 por defecto).
      * <p>
      * Pasa a FINALIZADO los eventos cuya fecha/hora sea estrictamente anterior al
-     * momento actual menos las horas de gracia, siempre que est├®n en estado
+     * momento actual menos las horas de gracia, siempre que estén en estado
      * PUBLICADO, AGOTADO o SUSPENDIDO.
      * <p>
-     * El cambio de estado y el alta de la notificaci├│n pendiente se guardan en la
-     * misma transacci├│n. El env├¡o a ms-tickets lo hace {@link NotificacionTicketsService}
-     * despu├®s del commit, con reintentos, para no perder el aviso si ms-tickets no
-     * est├í disponible.
+     * El cambio de estado y el alta de la notificación pendiente se guardan en la
+     * misma transacción. El envío a ms-tickets lo hace {@link NotificacionTicketsService}
+     * después del commit, con reintentos, para no perder el aviso si ms-tickets no
+     * está disponible.
      * <p>
      * Es idempotente: si se ejecuta dos veces seguidas, la segunda no modifica nada.
      */
@@ -581,18 +587,18 @@ public class EventoService {
     /**
      * Marca un evento publicado como AGOTADO.
      * <p>
-     * Valida que el evento exista y que est├® en estado PUBLICADO. Si las validaciones pasan,
+     * Valida que el evento exista y que esté en estado PUBLICADO. Si las validaciones pasan,
      * cambia el estado a AGOTADO.
      * <p>
-     * Es idempotente: si el evento ya estaba agotado, devuelve su informaci├│n
+     * Es idempotente: si el evento ya estaba agotado, devuelve su información
      * sin volver a modificarlo.
      *
      * @param id id del evento a marcar como agotado
      *
-     * @return DTO con la informaci├│n del evento agotado
+     * @return DTO con la información del evento agotado
      *
      * @throws NotFoundException si el evento no existe
-     * @throws ConflictException si el evento no est├í en estado PUBLICADO ni AGOTADO
+     * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
      */
     @Transactional
     public EventoEstadoResponse marcarAgotado(Long id) {
@@ -611,20 +617,20 @@ public class EventoService {
     }
 
     /**
-     * Vuelve a poner en venta un evento que estaba AGOTADO, pas├índolo a PUBLICADO.
+     * Vuelve a poner en venta un evento que estaba AGOTADO, pasándolo a PUBLICADO.
      * <p>
-     * Valida que el evento exista y que est├® en estado AGOTADO. No vuelve a crear el inventario
-     * en ms-tickets, porque ya fue creado cuando el evento se public├│ por primera vez.
+     * Valida que el evento exista y que esté en estado AGOTADO. No vuelve a crear el inventario
+     * en ms-tickets, porque ya fue creado cuando el evento se publicó por primera vez.
      * <p>
-     * Es idempotente: si el evento ya estaba publicado, devuelve su informaci├│n
+     * Es idempotente: si el evento ya estaba publicado, devuelve su información
      * sin volver a modificarlo.
      *
      * @param id id del evento a reabrir
      *
-     * @return DTO con la informaci├│n del evento publicado
+     * @return DTO con la información del evento publicado
      *
      * @throws NotFoundException si el evento no existe
-     * @throws ConflictException si el evento no est├í en estado AGOTADO ni PUBLICADO
+     * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
      */
     @Transactional
     public EventoEstadoResponse marcarPublicado(Long id) {
@@ -644,11 +650,11 @@ public class EventoService {
 
     private Evento buscarEventoParaValidacion(Long id) {
         return eventoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("No se encontr├│ el evento solicitado"));
+                .orElseThrow(() -> new NotFoundException("No se encontró el evento solicitado"));
     }
 
     private Evento buscarEventoParaCambioEstado(Long id) {
-        return buscarEventoParaCambioEstado(id, "No se encontr├│ el evento solicitado");
+        return buscarEventoParaCambioEstado(id, "No se encontró el evento solicitado");
     }
 
     private Evento buscarEventoParaCambioEstado(Long id, String mensaje) {
@@ -662,7 +668,7 @@ public class EventoService {
         } catch (RetryableException e) {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
-            throw new RemoteServiceException(502, "ms-tickets respondi├│ con error");
+            throw new RemoteServiceException(502, "ms-tickets respondió con error");
         }
     }
 
@@ -672,7 +678,7 @@ public class EventoService {
         } catch (RetryableException e) {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
-            throw new RemoteServiceException(502, "ms-tickets respondi├│ con error");
+            throw new RemoteServiceException(502, "ms-tickets respondió con error");
         }
     }
 
@@ -707,7 +713,7 @@ public class EventoService {
 
     private void verificarPropiedad(Evento evento, Long organizadorId, boolean esAdmin, String accion) {
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
-            throw new ForbiddenException("No pod├®s " + accion + " un evento que no te pertenece");
+            throw new ForbiddenException("No podés " + accion + " un evento que no te pertenece");
         }
     }
 
@@ -746,14 +752,14 @@ public class EventoService {
     private void aplicarCambios(Evento evento, EventoUpdateRequest dto) {
         if (dto.getNombre() != null) {
             if (dto.getNombre().isBlank()) {
-                throw new BadRequestException("El nombre del evento no puede estar vac├¡o");
+                throw new BadRequestException("El nombre del evento no puede estar vacío");
             }
             evento.setNombre(dto.getNombre().trim());
         }
 
         if (dto.getDescripcion() != null) {
             if (dto.getDescripcion().isBlank()) {
-                throw new BadRequestException("La descripci├│n del evento no puede estar vac├¡a");
+                throw new BadRequestException("La descripción del evento no puede estar vacía");
             }
             evento.setDescripcion(dto.getDescripcion().trim());
         }
@@ -796,7 +802,7 @@ public class EventoService {
                 .orElseThrow(() -> new NotFoundException("Evento no encontrado con id: " + eventoId));
 
         if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), organizadorId)) {
-            throw new ForbiddenException("No pod├®s definir precios en un evento que no te pertenece");
+            throw new ForbiddenException("No podés definir precios en un evento que no te pertenece");
         }
 
         if (evento.getEstado() != EstadoEvento.BORRADOR) {
@@ -821,7 +827,7 @@ public class EventoService {
      * Arma el request de inventario para ms-tickets a partir de los sectores del evento.
      * Los sectores se ordenan por id para que el payload sea determinista.
      *
-     * @param evento   evento que se est├í publicando
+     * @param evento   evento que se está publicando
      * @param sectores sectores del lugar del evento
      *
      * @return request listo para enviar a ms-tickets
@@ -842,15 +848,15 @@ public class EventoService {
 
     /**
      * Convierte un Sector en el request que describe su inventario.
-     * Si es numerado, incluye los asientos ordenados por fila y n├║mero;
-     * si no es numerado, incluye la capacidad m├íxima.
+     * Si es numerado, incluye los asientos ordenados por fila y número;
+     * si no es numerado, incluye la capacidad máxima.
      *
      * @param sector sector a convertir
      * @param precio precio del sector para el evento
      *
      * @return request con el inventario del sector
      *
-     * @throws IllegalStateException si el tipo de sector no est├í soportado
+     * @throws IllegalStateException si el tipo de sector no está soportado
      */
     private SectorDisponibilidadRequest toSectorDisponibilidadRequest(Sector sector, Double precio) {
         SectorDisponibilidadRequest.SectorDisponibilidadRequestBuilder builder =
@@ -884,7 +890,7 @@ public class EventoService {
      *
      * @param evento evento a convertir
      *
-     * @return DTO con la informaci├│n b├ísica del evento
+     * @return DTO con la información básica del evento
      */
     private EventoEstadoResponse toEstadoDTO(Evento evento) {
         return new EventoEstadoResponse(evento.getId(), evento.getNombre(), evento.getEstado());
@@ -908,7 +914,7 @@ public class EventoService {
         if (request.getNombre() == null || request.getNombre().isBlank()
                 || request.getDescripcion() == null || request.getDescripcion().isBlank()
                 || request.getTipo() == null || request.getLugarId() == null) {
-            throw new BadRequestException("Nombre, descripci├│n, tipo, fecha y lugar son obligatorios");
+            throw new BadRequestException("Nombre, descripción, tipo, fecha y lugar son obligatorios");
         }
 
         Lugar lugar = lugarService.obtenerPorId(request.getLugarId());

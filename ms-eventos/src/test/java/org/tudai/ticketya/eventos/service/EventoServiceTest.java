@@ -15,6 +15,8 @@ import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -45,6 +47,7 @@ import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
@@ -113,6 +116,54 @@ class EventoServiceTest {
 
         assertThat(eventoService.listarPublicados(pageable)).isSameAs(page);
         verify(eventoRepository).findByEstadoIn(EventoService.ESTADOS_VISIBLES, pageable);
+    }
+
+    @Test
+    void listarPublicados_conOrdenRelevancia_delegaEnLaConsultaSinUsarElOrdenDelPageable() {
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .orden(" ReLeVaNcIa ")
+                .build();
+        Pageable pageable = PageRequest.of(2, 5, Sort.by("nombre"));
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.buscarPorRelevancia(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(eventoRepository).buscarPorRelevancia(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(2);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+        assertThat(pageableCaptor.getValue().getSort().isSorted()).isFalse();
+        verify(eventoRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
+    void listarPublicados_sinOrden_ordenaPorFechaAscendenteYDesempataPorId() {
+        EventoFiltroRequestDTO filtro = new EventoFiltroRequestDTO();
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "nombre"));
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(eventoRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().toList())
+                .containsExactly(Sort.Order.asc("fecha"), Sort.Order.asc("id"));
+    }
+
+    @Test
+    void listarPublicados_conOrdenInvalido_lanzaBadRequestConLosValoresPermitidos() {
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .orden("nombre")
+                .build();
+
+        assertThatThrownBy(() -> eventoService.listarPublicados(filtro, PageRequest.of(0, 20)))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Valores permitidos: fecha, precio, relevancia");
+        verifyNoInteractions(eventoRepository);
     }
 
     @Test

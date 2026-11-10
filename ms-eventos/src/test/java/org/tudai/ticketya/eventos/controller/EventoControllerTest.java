@@ -2,6 +2,7 @@ package org.tudai.ticketya.eventos.controller;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -25,6 +26,7 @@ import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
@@ -33,6 +35,7 @@ import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -71,7 +74,7 @@ class EventoControllerTest {
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
         Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
-        when(eventoService.listarPublicados(pageable))
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(evento), pageable, 1));
 
         mvc.perform(get("/api/eventos"))
@@ -81,6 +84,54 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.content[0].tipo").value("FESTIVAL"))
                 .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    @Test
+    void listarEventos_conOrdenRelevancia_priorizaPublicadosYAgotados() throws Exception {
+        Evento publicado = Evento.builder()
+                .id(1L)
+                .nombre("Publicado")
+                .tipo(TipoEvento.RECITAL)
+                .fecha(LocalDateTime.of(2026, 12, 10, 20, 0))
+                .estado(EstadoEvento.PUBLICADO)
+                .build();
+        Evento agotado = Evento.builder()
+                .id(2L)
+                .nombre("Agotado")
+                .tipo(TipoEvento.FESTIVAL)
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
+                .estado(EstadoEvento.AGOTADO)
+                .build();
+        Pageable pageable = PageRequest.of(0, 5);
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(publicado, agotado), pageable, 2));
+
+        mvc.perform(get("/api/eventos")
+                        .param("orden", "relevancia")
+                        .param("page", "0")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
+                .andExpect(jsonPath("$.content[1].estado").value("AGOTADO"));
+
+        ArgumentCaptor<EventoFiltroRequestDTO> filtroCaptor =
+                ArgumentCaptor.forClass(EventoFiltroRequestDTO.class);
+        verify(eventoService).listarPublicados(filtroCaptor.capture(), any(Pageable.class));
+        assertThat(filtroCaptor.getValue().getOrden()).isEqualTo("relevancia");
+    }
+
+    @Test
+    void listarEventos_conOrdenInvalido_devuelve400ConLosValoresPermitidos() throws Exception {
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
+                .thenThrow(new BadRequestException(
+                        "Orden inválido: 'otro'. Valores permitidos: fecha, precio, relevancia"));
+
+        mvc.perform(get("/api/eventos").param("orden", "otro"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Solicitud inválida"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Orden inválido: 'otro'. Valores permitidos: fecha, precio, relevancia"));
     }
 
     @Test
