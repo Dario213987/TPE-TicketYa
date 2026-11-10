@@ -13,6 +13,7 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
@@ -39,6 +40,13 @@ public class EventoController {
 
         return new PagedModel<>(eventoService.listarPublicados(ordenable(pageable))
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
+    }
+
+    @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
+    @PutMapping("/{id}/publicar")
+    public EventoEstadoResponse publicarEvento(@PathVariable Long id) {
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.publicarEvento(id, organizadorIdActual(), esAdmin);
     }
 
     @PutMapping("/{eventoId}")
@@ -71,6 +79,10 @@ public class EventoController {
                 userContext.userId(), esAdmin);
     }
 
+    private Long organizadorIdActual() {
+        return userContext.userId();
+    }
+
     private static Pageable ordenable(Pageable pageable) {
         pageable.getSort().forEach(orden -> {
             if (!ORDENABLES.contains(orden.getProperty())) {
@@ -88,4 +100,41 @@ public class EventoController {
         return eventoService.crearEventoBorrador(request, userContext.userId());
     }
 
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PostMapping("/{id}/cancelar")
+    @ResponseStatus(HttpStatus.ACCEPTED)
+    public EventoEstadoResponse cancelarEvento(@PathVariable Long id) {
+        return eventoService.cancelarEvento(id);
+    }
+
+    // Endpoints internos: los consume ms-tickets servicio-a-servicio.
+    // No llevan @Authorize porque no hay usuario en esas llamadas; el gateway
+    // bloquea /api/eventos/internal/** para que no queden expuestos externamente.
+    @PutMapping("/internal/{id}/estado/agotado")
+    public EventoEstadoResponse marcarAgotado(@PathVariable Long id){
+        return eventoService.marcarAgotado(id);
+    }
+
+    @PutMapping("/internal/{id}/estado/publicar")
+    public EventoEstadoResponse marcarPublicado(@PathVariable Long id){
+        return eventoService.marcarPublicado(id);
+    }
+
+    @PutMapping("/internal/finalizar-vencidos")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void finalizarEventosVencidos() {
+        eventoService.finalizarEventosVencidos();
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/suspender")
+    public EventoEstadoResponse suspenderEvento(@PathVariable Long id) {
+        return eventoService.suspenderEvento(id);
+    }
+
+    @Authorize("hasRole('ADMINISTRADOR')")
+    @PutMapping("/{id}/reactivar")
+    public EventoEstadoResponse reactivarEvento(@PathVariable Long id) {
+        return eventoService.reactivarEvento(id);
+    }
 }

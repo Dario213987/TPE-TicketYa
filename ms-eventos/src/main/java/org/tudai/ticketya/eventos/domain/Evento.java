@@ -4,7 +4,7 @@ import jakarta.persistence.*;
 import lombok.*;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Map;
@@ -23,7 +23,7 @@ public class Evento {
     private Long id;
     @Enumerated(EnumType.STRING)
     private TipoEvento tipo;
-	private LocalDate fecha;
+	private LocalDateTime fecha;
 	@ManyToOne
 	@JoinColumn(name = "lugar_id")
 	private Lugar lugar;
