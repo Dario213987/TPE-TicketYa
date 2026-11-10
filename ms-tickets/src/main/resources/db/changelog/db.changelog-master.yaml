@@ -1,1 +1,7 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: 00001-crear-tablas-tickets.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00002-liberar-reservas-vencidas.xml
+      relativeToChangelogFile: true

@@ -1,0 +1,33 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00003-crear-tabla-evento" author="maxi">
+        <createTable tableName="eventos">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="nombre" type="varchar(255)"/>
+            <column name="descripcion" type="varchar(255)"/>
+            <column name="tipo" type="varchar(255)"/>
+            <column name="fecha" type="date"/>
+            <column name="estado" type="smallint"/>
+            <column name="organizador_id" type="bigint"/>
+            <column name="lugar_id" type="bigint"/>
+        </createTable>
+
+        <sql>ALTER TABLE eventos ADD CONSTRAINT chk_eventos_estado CHECK (estado IN (0, 1, 2, 3))</sql>
+
+        <addForeignKeyConstraint baseTableName="eventos"
+                                 baseColumnNames="lugar_id"
+                                 constraintName="fk_eventos_lugar"
+                                 referencedTableName="lugares"
+                                 referencedColumnNames="id"/>
+
+        <createIndex tableName="eventos" indexName="idx_eventos_lugar">
+            <column name="lugar_id"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
