@@ -1,0 +1,222 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00001-crear-disponibilidad-eventos" author="ticketya">
+        <createTable tableName="disponibilidad_eventos">
+            <column name="evento_id" type="BIGINT">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_disponibilidad_eventos"
+                             nullable="false"/>
+            </column>
+            <column name="creado_el" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="limite_entradas_por_cliente" type="INTEGER"/>
+        </createTable>
+    </changeSet>
+
+    <changeSet id="00002-crear-disponibilidad-sectores" author="ticketya">
+        <createTable tableName="disponibilidad_sectores">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_disponibilidad_sectores"
+                             nullable="false"/>
+            </column>
+            <column name="evento_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sector_id_externo" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tipo" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="capacidad_total" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="disponibles" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="disponibilidad_sectores"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_disponibilidad_sectores_evento"
+                                 referencedTableName="disponibilidad_eventos"
+                                 referencedColumnNames="evento_id"/>
+
+        <addUniqueConstraint tableName="disponibilidad_sectores"
+                             columnNames="evento_id, sector_id_externo"
+                             constraintName="uq_disponibilidad_sector"/>
+
+        <createIndex tableName="disponibilidad_sectores"
+                     indexName="idx_disponibilidad_sector_evento">
+            <column name="evento_id"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="00003-crear-disponibilidad-asientos" author="ticketya">
+        <createTable tableName="disponibilidad_asientos">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_disponibilidad_asientos"
+                             nullable="false"/>
+            </column>
+            <column name="evento_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sector_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fila" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="numero" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="estado" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="disponibilidad_asientos"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_disponibilidad_asientos_evento"
+                                 referencedTableName="disponibilidad_eventos"
+                                 referencedColumnNames="evento_id"/>
+
+        <addForeignKeyConstraint baseTableName="disponibilidad_asientos"
+                                 baseColumnNames="sector_id"
+                                 constraintName="fk_disponibilidad_asientos_sector"
+                                 referencedTableName="disponibilidad_sectores"
+                                 referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="disponibilidad_asientos"
+                             columnNames="evento_id, sector_id, fila, numero"
+                             constraintName="uq_disponibilidad_asiento"/>
+
+        <createIndex tableName="disponibilidad_asientos"
+                     indexName="idx_disponibilidad_asiento_evento_estado">
+            <column name="evento_id"/>
+            <column name="estado"/>
+        </createIndex>
+
+        <createIndex tableName="disponibilidad_asientos"
+                     indexName="idx_disponibilidad_asiento_sector_estado">
+            <column name="sector_id"/>
+            <column name="estado"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="00004-crear-tickets" author="ticketya">
+        <createTable tableName="tickets">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_tickets"
+                             nullable="false"/>
+            </column>
+            <column name="codigo_qr" type="VARCHAR(255)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="estado_ticket" type="VARCHAR(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="precio" type="DOUBLE PRECISION"/>
+            <column name="fecha_emision" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cliente_id" type="BIGINT"/>
+            <column name="expira_el" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="evento_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sector_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="asiento_id" type="BIGINT"/>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="tickets"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_tickets_evento"
+                                 referencedTableName="disponibilidad_eventos"
+                                 referencedColumnNames="evento_id"/>
+
+        <addForeignKeyConstraint baseTableName="tickets"
+                                 baseColumnNames="sector_id"
+                                 constraintName="fk_tickets_sector"
+                                 referencedTableName="disponibilidad_sectores"
+                                 referencedColumnNames="id"/>
+
+        <addForeignKeyConstraint baseTableName="tickets"
+                                 baseColumnNames="asiento_id"
+                                 constraintName="fk_tickets_asiento"
+                                 referencedTableName="disponibilidad_asientos"
+                                 referencedColumnNames="id"/>
+
+        <addUniqueConstraint tableName="tickets"
+                             columnNames="codigo_qr"
+                             constraintName="uq_tickets_codigo_qr"/>
+
+        <addUniqueConstraint tableName="tickets"
+                             columnNames="asiento_id"
+                             constraintName="uq_tickets_asiento"/>
+
+        <createIndex tableName="tickets"
+                     indexName="idx_tickets_evento_cliente_estado">
+            <column name="evento_id"/>
+            <column name="cliente_id"/>
+            <column name="estado_ticket"/>
+        </createIndex>
+    </changeSet>
+
+    <changeSet id="00005-crear-reservas" author="ticketya">
+        <createTable tableName="reservas">
+            <column name="id" type="BIGINT" autoIncrement="true">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_reservas"
+                             nullable="false"/>
+            </column>
+            <column name="evento_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="cliente_id" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sector_id_externo" type="BIGINT">
+                <constraints nullable="false"/>
+            </column>
+            <column name="expira_el" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creado_el" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="reservas"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_reservas_evento"
+                                 referencedTableName="disponibilidad_eventos"
+                                 referencedColumnNames="evento_id"/>
+
+        <createIndex tableName="reservas"
+                     indexName="idx_reservas_evento_cliente">
+            <column name="evento_id"/>
+            <column name="cliente_id"/>
+        </createIndex>
+
+        <addColumn tableName="tickets">
+            <column name="reserva_id" type="BIGINT"/>
+        </addColumn>
+
+        <addForeignKeyConstraint baseTableName="tickets"
+                                 baseColumnNames="reserva_id"
+                                 constraintName="fk_tickets_reserva"
+                                 referencedTableName="reservas"
+                                 referencedColumnNames="id"/>
+    </changeSet>
+</databaseChangeLog>

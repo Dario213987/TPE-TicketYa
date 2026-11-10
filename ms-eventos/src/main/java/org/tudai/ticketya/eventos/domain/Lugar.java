@@ -1,7 +1,6 @@
 package org.tudai.ticketya.eventos.domain;
 
 import jakarta.persistence.*;
-import jakarta.validation.groups.Default;
 import lombok.*;
 import java.util.HashSet;
 import java.util.Set;
@@ -28,6 +27,7 @@ public class Lugar {
     @OneToMany(cascade = CascadeType.ALL, orphanRemoval = true)
     @JoinColumn(name = "lugar_id")
     @Builder.Default
+    @Setter(AccessLevel.NONE)
     private Set<Sector> sectores = new HashSet<>();
 
     public void addSector(Sector sector) {
@@ -36,5 +36,17 @@ public class Lugar {
 
     public void removeSector(Sector sector) {
         this.sectores.remove(sector);
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (!(o instanceof Lugar other)) return false;
+        return id != null && id.equals(other.getId());
+    }
+
+    @Override
+    public int hashCode() {
+        return getClass().hashCode();
     }
 }

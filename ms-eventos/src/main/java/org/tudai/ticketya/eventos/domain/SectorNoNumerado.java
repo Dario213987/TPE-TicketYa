@@ -5,7 +5,7 @@ import lombok.*;
 import lombok.experimental.SuperBuilder;
 
 @Entity
-@DiscriminatorValue(TipoSector.NO_NUMERADO)
+@DiscriminatorValue("NO_NUMERADO")
 @Getter
 @Setter
 @NoArgsConstructor
