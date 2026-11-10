@@ -18,8 +18,23 @@ databaseChangeLog:
       file: 00006-crear-tabla-evento-sector-precio.xml
       relativeToChangelogFile: true
   - include:
+      file: 00007-agregar-estado-publicado.xml
+      relativeToChangelogFile: true
+  - include:
       file: 00002-insert-lugares-dev.xml
       relativeToChangelogFile: true
   - include:
-      file: 00007-agregar-estado-publicado.xml
+      file: 00008-agregar-estado-suspendido.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00009-eliminar-estado-confirmado.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00010-crear-tabla-shedlock.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00011-crear-tabla-evento-notificacion.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00012-cambiar-fecha-evento-a-timestamp.xml
       relativeToChangelogFile: true

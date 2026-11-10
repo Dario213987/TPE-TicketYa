@@ -93,6 +93,161 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/publicar:
+    put:
+      tags: [eventos]
+      operationId: publicarEvento
+      summary: Publica un evento en borrador
+      description: |
+        Solo el organizador dueño del evento o un administrador. Pasa el evento de BORRADOR
+        a PUBLICADO, validando fecha, lugar, sectores y precios, y crea la disponibilidad
+        en ms-tickets. Es idempotente si el evento ya está publicado.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: El evento publicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/cancelar:
+    post:
+      tags: [eventos]
+      operationId: cancelarEvento
+      summary: Cancela un evento
+      description: |
+        Solo administradores. El evento puede estar PUBLICADO, SUSPENDIDO o AGOTADO. Pasa el
+        evento a CANCELADO y bloquea nuevas reservas y compras en ms-tickets. El reintegro
+        masivo corresponde a US-07.05 y no lo ejecuta este endpoint.
+        Es idempotente si el evento ya está cancelado.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '202':
+          description: El evento cancelado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/suspender:
+    put:
+      tags: [eventos]
+      operationId: suspenderEvento
+      summary: Suspende un evento
+      description: |
+        Solo administradores. El evento puede estar PUBLICADO o AGOTADO. Pasa el evento a
+        SUSPENDIDO y bloquea nuevas reservas y compras en ms-tickets. No dispara el reintegro
+        masivo. Es idempotente si el evento ya está suspendido.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: El evento suspendido
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/{eventoId}/reactivar:
+    put:
+      tags: [eventos]
+      operationId: reactivarEvento
+      summary: Reactiva un evento suspendido
+      description: |
+        Solo administradores. Pasa el evento de SUSPENDIDO a PUBLICADO o AGOTADO según la
+        disponibilidad informada por ms-tickets y habilita nuevamente reservas y compras.
+        Es idempotente si el evento ya está publicado o agotado.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: El evento reactivado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+        '502': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/{id}/estado/agotado:
+    put:
+      tags: [eventos]
+      operationId: marcarEventoAgotado
+      summary: Marca un evento como AGOTADO
+      description: |
+        Endpoint interno de integración para pasar un evento PUBLICADO a AGOTADO.
+        Es idempotente si el evento ya está agotado. No requiere autenticación.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: El evento agotado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/{id}/estado/publicar:
+    put:
+      tags: [eventos]
+      operationId: marcarEventoPublicado
+      summary: Vuelve a publicar un evento AGOTADO
+      description: |
+        Endpoint interno de integración para pasar un evento AGOTADO a PUBLICADO.
+        Es idempotente si el evento ya está publicado. No requiere autenticación.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: El evento publicado
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoEstadoResponse'
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/eventos/internal/finalizar-vencidos:
+    put:
+      tags: [eventos]
+      operationId: finalizarEventosVencidos
+      summary: Finaliza los eventos vencidos
+      description: |
+        Endpoint interno para disparar manualmente el proceso de finalización.
+        Pasa a FINALIZADO los eventos PUBLICADO, AGOTADO o SUSPENDIDO cuya
+        fecha/hora sea anterior al momento actual menos 6 horas.
+        No requiere autenticación.
+      responses:
+        '204':
+          description: Proceso ejecutado
   /api/lugares:
     get:
       tags: [lugares]
@@ -284,7 +439,7 @@ components:
         format: int64
   responses:
     Error:
-      description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe)
+      description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe, 409 conflicto, 502 servicio dependiente no disponible)
       content:
         application/problem+json:
           schema:
@@ -295,7 +450,7 @@ components:
       enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
     EstadoEvento:
       type: string
-      enum: [BORRADOR, CONFIRMADO, CANCELADO, FINALIZADO, PUBLICADO, AGOTADO]
+      enum: [BORRADOR, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]
@@ -304,7 +459,7 @@ components:
         nombre: { type: string }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
     EventoUpdateRequest:
@@ -317,7 +472,7 @@ components:
         descripcion: { type: string, maxLength: 255 }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
         sectores:
           type: array
@@ -331,7 +486,7 @@ components:
         descripcion: { type: string, minLength: 1, maxLength: 255, pattern: '.*\S.*' }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
         participantes:
           type: array
@@ -346,7 +501,7 @@ components:
         descripcion: { type: string }
         tipo:
           $ref: '#/components/schemas/TipoEvento'
-        fecha: { type: string, format: date }
+        fecha: { type: string, format: date-time }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
         organizadorId: { type: integer, format: int64 }
@@ -365,6 +520,14 @@ components:
           additionalProperties:
             type: number
             format: double
+    EventoEstadoResponse:
+      type: object
+      required: [id, nombre, estado]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        estado:
+          $ref: '#/components/schemas/EstadoEvento'
     ParticipanteRequest:
       type: object
       properties:
