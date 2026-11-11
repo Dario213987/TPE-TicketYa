@@ -454,11 +454,20 @@
     },
     {
       "name": "3. Fila virtual",
-      "description": "Requiere que el evento {{eventoId}} tenga disponibilidad publicada con altaDemanda=true (lo hace la carpeta 1) y que el cliente {{clienteId}} no esté ya en la fila para validar el 201. Para reiniciar la fila: redis-cli -p 6380 DEL tickets:fila:evento:{{eventoId}}",
+      "description": "Requiere que el evento {{eventoId}} tenga disponibilidad publicada con altaDemanda=true (lo hace la carpeta 1). Cada corrida usa un cliente nuevo ({{clienteFila}}) para que el 201 sea repetible sin borrar la clave de Redis.",
       "item": [
         {
           "name": "Entrar a la fila (201)",
           "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"clienteFila\", String(Math.floor(Math.random() * 1000000) + 1));"
+                ]
+              }
+            },
             {
               "listen": "test",
               "script": {
@@ -466,7 +475,7 @@
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
                   "const j = pm.response.json();",
-                  "pm.test(\"devuelve evento y cliente\", () => { pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))); pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteId\"))); });",
+                  "pm.test(\"devuelve evento y cliente\", () => { pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))); pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteFila\"))); });",
                   "pm.test(\"ingresa al final de la fila\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); pm.expect(j.yaEstabaEnFila).to.eql(false); });",
                   "pm.test(\"informa el momento de ingreso\", () => pm.expect(j.ingresadoEl).to.be.a(\"string\"));",
                   "pm.collectionVariables.set(\"posicionFila\", String(j.posicion));"
@@ -479,7 +488,7 @@
             "header": [
               {
                 "key": "X-User-Id",
-                "value": "{{clienteId}}"
+                "value": "{{clienteFila}}"
               },
               {
                 "key": "X-User-Role",
@@ -523,7 +532,7 @@
             "header": [
               {
                 "key": "X-User-Id",
-                "value": "{{clienteId}}"
+                "value": "{{clienteFila}}"
               },
               {
                 "key": "X-User-Role",

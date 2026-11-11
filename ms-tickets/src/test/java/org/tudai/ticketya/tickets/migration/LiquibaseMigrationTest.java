@@ -114,7 +114,7 @@ class LiquibaseMigrationTest {
         liquibase.update(new Contexts());
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas");
-        assertThat(contarCambiosAplicados()).isEqualTo(7);
+        assertThat(contarCambiosAplicados()).isEqualTo(8);
     }
 
     @Test

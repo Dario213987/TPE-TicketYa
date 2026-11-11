@@ -3,8 +3,11 @@ databaseChangeLog:
       file: 00001-crear-tablas-tickets.xml
       relativeToChangelogFile: true
   - include:
-      file: 00002-agregar-alta-demanda-disponibilidad-eventos.xml
+      file: 00002-liberar-reservas-vencidas.xml
       relativeToChangelogFile: true
   - include:
-      file: 00003-agregar-estado-venta-disponibilidad-eventos.xml
+      file: 00003-agregar-alta-demanda-disponibilidad-eventos.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00004-agregar-estado-venta-disponibilidad-eventos.xml
       relativeToChangelogFile: true
