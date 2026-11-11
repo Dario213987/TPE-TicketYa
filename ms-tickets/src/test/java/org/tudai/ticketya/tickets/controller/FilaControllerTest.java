@@ -83,6 +83,19 @@ class FilaControllerTest {
     }
 
     @Test
+    void entrarEnFila_eventoConVentaCerrada_responde409() throws Exception {
+        when(userContext.role()).thenReturn(Role.CLIENTE);
+        when(userContext.userId()).thenReturn(42L);
+        when(filaService.entrar(7L, 42L))
+                .thenThrow(new ConflictException(
+                        "La venta del evento 7 no está abierta (SUSPENDIDA)"));
+
+        mvc.perform(post("/api/tickets/eventos/7/fila"))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.status").value(409));
+    }
+
+    @Test
     void entrarEnFila_eventoSinDisponibilidad_responde404() throws Exception {
         when(userContext.role()).thenReturn(Role.CLIENTE);
         when(userContext.userId()).thenReturn(42L);

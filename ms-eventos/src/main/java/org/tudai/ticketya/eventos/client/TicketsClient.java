@@ -21,16 +21,16 @@ public interface TicketsClient {
     @GetMapping("/api/tickets/eventos/{eventoId}/disponibilidad")
     DisponibilidadEventoResponse consultarDisponibilidad(@PathVariable("eventoId") Long eventoId);
 
-    @PutMapping("/api/tickets/eventos/{eventoId}/cancelar")
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/cancelar")
     void cancelarEvento(@PathVariable("eventoId") Long eventoId);
 
-    @PutMapping("/api/tickets/eventos/{eventoId}/suspender")
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/suspender")
     void suspenderEvento(@PathVariable("eventoId") Long eventoId);
 
-    @PutMapping("/api/tickets/eventos/{eventoId}/finalizar")
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/finalizar")
     void finalizarEvento(@PathVariable("eventoId") Long eventoId);
 
-    @PutMapping("/api/tickets/eventos/{eventoId}/reactivar")
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/reactivar")
     void reactivarEvento(@PathVariable("eventoId") Long eventoId);
 
 }

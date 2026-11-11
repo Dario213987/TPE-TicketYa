@@ -17,6 +17,7 @@ tags:
   - name: reservas
   - name: disponibilidad
   - name: fila
+  - name: interno
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
     post:
@@ -69,9 +70,10 @@ paths:
         Solo el rol CLIENTE puede entrar a la fila. El cliente se toma de X-User-Id,
         nunca del cuerpo.
 
-        El evento debe tener la disponibilidad publicada y estar marcado como
-        altaDemanda. Si no tiene disponibilidad responde 404; si tiene
-        disponibilidad pero no es de alta demanda responde 409.
+        El evento debe tener la disponibilidad publicada, estar marcado como
+        altaDemanda y tener la venta abierta. Si no tiene disponibilidad responde
+        404; si tiene disponibilidad pero no es de alta demanda o la venta no está
+        ABIERTA responde 409.
 
         La fila se guarda en un sorted set de Redis ordenado por el momento de
         llegada. La operación es idempotente: si el cliente ya está en la fila,
@@ -109,9 +111,10 @@ paths:
         coincidir con el del cuerpo.
 
         Es idempotente por evento: si el evento ya tenia disponibilidad, no se recrean los
-        sectores existentes, pero si se procesan los sectores nuevos y se actualizan el limite
-        de entradas por cliente y el flag altaDemanda cuando se informan. En ese caso responde
-        200 con yaExistia=true; si es la primera publicacion responde 201 con yaExistia=false.
+        sectores existentes, pero si se procesan los sectores nuevos y se actualiza el limite
+        de entradas por cliente. El flag altaDemanda solo se define en la primera publicacion;
+        si se intenta cambiar despues responde 409. En ese caso responde 200 con
+        yaExistia=true; si es la primera publicacion responde 201 con yaExistia=false.
       parameters:
         - name: eventoId
           in: path
@@ -161,6 +164,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/cancelar:
+    put:
+      tags: [interno]
+      operationId: cancelarVenta
+      summary: Cancela la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a CANCELADA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/suspender:
+    put:
+      tags: [interno]
+      operationId: suspenderVenta
+      summary: Suspende la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a SUSPENDIDA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/reactivar:
+    put:
+      tags: [interno]
+      operationId: reactivarVenta
+      summary: Reactiva la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a ABIERTA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/finalizar:
+    put:
+      tags: [interno]
+      operationId: finalizarVenta
+      summary: Finaliza la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a FINALIZADA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
