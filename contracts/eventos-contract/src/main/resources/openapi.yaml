@@ -436,8 +436,9 @@ components:
     TipoEventoFiltro:
       name: tipo
       in: query
-      description: Filtra por tipo de evento sin distinguir mayúsculas/minúsculas.
-      schema: { type: string }
+      description: Tipo de evento. La comparación no distingue mayúsculas/minúsculas.
+      schema:
+        $ref: '#/components/schemas/TipoEvento'
     OrganizadorIdFiltro:
       name: organizadorId
       in: query
@@ -456,13 +457,19 @@ components:
     FechaDesdeFiltro:
       name: fechaDesde
       in: query
-      description: Fecha mínima del evento en formato dd/MM/yyyy (inclusiva).
-      schema: { type: string, example: '01/12/2026' }
+      description: Fecha mínima inclusive del evento, en formato dd/MM/yyyy.
+      schema:
+        type: string
+        pattern: '^\d{2}/\d{2}/\d{4}$'
+        example: '01/12/2026'
     FechaHastaFiltro:
       name: fechaHasta
       in: query
-      description: Fecha máxima del evento en formato dd/MM/yyyy (inclusiva).
-      schema: { type: string, example: '31/12/2026' }
+      description: Fecha máxima inclusive del evento, en formato dd/MM/yyyy.
+      schema:
+        type: string
+        pattern: '^\d{2}/\d{2}/\d{4}$'
+        example: '31/12/2026'
     Orden:
       name: orden
       in: query

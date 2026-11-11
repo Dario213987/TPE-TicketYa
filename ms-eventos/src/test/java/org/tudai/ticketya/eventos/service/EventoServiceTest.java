@@ -53,6 +53,7 @@ import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Optional;
@@ -163,6 +164,40 @@ class EventoServiceTest {
         assertThatThrownBy(() -> eventoService.listarPublicados(filtro, PageRequest.of(0, 20)))
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Valores permitidos: fecha, precio, relevancia");
+        verifyNoInteractions(eventoRepository);
+    }
+
+    @Test
+    void listarPublicados_conFiltros_consultaElRepositorioConLaEspecificacion() {
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.findAll(org.mockito.ArgumentMatchers.<Specification<Evento>>any(),
+                any(Pageable.class))).thenReturn(page);
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .tipo("RECITAL")
+                .organizadorId(7L)
+                .participante("Soda Stereo")
+                .ciudad("Tandil")
+                .fechaDesde(LocalDate.of(2026, 12, 1))
+                .fechaHasta(LocalDate.of(2026, 12, 31))
+                .build();
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+        verify(eventoRepository).findAll(
+                org.mockito.ArgumentMatchers.<Specification<Evento>>any(), any(Pageable.class));
+    }
+
+    @Test
+    void listarPublicados_conRangoInvertido_lanzaBadRequestYNoConsulta() {
+        Pageable pageable = PageRequest.of(0, 20);
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .fechaDesde(LocalDate.of(2026, 12, 31))
+                .fechaHasta(LocalDate.of(2026, 12, 1))
+                .build();
+
+        assertThatThrownBy(() -> eventoService.listarPublicados(filtro, pageable))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessage("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
         verifyNoInteractions(eventoRepository);
     }
 
