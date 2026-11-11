@@ -74,6 +74,21 @@ class ReservaServiceTest {
     }
 
     @Test
+    void reservar_cuandoLaVentaNoEstaAbierta_lanzaConflictYNoReserva() {
+        DisponibilidadEvento evento = evento(7L, 4);
+        evento.setEstadoVenta(EstadoVenta.SUSPENDIDA);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> service.reservar(7L, 42L, reserva(3L, 1)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no está abierta")
+                .hasMessageContaining("SUSPENDIDA");
+
+        verifyNoInteractions(sectorRepository);
+        verify(ticketRepository, never()).saveAll(any());
+    }
+
+    @Test
     void reservar_cuandoSuperaElLimite_lanzaConflictException() {
         DisponibilidadEvento evento = evento(7L, 2);
         DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 10, 10);

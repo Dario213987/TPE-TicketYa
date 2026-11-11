@@ -30,6 +30,11 @@ public class DisponibilidadEvento {
     @Column(name = "alta_demanda", nullable = false)
     private boolean altaDemanda = false;
 
+    @Builder.Default
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_venta", nullable = false, length = 20)
+    private EstadoVenta estadoVenta = EstadoVenta.ABIERTA;
+
     @OneToMany(mappedBy = "evento", cascade = CascadeType.ALL, orphanRemoval = true, fetch = FetchType.LAZY)
     @Builder.Default
     private Set<DisponibilidadSector> sectores = new HashSet<>();

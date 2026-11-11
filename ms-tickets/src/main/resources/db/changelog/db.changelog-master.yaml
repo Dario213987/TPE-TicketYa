@@ -5,3 +5,6 @@ databaseChangeLog:
   - include:
       file: 00002-agregar-alta-demanda-disponibilidad-eventos.xml
       relativeToChangelogFile: true
+  - include:
+      file: 00003-agregar-estado-venta-disponibilidad-eventos.xml
+      relativeToChangelogFile: true
