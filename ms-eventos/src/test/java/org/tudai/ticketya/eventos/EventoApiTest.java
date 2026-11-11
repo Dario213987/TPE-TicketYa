@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
@@ -65,6 +66,9 @@ class EventoApiTest {
 
     @MockitoBean
     TicketsClient ticketsClient;
+
+    @MockitoBean
+    DevolucionesClient devolucionesClient;
 
     private Lugar lugar;
 

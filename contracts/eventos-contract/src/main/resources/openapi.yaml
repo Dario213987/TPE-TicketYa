@@ -132,8 +132,10 @@ paths:
       summary: Cancela un evento
       description: |
         Solo administradores. El evento puede estar PUBLICADO, SUSPENDIDO o AGOTADO. Pasa el
-        evento a CANCELADO y bloquea nuevas reservas y compras en ms-tickets. El reintegro
-        masivo corresponde a US-07.05 y no lo ejecuta este endpoint.
+        evento a CANCELADO, bloquea nuevas reservas y compras en ms-tickets y dispara el
+        reintegro masivo (US-07.05) delegando en ms-devoluciones. Si ms-tickets o
+        ms-devoluciones no están disponibles o responden con error, la cancelación no se
+        persiste y se devuelve 502.
         Es idempotente si el evento ya está cancelado.
       parameters:
         - $ref: '#/components/parameters/EventoId'

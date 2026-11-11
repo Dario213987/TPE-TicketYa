@@ -32,6 +32,7 @@ import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
@@ -81,6 +82,9 @@ class EventoServiceTest {
 
     @Mock
     private TicketsClient ticketsClient;
+
+    @Mock
+    private DevolucionesClient devolucionesClient;
 
     @Mock
     private LugarService lugarService;
@@ -820,8 +824,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        InOrder orden = inOrder(eventoRepository, ticketsClient, devolucionesClient);
         orden.verify(ticketsClient).cancelarEvento(1L);
+        orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
     }
 
@@ -833,6 +838,7 @@ class EventoServiceTest {
                 .isInstanceOf(NotFoundException.class)
                 .hasMessage("No se encontró el evento solicitado");
         verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(devolucionesClient);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -846,6 +852,7 @@ class EventoServiceTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
         verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(devolucionesClient);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -862,6 +869,7 @@ class EventoServiceTest {
                     .hasMessage("El evento debe estar publicado, suspendido o agotado para poder ser cancelado");
         }
         verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(devolucionesClient);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -897,6 +905,37 @@ class EventoServiceTest {
     }
 
     @Test
+    void cancelarEvento_conMsDevolucionesNoDisponible_lanzaRemoteServiceExceptionYNoPersiste() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        doThrow(mock(RetryableException.class)).when(devolucionesClient).reintegrarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(1L))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-devoluciones no disponible")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void cancelarEvento_cuandoMsDevolucionesRespondeConError_normalizaA502YNoPersiste() {
+        Evento evento = eventoCancelable(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        FeignException error = mock(FeignException.class);
+        doThrow(error).when(devolucionesClient).reintegrarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.cancelarEvento(1L))
+                .isInstanceOf(RemoteServiceException.class)
+                .hasMessage("ms-devoluciones respondió con error")
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
     void cancelarEvento_desdeSuspendido_loCancelaYNotificaTickets() {
         Evento evento = eventoCancelable(EstadoEvento.SUSPENDIDO);
         when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
@@ -909,8 +948,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        InOrder orden = inOrder(eventoRepository, ticketsClient, devolucionesClient);
         orden.verify(ticketsClient).cancelarEvento(1L);
+        orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
     }
 
@@ -926,8 +966,9 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
 
-        InOrder orden = inOrder(eventoRepository, ticketsClient);
+        InOrder orden = inOrder(eventoRepository, ticketsClient, devolucionesClient);
         orden.verify(ticketsClient).cancelarEvento(1L);
+        orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
     }
 

@@ -29,6 +29,7 @@ import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
@@ -78,6 +79,7 @@ public class EventoService {
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
+    private final DevolucionesClient devolucionesClient;
     private final LugarRepository lugarRepository;
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
@@ -325,11 +327,12 @@ public class EventoService {
      * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
      * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
-     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
-     * después cambia el estado a CANCELADO.
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, dispara
+     * el reintegro masivo delegando en ms-devoluciones, y recién después cambia el estado a
+     * CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo ni a llamar a ms-tickets.
+     * sin volver a modificarlo ni a llamar a ms-tickets ni a ms-devoluciones.
      *
      * @param id id del evento a cancelar
      *
@@ -337,7 +340,7 @@ public class EventoService {
      *
      * @throws NotFoundException      si el evento no existe
      * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     * @throws RemoteServiceException si ms-tickets o ms-devoluciones no están disponibles o responden con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
@@ -348,6 +351,8 @@ public class EventoService {
         }
 
         ejecutarTickets(() -> ticketsClient.cancelarEvento(id));
+
+        ejecutarDevoluciones(() -> devolucionesClient.reintegrarEvento(id));
 
         return transactionTemplate.execute(status -> confirmarCancelacion(id));
     }
@@ -485,8 +490,6 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.CANCELADO);
-
-        //TO DO : REINTEGRO MASIVO
 
         return toEstadoDTO(eventoRepository.save(evento));
     }
@@ -679,6 +682,16 @@ public class EventoService {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
             throw new RemoteServiceException(502, "ms-tickets respondió con error");
+        }
+    }
+
+    private void ejecutarDevoluciones(Runnable llamada) {
+        try {
+            llamada.run();
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones no disponible");
+        } catch (FeignException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones respondió con error");
         }
     }
 
