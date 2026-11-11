@@ -2,6 +2,7 @@ package org.tudai.ticketya.eventos.controller;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -31,9 +32,11 @@ import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -84,6 +87,33 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.page.totalElements").value(1));
 
         verify(eventoService).listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable));
+    }
+
+    @Test
+    void listarEventos_conFiltros_bindeaTodosLosParametros() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        mvc.perform(get("/api/eventos")
+                        .param("tipo", "RECITAL")
+                        .param("organizadorId", "7")
+                        .param("participante", "Soda Stereo")
+                        .param("ciudad", "Tandil")
+                        .param("fechaDesde", "01/12/2026")
+                        .param("fechaHasta", "31/12/2026"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<EventoFiltroRequestDTO> captor =
+                ArgumentCaptor.forClass(EventoFiltroRequestDTO.class);
+        verify(eventoService).listarPublicados(captor.capture(), eq(pageable));
+        EventoFiltroRequestDTO filtro = captor.getValue();
+        assertThat(filtro.getTipo()).isEqualTo("RECITAL");
+        assertThat(filtro.getOrganizadorId()).isEqualTo(7L);
+        assertThat(filtro.getParticipante()).isEqualTo("Soda Stereo");
+        assertThat(filtro.getCiudad()).isEqualTo("Tandil");
+        assertThat(filtro.getFechaDesde()).isEqualTo(LocalDate.of(2026, 12, 1));
+        assertThat(filtro.getFechaHasta()).isEqualTo(LocalDate.of(2026, 12, 31));
     }
 
     @Test

@@ -15,14 +15,20 @@ paths:
       tags: [eventos]
       operationId: listarEventos
       summary: Lista los eventos publicados
-      description: Paginado. Devuelve únicamente eventos publicados, agotados o finalizados. Ordenado por fecha por defecto.
+      description: Paginado. Devuelve únicamente eventos en estado PUBLICADO o AGOTADO. Los filtros opcionales se combinan con AND. Ordenado por fecha por defecto.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
         - $ref: '#/components/parameters/Sort'
+        - $ref: '#/components/parameters/TipoEventoFiltro'
+        - $ref: '#/components/parameters/OrganizadorId'
+        - $ref: '#/components/parameters/Participante'
+        - $ref: '#/components/parameters/Ciudad'
+        - $ref: '#/components/parameters/FechaDesde'
+        - $ref: '#/components/parameters/FechaHasta'
       responses:
         '200':
-          description: Página de eventos publicados
+          description: Página de eventos visibles
           content:
             application/json:
               schema:
@@ -430,6 +436,43 @@ components:
       in: query
       description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos válidos: lugares (id, nombre, tipo, ciudad); eventos (id, nombre, fecha, tipo). Por defecto nombre,asc en lugares y fecha,asc en eventos"
       schema: { type: string }
+    TipoEventoFiltro:
+      name: tipo
+      in: query
+      description: Tipo de evento. La comparación no distingue mayúsculas/minúsculas.
+      schema:
+        $ref: '#/components/schemas/TipoEvento'
+    OrganizadorId:
+      name: organizadorId
+      in: query
+      description: ID del organizador del evento.
+      schema: { type: integer, format: int64 }
+    Participante:
+      name: participante
+      in: query
+      description: Nombre de un participante/artista. Coincidencia exacta sin distinguir mayúsculas ni tildes.
+      schema: { type: string }
+    Ciudad:
+      name: ciudad
+      in: query
+      description: Ciudad del lugar del evento. La comparación no distingue mayúsculas/minúsculas.
+      schema: { type: string }
+    FechaDesde:
+      name: fechaDesde
+      in: query
+      description: Fecha mínima inclusive del evento, en formato dd/MM/yyyy.
+      schema:
+        type: string
+        pattern: '^\d{2}/\d{2}/\d{4}$'
+        example: '01/12/2026'
+    FechaHasta:
+      name: fechaHasta
+      in: query
+      description: Fecha máxima inclusive del evento, en formato dd/MM/yyyy.
+      schema:
+        type: string
+        pattern: '^\d{2}/\d{2}/\d{4}$'
+        example: '31/12/2026'
     EventoId:
       name: eventoId
       in: path
