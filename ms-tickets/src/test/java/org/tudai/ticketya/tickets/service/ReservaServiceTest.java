@@ -152,7 +152,8 @@ class ReservaServiceTest {
                 eq(7L), eq(42L), estados.capture());
         assertThat(estados.getValue())
                 .containsExactlyInAnyOrder(EstadoTicket.EMITIDO, EstadoTicket.USADO)
-                .doesNotContain(EstadoTicket.DEVUELTO, EstadoTicket.CANCELADO, EstadoTicket.EXPIRADO);
+                .doesNotContain(EstadoTicket.DEVUELTO, EstadoTicket.CANCELADO,
+                        EstadoTicket.EXPIRADO, EstadoTicket.LIBERADO);
     }
 
     @Test
