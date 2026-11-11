@@ -24,6 +24,7 @@ import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.service.EventoService;
@@ -71,7 +72,7 @@ class EventoControllerTest {
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
         Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
-        when(eventoService.listarPublicados(pageable))
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(evento), pageable, 1));
 
         mvc.perform(get("/api/eventos"))
@@ -81,6 +82,8 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.content[0].tipo").value("FESTIVAL"))
                 .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+
+        verify(eventoService).listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable));
     }
 
     @Test
