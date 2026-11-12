@@ -158,7 +158,7 @@ class ReservaPagoServiceTest {
     @Test
     void preparar_reservaVencida_lanzaConflictException() {
         prepararReserva(reserva(null), evento(ORGANIZADOR_ID),
-                List.of(ticket(1L, sector(1500.0), null, EstadoTicket.EXPIRADO)));
+                List.of(ticket(1L, sector(1500.0), null, EstadoTicket.LIBERADO)));
 
         assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
                 .isInstanceOf(ConflictException.class)
@@ -183,6 +183,16 @@ class ReservaPagoServiceTest {
         assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("precio");
+    }
+
+    @Test
+    void preparar_sectorConPrecioCero_lanzaConflictException() {
+        prepararReserva(reserva(null), evento(ORGANIZADOR_ID),
+                List.of(ticket(1L, sector(0.0), null, EstadoTicket.RESERVADO)));
+
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("precio válido");
     }
 
     @Test

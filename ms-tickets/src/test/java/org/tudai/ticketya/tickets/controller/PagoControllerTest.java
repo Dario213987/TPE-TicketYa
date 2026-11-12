@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -14,6 +15,7 @@ import org.tudai.ticketya.tickets.dto.TicketEmitidoDTO;
 import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
 import org.tudai.ticketya.tickets.service.PagoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
+import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
 import java.util.List;
 
@@ -27,16 +29,34 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 class PagoControllerTest {
 
     private PagoService pagoService;
+    private UserContext userContext;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
         pagoService = mock(PagoService.class);
-        UserContext userContext = mock(UserContext.class);
+        userContext = mock(UserContext.class);
         when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.CLIENTE);
         mvc = MockMvcBuilders.standaloneSetup(new PagoController(pagoService, userContext))
                 .setControllerAdvice(new GlobalExceptionHandler())
+                .addInterceptors(new AuthorizeInterceptor(userContext))
                 .build();
+    }
+
+    @Test
+    void pagar_conRolDistintoDeCliente_respondeForbiddenSinPagar() throws Exception {
+        for (Role rol : List.of(Role.ORGANIZADOR, Role.ADMINISTRADOR, Role.PERSONAL_ACCESO)) {
+            when(userContext.role()).thenReturn(rol);
+
+            mvc.perform(post("/api/tickets/reservas/99/pago")
+                            .header("Idempotency-Key", "clave-1")
+                            .contentType(MediaType.APPLICATION_JSON)
+                            .content("{\"medioPago\":\"TARJETA\"}"))
+                    .andExpect(status().isForbidden());
+        }
+
+        verifyNoInteractions(pagoService);
     }
 
     @Test

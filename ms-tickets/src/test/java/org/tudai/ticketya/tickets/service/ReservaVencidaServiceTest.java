@@ -83,7 +83,7 @@ class ReservaVencidaServiceTest {
 
         service.liberarVencidas(7L, ahora);
 
-        assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
+        assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.LIBERADO);
         assertThat(asiento.getEstado()).isEqualTo(EstadoDisponibilidad.LIBRE);
         assertThat(ticket.getAsiento()).isNull();
         assertThat(sector.getDisponibles()).isEqualTo(3);
@@ -115,6 +115,6 @@ class ReservaVencidaServiceTest {
         service.liberarVencidas(7L, ahora);
 
         assertThat(sector.getDisponibles()).isEqualTo(10);
-        assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.EXPIRADO);
+        assertThat(ticket.getEstadoTicket()).isEqualTo(EstadoTicket.LIBERADO);
     }
 }

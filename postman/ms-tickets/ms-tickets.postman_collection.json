@@ -1,0 +1,780 @@
+{
+  "info": {
+    "_postman_id": "5d3f9a2e-7c41-4b8e-9f10-2a6c1e8b3d47",
+    "name": "ms-tickets",
+    "description": "Gestion de disponibilidad y reservas de entradas. Requiere X-User-Id (numerico) y X-User-Role. Las rutas se exponen a traves del gateway bajo /api/tickets. Ejecutar en orden: la carpeta 1 crea la disponibilidad que usan las demas.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Disponibilidad",
+      "item": [
+        {
+          "name": "Publicar disponibilidad (numerado + no numerado)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 o 201\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve el eventoId\", () => pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))));",
+                  "pm.test(\"informa sectores procesados\", () => pm.expect(j.sectoresProcesados).to.be.a(\"number\"));",
+                  "pm.test(\"informa asientos insertados/omitidos\", () => { pm.expect(j.asientosInsertados).to.be.a(\"number\"); pm.expect(j.asientosOmitidos).to.be.a(\"number\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Publicar de nuevo (idempotente)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"yaExistia true\", () => pm.expect(pm.response.json().yaExistia).to.eql(true));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar disponibilidad",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve los sectores\", () => pm.expect(j.sectores).to.be.an(\"array\").that.is.not.empty);",
+                  "pm.test(\"incluye limite por cliente\", () => pm.expect(j.limiteEntradasPorCliente).to.be.a(\"number\"));",
+                  "const numerado = j.sectores.find(s => s.tipoSector === \"NUMERADO\");",
+                  "pm.test(\"el sector numerado informa asientos\", () => pm.expect(numerado.asientos).to.be.an(\"array\").that.is.not.empty);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Reservas",
+      "item": [
+        {
+          "name": "Reservar sector numerado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"cliente tomado del header\", () => pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteId\"))));",
+                  "pm.test(\"cantidad reservada\", () => pm.expect(j.cantidad).to.eql(2));",
+                  "pm.test(\"devuelve codigos QR\", () => pm.expect(j.codigosQr).to.have.lengthOf(2));",
+                  "pm.test(\"tiene expiracion\", () => pm.expect(j.expiraEl).to.exist);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNumeradoId}},\n  \"cantidad\": 2\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reservar sector no numerado",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"reserva el sector pedido\", () => pm.expect(j.sectorId).to.eql(Number(pm.collectionVariables.get(\"sectorNoNumeradoId\"))));",
+                  "pm.test(\"descuenta disponibles\", () => pm.expect(pm.response.code).to.eql(201));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNoNumeradoId}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reservar el ultimo lugar disponible",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"reserva creada\", () => pm.expect(pm.response.json().cantidad).to.be.at.least(1));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNumeradoId}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reservar superando el limite (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"detalle del limite\", () => pm.expect(pm.response.json().detail).to.include(\"limite\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNoNumeradoId}},\n  \"cantidad\": 5\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "3. Errores",
+      "item": [
+        {
+          "name": "400 cantidad invalida",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNoNumeradoId}},\n  \"cantidad\": 0\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "400 eventoId del path distinto al del cuerpo",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"detalle de la inconsistencia\", () => pm.expect(pm.response.json().detail).to.include(\"no coincide\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventoId\": 999999,\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "401 sin X-User-Id al reservar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNoNumeradoId}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol ORGANIZADOR al reservar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": {{sectorNoNumeradoId}},\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol CLIENTE al publicar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "404 disponibilidad inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/999999/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "999999",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "404 sector inexistente al reservar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"sectorId\": 999999,\n  \"cantidad\": 1\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "reservas"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "eventoId",
+      "value": "5"
+    },
+    {
+      "key": "sectorNumeradoId",
+      "value": "3"
+    },
+    {
+      "key": "sectorNoNumeradoId",
+      "value": "4"
+    },
+    {
+      "key": "clienteId",
+      "value": "42"
+    },
+    {
+      "key": "organizadorId",
+      "value": "1"
+    }
+  ]
+}
