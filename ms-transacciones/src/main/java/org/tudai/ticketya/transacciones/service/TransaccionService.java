@@ -13,6 +13,7 @@ import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.transacciones.domain.Transaccion;
 import org.tudai.ticketya.transacciones.repository.TransaccionRepository;
 import org.tudai.ticketya.transacciones.service.temp_mock_gateway.PaymentGateway;
@@ -25,16 +26,29 @@ import java.util.Optional;
 public class TransaccionService {
 
     private final TransaccionRepository repository;
-    private final PaymentGateway gateway;
+    private final PasarelaResiliente pasarela;
     private final UserContext user;
 
+    /**
+     * Crea la transacción y la procesa en la pasarela.
+     * <p>
+     * Es idempotente por ticket, cliente, organizador y tipo: si ya existe una COMPLETA o FALLIDA,
+     * la devuelve sin volver a llamar a la pasarela. Si existe una PENDIENTE (porque la pasarela
+     * no respondió en un intento anterior), la vuelve a procesar con la misma clave de
+     * idempotencia, así la pasarela no cobra dos veces.
+     *
+     * @throws RemoteServiceException si la pasarela no responde después de los reintentos; la
+     *                                transacción queda PENDIENTE para reintentarla después
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Transaccion crear(Transaccion pedido) {
         Long organizadorId = user.userId();
 
         var existente = find(pedido, organizadorId);
         if (existente.isPresent()) {
-            return existente.get();
+            Transaccion transaccion = existente.get();
+            return transaccion.getEstado() == EstadoTransaccion.PENDIENTE
+                    ? procesar(transaccion) : transaccion;
         }
 
         pedido.setOrganizadorId(organizadorId);
@@ -45,20 +59,23 @@ public class TransaccionService {
             return find(pedido, organizadorId).orElseThrow();
         }
 
-        var orden = new PaymentGateway.Orden(pedido.getId(), pedido.getTicketId(),
-                pedido.getClienteId(), pedido.getMonto());
-        PaymentGateway.Resultado resultado;
-        try {
-            resultado = pedido.getTipo() == TipoTransaccion.DEBITO
-                    ? gateway.debitar(orden) : gateway.acreditar(orden);
-        } catch (RuntimeException e) {
-            repository.deleteById(pedido.getId());
-            throw e;
-        }
+        return procesar(pedido);
+    }
 
-        pedido.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
-        pedido.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());
-        return repository.saveAndFlush(pedido);
+    private Transaccion procesar(Transaccion transaccion) {
+        var orden = new PaymentGateway.Orden(transaccion.getId(), claveIdempotencia(transaccion),
+                transaccion.getTicketId(), transaccion.getClienteId(), transaccion.getMonto());
+
+        // Si la pasarela no responde, lanza RemoteServiceException y la transacción queda PENDIENTE.
+        PaymentGateway.Resultado resultado = pasarela.procesar(transaccion.getTipo(), orden);
+
+        transaccion.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
+        transaccion.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());
+        return repository.saveAndFlush(transaccion);
+    }
+
+    static String claveIdempotencia(Transaccion transaccion) {
+        return "tx-" + transaccion.getId();
     }
 
     private Optional<Transaccion> find(Transaccion p, Long organizadorId) {
