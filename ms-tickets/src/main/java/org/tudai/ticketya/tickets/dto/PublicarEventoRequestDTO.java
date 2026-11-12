@@ -21,6 +21,8 @@ public class PublicarEventoRequestDTO {
     @Min(value = 1, message = "El limite de entradas por cliente debe ser mayor a 0")
     private Integer limiteEntradasPorCliente;
 
+    private Boolean altaDemanda;
+
     @NotEmpty(message = "El evento debe tener al menos un sector")
     @Valid
     private List<SectorDisponibilidadDTO> sectores;

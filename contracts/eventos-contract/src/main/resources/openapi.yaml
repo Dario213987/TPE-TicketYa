@@ -462,6 +462,9 @@ components:
         fecha: { type: string, format: date-time }
         estado:
           $ref: '#/components/schemas/EstadoEvento'
+        altaDemanda:
+          type: boolean
+          description: Indica que el evento usa fila virtual por alta demanda.
     EventoUpdateRequest:
       type: object
       description: |
@@ -474,6 +477,9 @@ components:
           $ref: '#/components/schemas/TipoEvento'
         fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
+        altaDemanda:
+          type: boolean
+          description: Solo modificable mientras el evento está en BORRADOR.
         sectores:
           type: array
           description: "IDs de sectores. Alias aceptado: sectorIds."
@@ -488,6 +494,10 @@ components:
           $ref: '#/components/schemas/TipoEvento'
         fecha: { type: string, format: date-time }
         lugarId: { type: integer, format: int64 }
+        altaDemanda:
+          type: boolean
+          default: false
+          description: Marca el evento como de alta demanda para habilitar la fila virtual en ms-tickets.
         participantes:
           type: array
           items:
@@ -505,6 +515,7 @@ components:
         estado:
           $ref: '#/components/schemas/EstadoEvento'
         organizadorId: { type: integer, format: int64 }
+        altaDemanda: { type: boolean }
         lugar:
           $ref: '#/components/schemas/LugarResponse'
         participantes:

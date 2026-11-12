@@ -12,5 +12,6 @@ import java.util.List;
 public class DisponibilidadEventoResponseDTO {
     private Long eventoId;
     private Integer limiteEntradasPorCliente;
+    private boolean altaDemanda;
     private List<SectorDisponibilidadResponseDTO> sectores;
 }
