@@ -62,6 +62,7 @@
                                 <useResponseEntity>false</useResponseEntity>
                                 <useFeignClientUrl>false</useFeignClientUrl>
                                 <openApiNullable>false</openApiNullable>
+                                <dateLibrary>java8-localdatetime</dateLibrary>
                                 <documentationProvider>none</documentationProvider>
                                 <annotationLibrary>none</annotationLibrary>
                                 <hideGenerationTimestamp>true</hideGenerationTimestamp>

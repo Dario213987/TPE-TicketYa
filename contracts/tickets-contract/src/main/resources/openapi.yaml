@@ -12,7 +12,9 @@ info:
     - La consulta de disponibilidad es publica.
 
     Las reservas vencidas se liberan de forma perezosa antes de reservar y antes de consultar
-    la disponibilidad.
+    la disponibilidad. Ademas, un job periodico libera todas las reservas cuyo tiempo expiro.
+    El job usa un bloqueo distribuido para que, si hay varias instancias, solo una libere cada
+    reserva.
 tags:
   - name: reservas
   - name: disponibilidad
@@ -335,7 +337,7 @@ components:
       enum: [PENDIENTE_PAGO, APROBADO, RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE]
     EstadoTicket:
       type: string
-      enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO]
+      enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
     PagoRequestDTO:
       type: object
       required: [medioPago]

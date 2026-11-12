@@ -12,7 +12,7 @@ import java.util.Set;
 @AllArgsConstructor
 @SuperBuilder
 @Entity
-@DiscriminatorValue(TipoSector.NUMERADO)
+@DiscriminatorValue("NUMERADO")
 public class SectorNumerado extends Sector {
 
     @ElementCollection
