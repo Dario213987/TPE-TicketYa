@@ -67,8 +67,7 @@ class EventoFiltroMySQLTest {
                 .ciudad("Tandil")
                 .ubicacion(Ubicacion.builder().latitud(-37.32).longitud(-59.14).build())
                 .build());
-        Participante participante = participanteRepository.save(
-                Participante.builder().nombre("Café Tacvba").build());
+        Participante participante = Participante.builder().nombre("Café Tacvba").build();
         Evento evento = Evento.builder()
                 .nombre("Festival Cafe")
                 .tipo(TipoEvento.FESTIVAL)
@@ -78,7 +77,7 @@ class EventoFiltroMySQLTest {
                 .fecha(LocalDateTime.now().plusDays(10))
                 .build();
         evento.addParticipante(participante);
-        eventoRepository.save(evento);
+        eventoRepository.saveAndFlush(evento);
 
         Page<Evento> resultado = eventoService.listarPublicados(
                 EventoFiltroRequestDTO.builder().participante("CAFE TACVBA").build(),
