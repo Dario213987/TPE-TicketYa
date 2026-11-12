@@ -1,0 +1,512 @@
+{
+	"info": {
+		"_postman_id": "aaa510fb-36d3-4115-972c-ce9621612652",
+		"name": "ms-tickets - pagar reserva",
+		"description": "TKY-56. Flujo publicar disponibilidad → reservar → pagar, por el gateway. Requiere ms-tickets y ms-transacciones levantados (la pasarela simulada aprueba todos los pagos). Ejecutar en orden: la carpeta 1 guarda reservaId e idempotencyKey.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. compra",
+			"item": [
+				{
+					"name": "Publicar disponibilidad con precio y organizador",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201 o 200\", () => pm.expect(pm.response.code).to.be.oneOf([200, 201]));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{organizadorId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "ORGANIZADOR"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"eventoId\": {{eventoId}},\n  \"organizadorId\": {{organizadorId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 100,\n      \"precio\": 1500.0\n    }\n  ]\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/disponibilidad",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"eventos",
+								"{{eventoId}}",
+								"disponibilidad"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reservar entradas",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"const j = pm.response.json();",
+									"pm.collectionVariables.set(\"reservaId\", j.idReserva);",
+									"pm.collectionVariables.set(\"idempotencyKey\", pm.variables.replaceIn(\"{{$guid}}\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"sectorId\": {{sectorId}},\n  \"cantidad\": 2\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/reservas",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"eventos",
+								"{{eventoId}}",
+								"reservas"
+							]
+						}
+					}
+				},
+				{
+					"name": "Pagar reserva",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"const j = pm.response.json();",
+									"pm.test(\"pago aprobado\", () => pm.expect(j.estadoPago).to.eql(\"APROBADO\"));",
+									"pm.test(\"registra el medio de pago\", () => pm.expect(j.medioPago).to.eql(\"TARJETA_CREDITO\"));",
+									"pm.test(\"tickets VENDIDO con QR\", () => j.tickets.forEach(t => { pm.expect(t.estado).to.eql(\"VENDIDO\"); pm.expect(t.codigoQr).to.exist; }));",
+									"pm.test(\"total = 2 x 1500\", () => pm.expect(j.total).to.eql(3000));",
+									"pm.collectionVariables.set(\"primerQr\", j.tickets[0].codigoQr);"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{idempotencyKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reintento con la misma Idempotency-Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+									"pm.test(\"devuelve la compra original\", () => pm.expect(pm.response.json().tickets[0].codigoQr).to.eql(pm.collectionVariables.get(\"primerQr\")));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{idempotencyKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				}
+			]
+		},
+		{
+			"name": "2. errores",
+			"item": [
+				{
+					"name": "Otra Idempotency-Key sobre la reserva pagada",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 409\", () => pm.response.to.have.status(409));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{$guid}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				},
+				{
+					"name": "Reserva de otro cliente",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{otroClienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{idempotencyKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				},
+				{
+					"name": "Sin Idempotency-Key",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				},
+				{
+					"name": "Rol no cliente",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "POST",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{organizadorId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "ORGANIZADOR"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							},
+							{
+								"key": "Idempotency-Key",
+								"value": "{{idempotencyKey}}"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"medioPago\": \"TARJETA_CREDITO\"\n}",
+							"options": {
+								"raw": {
+									"language": "json"
+								}
+							}
+						},
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/reservas/{{reservaId}}/pago",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"reservas",
+								"{{reservaId}}",
+								"pago"
+							]
+						}
+					}
+				}
+			]
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "eventoId",
+			"value": "7001"
+		},
+		{
+			"key": "sectorId",
+			"value": "1"
+		},
+		{
+			"key": "organizadorId",
+			"value": "5"
+		},
+		{
+			"key": "clienteId",
+			"value": "42"
+		},
+		{
+			"key": "otroClienteId",
+			"value": "43"
+		},
+		{
+			"key": "reservaId",
+			"value": ""
+		},
+		{
+			"key": "idempotencyKey",
+			"value": ""
+		},
+		{
+			"key": "primerQr",
+			"value": ""
+		}
+	]
+}
