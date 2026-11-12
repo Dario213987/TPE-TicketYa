@@ -92,9 +92,10 @@ public class ReservaPagoService {
             throw new ConflictException("El evento " + evento.getEventoId() + " no tiene organizador informado");
         }
         for (Ticket ticket : tickets) {
-            if (ticket.getSector().getPrecio() == null) {
+            Double precio = ticket.getSector().getPrecio();
+            if (precio == null || precio <= 0) {
                 throw new ConflictException(
-                        "El sector " + ticket.getSector().getSectorIdExterno() + " no tiene precio");
+                        "El sector " + ticket.getSector().getSectorIdExterno() + " no tiene un precio válido");
             }
         }
 
