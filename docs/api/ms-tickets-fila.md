@@ -9,6 +9,7 @@ La fila virtual permite ordenar a los clientes por orden de llegada cuando un ev
 3. `ms-tickets` guarda el flag en `disponibilidad_eventos.alta_demanda` y deja la venta en estado `ABIERTA`.
 4. Un cliente entra a la fila con `POST /api/tickets/eventos/{eventoId}/fila`.
 5. Si el cliente vuelve a llamar, conserva su posición y recibe `200` en lugar de `201`.
+6. Mientras espera, consulta su posición con `GET /api/tickets/eventos/{eventoId}/fila`; si ya no está en la fila recibe `404`.
 
 La venta se considera abierta solo si `disponibilidad_eventos.estado_venta` es `ABIERTA`. Si el evento no tiene disponibilidad en `ms-tickets`, la fila responde `404`; si la tiene pero `altaDemanda` es `false` o la venta no está abierta, responde `409`.
 
@@ -83,16 +84,48 @@ Respuesta `200 OK` si el cliente ya estaba en la fila:
 }
 ```
 
+### `GET /api/tickets/eventos/{eventoId}/fila`
+
+- Rol requerido: `CLIENTE`.
+- El cliente se toma del header `X-User-Id`; no se acepta en el cuerpo.
+- No requiere cuerpo.
+
+Pensado para el polling del cliente: solo lee Redis (`ZRANK` + `ZCARD` en un único
+script Lua), sin consultar la base de datos ni validar el estado de venta. Si el
+cliente no está en la fila responde `404`.
+
+Ejemplo:
+
+```bash
+curl -i http://localhost:8080/api/tickets/eventos/5/fila \
+  -H "X-User-Id: 42" \
+  -H "X-User-Role: CLIENTE"
+```
+
+Respuesta `200 OK`:
+
+```json
+{
+  "eventoId": 5,
+  "clienteId": 42,
+  "posicion": 3,
+  "personasDelante": 2,
+  "totalEnFila": 7
+}
+```
+
+`posicion` empieza en `1` y `personasDelante` es siempre `posicion - 1`.
+
 ### Códigos de estado
 
 | Código | Cuándo |
 |---|---|
-| `201` | El cliente ingresó a la fila por primera vez. |
-| `200` | El cliente ya estaba en la fila; se conserva su posición. |
+| `201` | `POST`: el cliente ingresó a la fila por primera vez. |
+| `200` | `POST`: el cliente ya estaba en la fila; se conserva su posición. `GET`: el cliente está en la fila. |
 | `401` | Falta la autenticación de usuario o `X-User-Id` no es numérico. |
 | `403` | El rol no es `CLIENTE`. |
-| `404` | El evento no tiene disponibilidad publicada en `ms-tickets`. |
-| `409` | El evento tiene disponibilidad pero no está marcado como `altaDemanda`, o la venta no está `ABIERTA`. |
+| `404` | `POST`: el evento no tiene disponibilidad publicada en `ms-tickets`. `GET`: el cliente no está en la fila. |
+| `409` | `POST`: el evento tiene disponibilidad pero no está marcado como `altaDemanda`, o la venta no está `ABIERTA`. |
 
 ## Modelo en Redis
 

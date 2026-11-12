@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Acceso a la fila virtual de un evento en Redis.
@@ -47,6 +48,14 @@ public class FilaRedisRepository {
                     redis.call('ZCARD', KEYS[1]), score}
             """, List.class);
 
+    private static final RedisScript<List> CONSULTAR = new DefaultRedisScript<>("""
+            local rank = redis.call('ZRANK', KEYS[1], ARGV[1])
+            if not rank then
+                return {}
+            end
+            return {rank, redis.call('ZCARD', KEYS[1])}
+            """, List.class);
+
     private final StringRedisTemplate redisTemplate;
 
     public Registro registrar(Long eventoId, Long clienteId) {
@@ -69,6 +78,24 @@ public class FilaRedisRepository {
                         (scoreMicros % 1_000_000) * 1_000));
     }
 
+    public Optional<Posicion> consultar(Long eventoId, Long clienteId) {
+        List<?> resultado = redisTemplate.execute(
+                CONSULTAR, List.of(clave(eventoId)), String.valueOf(clienteId));
+
+        if (resultado == null || resultado.isEmpty()) {
+            return Optional.empty();
+        }
+        if (resultado.size() < 2) {
+            throw new IllegalStateException(
+                    "No se pudo obtener la posición del cliente " + clienteId
+                            + " para el evento " + eventoId);
+        }
+
+        long posicion = numero(resultado.get(0));
+        return Optional.of(new Posicion(
+                posicion + 1, posicion, numero(resultado.get(1))));
+    }
+
     public static String clave(Long eventoId) {
         return PREFIJO_CLAVE + eventoId;
     }
@@ -82,5 +109,8 @@ public class FilaRedisRepository {
 
     public record Registro(boolean agregado, long posicion, long totalEnFila,
                            Instant ingresadoEl) {
+    }
+
+    public record Posicion(long posicion, long personasDelante, long totalEnFila) {
     }
 }

@@ -556,6 +556,99 @@
           "response": []
         },
         {
+          "name": "Consultar posición (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve posición y personas delante\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.personasDelante).to.eql(j.posicion - 1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar posición sin estar en la fila (404)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"clienteFueraFila\", String(Math.floor(Math.random() * 1000000) + 2000000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFueraFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "403 rol ORGANIZADOR",
           "event": [
             {

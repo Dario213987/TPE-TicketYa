@@ -6,6 +6,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.tickets.dto.PosicionFilaResponseDTO;
 import org.tudai.ticketya.tickets.dto.TurnoFilaResponseDTO;
 import org.tudai.ticketya.tickets.service.FilaService;
 
@@ -23,5 +24,11 @@ public class FilaController {
         TurnoFilaResponseDTO turno = filaService.entrar(eventoId, userContext.userId());
         HttpStatus estado = turno.isYaEstabaEnFila() ? HttpStatus.OK : HttpStatus.CREATED;
         return ResponseEntity.status(estado).body(turno);
+    }
+
+    @GetMapping("/{eventoId}/fila")
+    @Authorize("hasRole('CLIENTE')")
+    public ResponseEntity<PosicionFilaResponseDTO> consultarPosicion(@PathVariable Long eventoId) {
+        return ResponseEntity.ok(filaService.consultar(eventoId, userContext.userId()));
     }
 }

@@ -64,6 +64,31 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/fila:
+    get:
+      tags: [fila]
+      operationId: consultarPosicionFila
+      summary: Consulta la posición del cliente en la fila virtual
+      description: |
+        Solo el rol CLIENTE puede consultar su posición. El cliente se toma de
+        X-User-Id, nunca del cuerpo.
+
+        Pensado para polling frecuente: solo lee Redis y no consulta la base de
+        datos. Si el cliente no está en la fila responde 404.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: El cliente está en la fila
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosicionFilaResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
     post:
       tags: [fila]
       operationId: entrarEnFila
@@ -399,6 +424,24 @@ components:
           type: string
           format: date-time
           description: Momento en que el cliente ingresó a la fila.
+    PosicionFilaResponseDTO:
+      type: object
+      required: [eventoId, clienteId, posicion, personasDelante, totalEnFila]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        posicion:
+          type: integer
+          format: int64
+          description: Posición actual en la fila, empezando en 1.
+        personasDelante:
+          type: integer
+          format: int64
+          description: Cantidad de personas delante del cliente (posicion - 1).
+        totalEnFila:
+          type: integer
+          format: int64
+          description: Cantidad de clientes en la fila al momento de la consulta.
     Problema:
       type: object
       properties:

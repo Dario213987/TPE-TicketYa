@@ -7,6 +7,7 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.EstadoVenta;
+import org.tudai.ticketya.tickets.dto.PosicionFilaResponseDTO;
 import org.tudai.ticketya.tickets.dto.TurnoFilaResponseDTO;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.FilaRedisRepository;
@@ -50,6 +51,31 @@ public class FilaService {
                 .totalEnFila(registro.totalEnFila())
                 .yaEstabaEnFila(!registro.agregado())
                 .ingresadoEl(registro.ingresadoEl())
+                .build();
+    }
+
+    /**
+     * Consulta liviana para polling: solo lee Redis, sin tocar la base de datos.
+     * Si el cliente no está en la fila responde 404.
+     */
+    public PosicionFilaResponseDTO consultar(Long eventoId, Long clienteId) {
+        if (eventoId == null) {
+            throw new BadRequestException("El id del evento es obligatorio");
+        }
+        if (clienteId == null) {
+            throw new BadRequestException("El cliente es obligatorio");
+        }
+
+        FilaRedisRepository.Posicion posicion = filaRepository.consultar(eventoId, clienteId)
+                .orElseThrow(() -> new NotFoundException(
+                        "El cliente " + clienteId + " no está en la fila del evento " + eventoId));
+
+        return PosicionFilaResponseDTO.builder()
+                .eventoId(eventoId)
+                .clienteId(clienteId)
+                .posicion(posicion.posicion())
+                .personasDelante(posicion.personasDelante())
+                .totalEnFila(posicion.totalEnFila())
                 .build();
     }
 }

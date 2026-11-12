@@ -9,6 +9,7 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.EstadoVenta;
+import org.tudai.ticketya.tickets.dto.PosicionFilaResponseDTO;
 import org.tudai.ticketya.tickets.dto.TurnoFilaResponseDTO;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.FilaRedisRepository;
@@ -121,6 +122,33 @@ class FilaServiceTest {
                 .hasMessageContaining("No hay disponibilidad para el evento 7");
 
         verifyNoInteractions(filaRepository);
+    }
+
+    @Test
+    void consultar_siElClienteEsta_devuelveSuPosicionSinTocarLaBase() {
+        when(filaRepository.consultar(7L, 42L))
+                .thenReturn(Optional.of(new FilaRedisRepository.Posicion(3, 2, 5)));
+
+        PosicionFilaResponseDTO posicion = service.consultar(7L, 42L);
+
+        assertThat(posicion.getEventoId()).isEqualTo(7L);
+        assertThat(posicion.getClienteId()).isEqualTo(42L);
+        assertThat(posicion.getPosicion()).isEqualTo(3L);
+        assertThat(posicion.getPersonasDelante()).isEqualTo(2L);
+        assertThat(posicion.getTotalEnFila()).isEqualTo(5L);
+
+        verifyNoInteractions(eventoRepository);
+    }
+
+    @Test
+    void consultar_siElClienteNoEsta_lanzaNotFoundSinTocarLaBase() {
+        when(filaRepository.consultar(7L, 42L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> service.consultar(7L, 42L))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("El cliente 42 no está en la fila del evento 7");
+
+        verifyNoInteractions(eventoRepository);
     }
 
     private DisponibilidadEvento evento(boolean altaDemanda, EstadoVenta estadoVenta) {

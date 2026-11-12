@@ -72,6 +72,40 @@ class FilaRedisRepositoryTest {
     }
 
     @Test
+    void consultar_siElClienteEsta_devuelvePosicionPersonasDelanteYTotal() {
+        doReturn(List.of(2L, 5L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        FilaRedisRepository.Posicion posicion = repository.consultar(7L, 42L).orElseThrow();
+
+        assertThat(posicion.posicion()).isEqualTo(3);
+        assertThat(posicion.personasDelante()).isEqualTo(2);
+        assertThat(posicion.totalEnFila()).isEqualTo(5);
+
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(List.of(FilaRedisRepository.clave(7L))), eq("42"));
+    }
+
+    @Test
+    void consultar_siElClienteNoEsta_devuelveVacio() {
+        doReturn(List.of())
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.consultar(7L, 42L)).isEmpty();
+    }
+
+    @Test
+    void consultar_siRedisNoDevuelveElResultadoEsperado_lanzaIllegalState() {
+        doReturn(List.of(0L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThatThrownBy(() -> repository.consultar(7L, 42L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cliente 42")
+                .hasMessageContaining("evento 7");
+    }
+
+    @Test
     void clave_usaElPrefijoYElEvento() {
         assertThat(FilaRedisRepository.clave(5L)).isEqualTo("tickets:fila:evento:5");
     }

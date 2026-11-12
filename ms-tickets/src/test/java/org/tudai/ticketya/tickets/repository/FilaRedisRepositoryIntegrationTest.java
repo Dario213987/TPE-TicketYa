@@ -73,6 +73,19 @@ class FilaRedisRepositoryIntegrationTest {
     }
 
     @Test
+    void consultaLaPosicionYLaCantidadDePersonasDelante() {
+        assertThat(repository.consultar(7L, 42L)).isEmpty();
+
+        repository.registrar(7L, 42L);
+        repository.registrar(7L, 43L);
+        FilaRedisRepository.Posicion posicion = repository.consultar(7L, 43L).orElseThrow();
+
+        assertThat(posicion.posicion()).isEqualTo(2);
+        assertThat(posicion.personasDelante()).isEqualTo(1);
+        assertThat(posicion.totalEnFila()).isEqualTo(2);
+    }
+
+    @Test
     void registraEnParalelo_asignaPosicionesUnicasDelUnoAlTotal() throws Exception {
         int cantidad = 20;
         ExecutorService pool = Executors.newFixedThreadPool(cantidad);
