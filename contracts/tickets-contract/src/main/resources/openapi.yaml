@@ -78,6 +78,12 @@ paths:
         Idempotencia: un reintento con el mismo Idempotency-Key devuelve el resultado original
         (la compra o el rechazo) sin volver a cobrar ni emitir. Si la reserva ya fue procesada
         con otra clave responde 409.
+
+        Compensacion (ver ms-tickets/docs/estados-compra.md): si ms-transacciones no responde
+        (timeout o 5xx) la reserva queda PENDIENTE_PAGO, no se libera y responde 202; el
+        reintento con la misma clave consulta el estado real. Si un debito se rechaza, se
+        reintegran los aprobados. Si falla la emision despues de cobrar, se reintegra todo,
+        se libera la reserva y responde 409.
       parameters:
         - name: reservaId
           in: path
@@ -96,6 +102,12 @@ paths:
       responses:
         '201':
           description: La compra con las entradas emitidas (o la original si es un reintento)
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CompraResponseDTO'
+        '202':
+          description: El pago quedo PENDIENTE_PAGO; reintentar con la misma Idempotency-Key
           content:
             application/json:
               schema:
@@ -322,10 +334,10 @@ components:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
     EstadoPago:
       type: string
-      enum: [APROBADO, RECHAZADO]
+      enum: [PENDIENTE_PAGO, APROBADO, RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE]
     EstadoTicket:
       type: string
-      enum: [RESERVADO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO]
+      enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
     PagoRequestDTO:
       type: object
       required: [medioPago]
@@ -348,7 +360,7 @@ components:
         precio: { type: number, format: double }
     CompraResponseDTO:
       type: object
-      required: [reservaId, eventoId, clienteId, medioPago, estadoPago, total, pagadoEl, tickets]
+      required: [reservaId, eventoId, clienteId, medioPago, estadoPago, total, tickets]
       properties:
         reservaId: { type: integer, format: int64 }
         eventoId: { type: integer, format: int64 }
@@ -357,7 +369,7 @@ components:
         estadoPago:
           $ref: '#/components/schemas/EstadoPago'
         total: { type: number, format: double }
-        pagadoEl: { type: string, format: date-time }
+        pagadoEl: { type: string, format: date-time, nullable: true }
         tickets:
           type: array
           items:

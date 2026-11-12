@@ -136,7 +136,8 @@ class ReservaServiceTest {
         verify(ticketRepository).countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
                 eq(7L), eq(42L), estados.capture());
         assertThat(estados.getValue())
-                .containsExactlyInAnyOrder(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO)
+                .containsExactlyInAnyOrder(EstadoTicket.PENDIENTE_PAGO, EstadoTicket.EMITIDO,
+                        EstadoTicket.VENDIDO, EstadoTicket.USADO)
                 .doesNotContain(EstadoTicket.DEVUELTO, EstadoTicket.CANCELADO,
                         EstadoTicket.EXPIRADO, EstadoTicket.LIBERADO);
     }

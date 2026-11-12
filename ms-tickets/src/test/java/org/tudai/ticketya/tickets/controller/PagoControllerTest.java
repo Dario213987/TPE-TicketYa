@@ -70,6 +70,23 @@ class PagoControllerTest {
     }
 
     @Test
+    void pagar_pagoPendiente_respondeAcceptedParaReintentar() throws Exception {
+        when(pagoService.pagar(eq(99L), eq(42L), eq("clave-1"), any(PagoRequestDTO.class)))
+                .thenReturn(CompraResponseDTO.builder()
+                        .reservaId(99L)
+                        .estadoPago(EstadoPago.PENDIENTE_PAGO)
+                        .tickets(List.of())
+                        .build());
+
+        mvc.perform(post("/api/tickets/reservas/99/pago")
+                        .header("Idempotency-Key", "clave-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"medioPago\":\"TARJETA\"}"))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.estadoPago").value("PENDIENTE_PAGO"));
+    }
+
+    @Test
     void pagar_sinIdempotencyKey_respondeBadRequest() throws Exception {
         mvc.perform(post("/api/tickets/reservas/99/pago")
                         .contentType(MediaType.APPLICATION_JSON)
