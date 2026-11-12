@@ -51,6 +51,7 @@ import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
+import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -77,6 +78,9 @@ class EventoServiceTest {
 
     @Mock
     private LugarRepository lugarRepository;
+
+    @Mock
+    private ParticipanteRepository participanteRepository;
 
     @Mock
     private TicketsClient ticketsClient;
@@ -124,6 +128,11 @@ class EventoServiceTest {
         Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
         when(eventoRepository.findAll(org.mockito.ArgumentMatchers.<Specification<Evento>>any(), eq(pageable)))
                 .thenReturn(page);
+        ParticipanteRepository.ParticipanteIdNombre participante =
+                mock(ParticipanteRepository.ParticipanteIdNombre.class);
+        when(participante.getId()).thenReturn(3L);
+        when(participante.getNombre()).thenReturn("Soda Stereo");
+        when(participanteRepository.findAllIdAndNombre()).thenReturn(List.of(participante));
         EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
                 .tipo("RECITAL")
                 .organizadorId(7L)
@@ -136,6 +145,7 @@ class EventoServiceTest {
         assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
         verify(eventoRepository).findAll(
                 org.mockito.ArgumentMatchers.<Specification<Evento>>any(), eq(pageable));
+        verify(participanteRepository).findAllIdAndNombre();
     }
 
     @Test
@@ -150,6 +160,19 @@ class EventoServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
         verifyNoInteractions(eventoRepository);
+    }
+
+    @Test
+    void listarPublicados_conTipoInvalido_lanzaBadRequestYNoConsulta() {
+        Pageable pageable = PageRequest.of(0, 20);
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .tipo("INVALIDO")
+                .build();
+
+        assertThatThrownBy(() -> eventoService.listarPublicados(filtro, pageable))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Tipo de evento inválido: 'INVALIDO'");
+        verifyNoInteractions(eventoRepository, participanteRepository);
     }
 
     @Test

@@ -100,8 +100,8 @@ class EventoControllerTest {
                         .param("organizadorId", "7")
                         .param("participante", "Soda Stereo")
                         .param("ciudad", "Tandil")
-                        .param("fechaDesde", "01/12/2026")
-                        .param("fechaHasta", "31/12/2026"))
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<EventoFiltroRequestDTO> captor =
@@ -121,6 +121,15 @@ class EventoControllerTest {
         mvc.perform(get("/api/eventos").param("sort", "precio,asc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Solicitud inválida"));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_devuelve400YNoConsultaElServicio() throws Exception {
+        mvc.perform(get("/api/eventos").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
+
+        verifyNoInteractions(eventoService);
     }
 
     @Test

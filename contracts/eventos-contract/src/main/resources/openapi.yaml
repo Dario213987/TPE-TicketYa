@@ -18,7 +18,7 @@ paths:
       description: Paginado. Devuelve únicamente eventos en estado PUBLICADO o AGOTADO. Los filtros opcionales se combinan con AND. Ordenado por fecha por defecto.
       parameters:
         - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/EventosSize'
         - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/TipoEventoFiltro'
         - $ref: '#/components/parameters/OrganizadorId'
@@ -431,6 +431,11 @@ components:
       in: query
       description: Elementos por página (máximo 100)
       schema: { type: integer, minimum: 1, maximum: 100, default: 10 }
+    EventosSize:
+      name: size
+      in: query
+      description: Elementos por página (máximo 50)
+      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
     Sort:
       name: sort
       in: query
@@ -439,7 +444,7 @@ components:
     TipoEventoFiltro:
       name: tipo
       in: query
-      description: Tipo de evento. La comparación no distingue mayúsculas/minúsculas.
+      description: Tipo de evento. La comparación no distingue mayúsculas/minúsculas. Un valor inválido devuelve 400.
       schema:
         $ref: '#/components/schemas/TipoEvento'
     OrganizadorId:
@@ -450,7 +455,7 @@ components:
     Participante:
       name: participante
       in: query
-      description: Nombre de un participante/artista. Coincidencia exacta sin distinguir mayúsculas ni tildes.
+      description: Nombre de un participante/artista. Coincidencia exacta, no parcial, sin distinguir mayúsculas ni tildes.
       schema: { type: string }
     Ciudad:
       name: ciudad
@@ -460,19 +465,19 @@ components:
     FechaDesde:
       name: fechaDesde
       in: query
-      description: Fecha mínima inclusive del evento, en formato dd/MM/yyyy.
+      description: Fecha mínima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
       schema:
         type: string
-        pattern: '^\d{2}/\d{2}/\d{4}$'
-        example: '01/12/2026'
+        format: date
+        example: '2026-12-01'
     FechaHasta:
       name: fechaHasta
       in: query
-      description: Fecha máxima inclusive del evento, en formato dd/MM/yyyy.
+      description: Fecha máxima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
       schema:
         type: string
-        pattern: '^\d{2}/\d{2}/\d{4}$'
-        example: '31/12/2026'
+        format: date
+        example: '2026-12-31'
     EventoId:
       name: eventoId
       in: path

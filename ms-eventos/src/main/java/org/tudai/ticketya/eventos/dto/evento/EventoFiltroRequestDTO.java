@@ -18,9 +18,9 @@ public class EventoFiltroRequestDTO {
     private String participante;
     private String ciudad;
 
-    @DateTimeFormat(pattern = "dd/MM/yyyy")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate fechaDesde;
 
-    @DateTimeFormat(pattern = "dd/MM/yyyy")
+    @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate fechaHasta;
 }
