@@ -9,9 +9,9 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.eventos.dto.lugar.LugarCreateDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarDetalleResponseDTO;
-import org.tudai.ticketya.eventos.dto.lugar.LugarResponseDTO;
+import org.tudai.ticketya.contract.eventos.model.LugarCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.LugarDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.LugarResponse;
 import org.tudai.ticketya.eventos.service.LugarService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 
@@ -45,16 +45,15 @@ class LugarControllerTest {
 
     @Test
     void crearLugar_conDatosValidos_devuelve201() throws Exception {
-        LugarResponseDTO response = LugarResponseDTO.builder()
+        LugarResponse response = new LugarResponse()
                 .id(5L)
                 .nombre("Estadio Municipal")
                 .tipo("ESTADIO")
                 .direccion("Av. Siempre Viva 742")
                 .ciudad("Rosario")
                 .latitud(-32.95)
-                .longitud(-60.64)
-                .build();
-        when(lugarService.crearLugar(any(LugarCreateDTO.class))).thenReturn(response);
+                .longitud(-60.64);
+        when(lugarService.crearLugar(any(LugarCreateRequest.class))).thenReturn(response);
 
         mvc.perform(post("/api/lugares")
                         .contentType(MediaType.APPLICATION_JSON)
@@ -125,14 +124,13 @@ class LugarControllerTest {
 
     @Test
     void listarLugares_devuelveLaPaginaDelServicio() throws Exception {
-        LugarDetalleResponseDTO lugar = LugarDetalleResponseDTO.builder()
+        LugarDetalleResponse lugar = new LugarDetalleResponse()
                 .id(1L)
                 .nombre("Estadio Municipal")
                 .ciudad("Rosario")
                 .latitud(-32.95)
                 .longitud(-60.64)
-                .sectores(List.of())
-                .build();
+                .sectores(List.of());
         when(lugarService.listarLugares(isNull(), any(Pageable.class)))
                 .thenReturn(new PageImpl<>(List.of(lugar)));
 
@@ -157,14 +155,13 @@ class LugarControllerTest {
 
     @Test
     void obtenerLugar_existente_devuelve200() throws Exception {
-        LugarDetalleResponseDTO response = LugarDetalleResponseDTO.builder()
+        LugarDetalleResponse response = new LugarDetalleResponse()
                 .id(3L)
                 .nombre("Teatro El Círculo")
                 .ciudad("Rosario")
                 .latitud(-32.95)
                 .longitud(-60.64)
-                .sectores(List.of())
-                .build();
+                .sectores(List.of());
         when(lugarService.obtenerLugar(3L)).thenReturn(response);
 
         mvc.perform(get("/api/lugares/3"))

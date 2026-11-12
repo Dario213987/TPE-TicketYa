@@ -137,7 +137,8 @@ class ReservaServiceTest {
                 eq(7L), eq(42L), estados.capture());
         assertThat(estados.getValue())
                 .containsExactlyInAnyOrder(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO)
-                .doesNotContain(EstadoTicket.DEVUELTO, EstadoTicket.CANCELADO, EstadoTicket.EXPIRADO);
+                .doesNotContain(EstadoTicket.DEVUELTO, EstadoTicket.CANCELADO,
+                        EstadoTicket.EXPIRADO, EstadoTicket.LIBERADO);
     }
 
     @Test
@@ -343,6 +344,48 @@ class ReservaServiceTest {
 
         assertThat(sector.getDisponibles()).isEqualTo(5);
         verifyNoInteractions(asientoRepository);
+    }
+
+    @Test
+    void reservar_sectorNoNumerado_sinDisponiblesSuficientes_lanzaConflictYNoModifica() {
+        DisponibilidadEvento evento = evento(7L, 5);
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 10, 2);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.of(sector));
+        when(ticketRepository.countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
+                eq(7L), eq(42L), any())).thenReturn(0L);
+        when(ticketRepository.contarReservasVigentes(eq(7L), eq(42L), eq(EstadoTicket.RESERVADO), any()))
+                .thenReturn(0L);
+
+        assertThatThrownBy(() -> service.reservar(7L, 42L, reserva(3L, 3)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No hay entradas suficientes");
+
+        assertThat(sector.getDisponibles()).isEqualTo(2);
+        verify(ticketRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void reservar_sectorNoNumerado_ultimoLugar_noQuedaNegativo() {
+        DisponibilidadEvento evento = evento(7L, 5);
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 10, 1);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.of(sector));
+        when(ticketRepository.countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
+                eq(7L), eq(42L), any())).thenReturn(0L);
+        when(ticketRepository.contarReservasVigentes(eq(7L), eq(42L), eq(EstadoTicket.RESERVADO), any()))
+                .thenReturn(0L);
+
+        service.reservar(7L, 42L, reserva(3L, 1));
+        assertThat(sector.getDisponibles()).isZero();
+
+        assertThatThrownBy(() -> service.reservar(7L, 43L, reserva(3L, 1)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No hay entradas suficientes");
+
+        assertThat(sector.getDisponibles()).isZero();
     }
 
     @Test

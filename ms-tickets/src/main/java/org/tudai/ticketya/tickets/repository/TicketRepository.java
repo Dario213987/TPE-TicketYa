@@ -34,4 +34,14 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Ticket> findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
             Long eventoId, EstadoTicket estado, Instant ahora);
+
+    List<Ticket> findByReserva_Id(Long reservaId);
+
+    @Query("""
+            select distinct t.evento.eventoId from Ticket t
+            where t.estadoTicket = :estado
+              and t.expiraEl <= :ahora
+            """)
+    List<Long> findEventosConReservasVencidas(@Param("estado") EstadoTicket estado,
+                                              @Param("ahora") Instant ahora);
 }

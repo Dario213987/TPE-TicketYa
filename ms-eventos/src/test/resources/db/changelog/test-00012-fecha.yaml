@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - include:
+      file: db/changelog/00001-crear-tabla-lugar.xml
+  - include:
+      file: db/changelog/00003-crear-tabla-evento.xml
+  - changeSet:
+      id: test-insert-evento-con-fecha-date
+      author: ticketya
+      changes:
+        - sql:
+            sql: "INSERT INTO eventos (id, nombre, fecha, estado) VALUES (1, 'Evento viejo', DATE '2026-01-15', 0)"
+  - include:
+      file: db/changelog/00012-cambiar-fecha-evento-a-timestamp.xml

@@ -212,7 +212,7 @@ class PagoServiceTest {
     @Test
     void pagar_reservaVencida_lanzaConflictExceptionSinCobrar() {
         Ticket expirado = ticket(1L, sector(1500.0), null);
-        expirado.setEstadoTicket(EstadoTicket.EXPIRADO);
+        expirado.setEstadoTicket(EstadoTicket.LIBERADO);
         prepararReservaVigente(reserva(), evento(ORGANIZADOR_ID), List.of(expirado));
 
         assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago("TARJETA")))
