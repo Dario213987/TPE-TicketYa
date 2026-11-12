@@ -1,17 +1,17 @@
-package org.tudai.ticketya.eventos.dto.evento;
+package org.tudai.ticketya.eventos.client.dto;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 
+import java.util.List;
+
 @Data
-@Builder
 @NoArgsConstructor
 @AllArgsConstructor
-public class PrecioEventoSectorResponseDTO {
-
+@Builder
+public class DisponibilidadEventoResponse {
     private Long eventoId;
-    private Long sectorId;
-    private Double precio;
+    private List<SectorDisponibilidadResponse> sectores;
 }

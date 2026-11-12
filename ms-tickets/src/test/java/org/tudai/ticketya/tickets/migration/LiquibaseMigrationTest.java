@@ -51,6 +51,7 @@ class LiquibaseMigrationTest {
                         "disponibilidad_asientos",
                         "tickets",
                         "reservas",
+                        "bloqueos_job",
                         "ventas",
                         "venta_items");
     }
@@ -72,7 +73,7 @@ class LiquibaseMigrationTest {
         assertThat(columnas("tickets"))
                 .containsExactlyInAnyOrder("id", "codigo_qr", "estado_ticket", "precio",
                         "fecha_emision", "cliente_id", "expira_el", "evento_id", "sector_id",
-                        "asiento_id", "reserva_id", "venta_id");
+                        "asiento_id", "reserva_id", "venta_id", "pago_en_curso");
 
         assertThat(columnas("ventas"))
                 .containsExactlyInAnyOrder("id", "reserva_id", "cliente_id", "evento_id", "total",
@@ -85,7 +86,7 @@ class LiquibaseMigrationTest {
         assertThat(columnas("reservas"))
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
                         "expira_el", "creado_el", "idempotency_key", "medio_pago", "estado_pago",
-                        "motivo_rechazo", "pagado_el");
+                        "motivo_rechazo", "pagado_el", "pago_en_curso");
     }
 
     @Test
@@ -95,7 +96,7 @@ class LiquibaseMigrationTest {
                 .contains("idx_disponibilidad_asiento_evento_estado",
                         "idx_disponibilidad_asiento_sector_estado");
         assertThat(indices("tickets"))
-                .contains("idx_tickets_evento_cliente_estado");
+                .contains("idx_tickets_evento_cliente_estado", "idx_tickets_estado_expira");
         assertThat(indices("reservas")).contains("idx_reservas_evento_cliente");
 
         assertThat(restricciones("disponibilidad_sectores"))
@@ -123,8 +124,9 @@ class LiquibaseMigrationTest {
     void laMigracionEsIdempotente() throws Exception {
         liquibase.update(new Contexts());
 
-        assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas");
-        assertThat(contarCambiosAplicados()).isEqualTo(7);
+        assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
+                "bloqueos_job");
+        assertThat(contarCambiosAplicados()).isEqualTo(8);
     }
 
     @Test
