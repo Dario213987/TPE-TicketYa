@@ -13,12 +13,11 @@ public interface EventoRepositoryCustom {
 
     /**
      * Busca eventos aplicando la {@code Specification} recibida y los ordena por el
-     * precio mínimo de los sectores de su lugar, de menor a mayor. La paginación se
-     * resuelve en la base.
+     * precio mínimo de los sectores configurados para el evento, de menor a mayor.
+     * La paginación se resuelve en la base.
      *
-     * Los eventos sin precio (lugar sin sectores o con todos los precios nulos)
-     * quedan al final. Los empates se desempatan por id para que la paginación
-     * sea estable.
+     * Los eventos sin precio quedan al final. Los empates se desempatan por id para
+     * que la paginación sea estable.
      *
      * Ignora el orden del {@code Pageable}: el criterio lo define la propia consulta.
      *
@@ -33,7 +32,7 @@ public interface EventoRepositoryCustom {
      * Busca eventos aplicando la {@code Specification} recibida y los ordena por
      * relevancia: primero los {@code PUBLICADO} y después los {@code AGOTADO}.
      * Dentro de cada estado ordena por fecha ascendente y desempata por id para
-     * que la paginación sea estable.
+     * que la paginación sea estable. {@code CANCELADO} no se lista.
      *
      * Ignora el orden del {@code Pageable}: el criterio lo define la propia consulta.
      *

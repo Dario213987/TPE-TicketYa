@@ -74,7 +74,7 @@ class EventoControllerTest {
                 .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
-        Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
+        Pageable pageable = PageRequest.of(0, 20);
         when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(evento), pageable, 1));
 
@@ -91,7 +91,7 @@ class EventoControllerTest {
 
     @Test
     void listarEventos_conFiltros_bindeaTodosLosParametros() throws Exception {
-        Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
+        Pageable pageable = PageRequest.of(0, 20);
         when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(), pageable, 0));
 
@@ -100,8 +100,8 @@ class EventoControllerTest {
                         .param("organizadorId", "7")
                         .param("participante", "Soda Stereo")
                         .param("ciudad", "Tandil")
-                        .param("fechaDesde", "01/12/2026")
-                        .param("fechaHasta", "31/12/2026"))
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
                 .andExpect(status().isOk());
 
         ArgumentCaptor<EventoFiltroRequestDTO> captor =
@@ -152,6 +152,18 @@ class EventoControllerTest {
     }
 
     @Test
+    void listarEventos_conSortLegado_loConservaEnElPageable() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "nombre"));
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        mvc.perform(get("/api/eventos").param("sort", "nombre,desc"))
+                .andExpect(status().isOk());
+
+        verify(eventoService).listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable));
+    }
+
+    @Test
     void listarEventos_conOrdenInvalido_devuelve400ConLosValoresPermitidos() throws Exception {
         when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
                 .thenThrow(new BadRequestException(
@@ -169,6 +181,15 @@ class EventoControllerTest {
         mvc.perform(get("/api/eventos").param("sort", "precio,asc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Solicitud inválida"));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_devuelve400YNoConsultaElServicio() throws Exception {
+        mvc.perform(get("/api/eventos").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
+
+        verifyNoInteractions(eventoService);
     }
 
     @Test

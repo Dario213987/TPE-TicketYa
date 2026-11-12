@@ -6,8 +6,8 @@ import jakarta.persistence.TypedQuery;
 import jakarta.persistence.criteria.CriteriaBuilder;
 import jakarta.persistence.criteria.CriteriaQuery;
 import jakarta.persistence.criteria.Expression;
-import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.JoinType;
+import jakarta.persistence.criteria.MapJoin;
 import jakarta.persistence.criteria.Predicate;
 import jakarta.persistence.criteria.Root;
 import org.springframework.data.domain.Page;
@@ -16,8 +16,6 @@ import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.domain.Specification;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
-import org.tudai.ticketya.eventos.domain.Lugar;
-import org.tudai.ticketya.eventos.domain.Sector;
 
 import java.util.List;
 
@@ -33,8 +31,8 @@ public class EventoRepositoryImpl implements EventoRepositoryCustom {
     /**
      * {@inheritDoc}
      *
-     * Hace {@code LEFT JOIN} de evento a lugar y de lugar a sectores, agrupa por id de evento
-     * y ordena por {@code MIN(precio)}. Desactiva {@code distinct} porque la base no permite
+     * Hace {@code LEFT JOIN} de evento a sus precios por sector, agrupa por id de evento y
+     * ordena por el mínimo de esos precios. Desactiva {@code distinct} porque la base no permite
      * ordenar por una agregación junto con {@code DISTINCT}; los duplicados se evitan con el
      * {@code GROUP BY}. El total se calcula con una consulta {@code count} aparte, con los
      * mismos filtros.
@@ -49,9 +47,8 @@ public class EventoRepositoryImpl implements EventoRepositoryCustom {
         query.where(predicate);
         query.distinct(false);
 
-        Join<Evento, Lugar> lugar = root.join("lugar", JoinType.LEFT);
-        Join<Lugar, Sector> sector = lugar.join("sectores", JoinType.LEFT);
-        Expression<Double> precioMinimo = criteriaBuilder.min(sector.get("precio").as(Double.class));
+        MapJoin<Evento, Long, Double> precios = root.joinMap("preciosSectores", JoinType.LEFT);
+        Expression<Double> precioMinimo = criteriaBuilder.min(precios.value());
 
         query.groupBy(root.get("id"));
         query.orderBy(

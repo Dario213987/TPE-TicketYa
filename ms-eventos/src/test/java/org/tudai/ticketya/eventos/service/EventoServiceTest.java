@@ -53,6 +53,7 @@ import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
+import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -79,6 +80,9 @@ class EventoServiceTest {
 
     @Mock
     private LugarRepository lugarRepository;
+
+    @Mock
+    private ParticipanteRepository participanteRepository;
 
     @Mock
     private TicketsClient ticketsClient;
@@ -144,8 +148,62 @@ class EventoServiceTest {
     }
 
     @Test
+    void listarPublicados_conOrdenPrecio_delegaEnLaConsultaSinUsarElOrdenDelPageable() {
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .orden("precio")
+                .build();
+        Pageable pageable = PageRequest.of(1, 5, Sort.by("nombre"));
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.buscarPorPrecio(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(eventoRepository).buscarPorPrecio(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getPageNumber()).isEqualTo(1);
+        assertThat(pageableCaptor.getValue().getPageSize()).isEqualTo(5);
+        assertThat(pageableCaptor.getValue().getSort().isSorted()).isFalse();
+        verify(eventoRepository, never()).findAll(any(Specification.class), any(Pageable.class));
+    }
+
+    @Test
     void listarPublicados_sinOrden_ordenaPorFechaAscendenteYDesempataPorId() {
         EventoFiltroRequestDTO filtro = new EventoFiltroRequestDTO();
+        Pageable pageable = PageRequest.of(0, 20);
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(eventoRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().toList())
+                .containsExactly(Sort.Order.asc("fecha"), Sort.Order.asc("id"));
+    }
+
+    @Test
+    void listarPublicados_sinOrden_conSortLegado_respetaElOrdenDelPageable() {
+        EventoFiltroRequestDTO filtro = new EventoFiltroRequestDTO();
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "nombre"));
+        Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
+        when(eventoRepository.findAll(any(Specification.class), any(Pageable.class)))
+                .thenReturn(page);
+
+        assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
+
+        ArgumentCaptor<Pageable> pageableCaptor = ArgumentCaptor.forClass(Pageable.class);
+        verify(eventoRepository).findAll(any(Specification.class), pageableCaptor.capture());
+        assertThat(pageableCaptor.getValue().getSort().toList())
+                .containsExactly(Sort.Order.desc("nombre"));
+    }
+
+    @Test
+    void listarPublicados_conOrdenFecha_tienePrioridadSobreElSortDelPageable() {
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .orden("fecha")
+                .build();
         Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "nombre"));
         Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
         when(eventoRepository.findAll(any(Specification.class), any(Pageable.class)))
@@ -177,6 +235,11 @@ class EventoServiceTest {
         Page<Evento> page = new PageImpl<>(List.of(Evento.builder().id(1L).build()));
         when(eventoRepository.findAll(org.mockito.ArgumentMatchers.<Specification<Evento>>any(),
                 any(Pageable.class))).thenReturn(page);
+        ParticipanteRepository.ParticipanteIdNombre participante =
+                mock(ParticipanteRepository.ParticipanteIdNombre.class);
+        when(participante.getId()).thenReturn(3L);
+        when(participante.getNombre()).thenReturn("Soda Stereo");
+        when(participanteRepository.findAllIdAndNombre()).thenReturn(List.of(participante));
         EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
                 .tipo("RECITAL")
                 .organizadorId(7L)
@@ -189,6 +252,7 @@ class EventoServiceTest {
         assertThat(eventoService.listarPublicados(filtro, pageable)).isSameAs(page);
         verify(eventoRepository).findAll(
                 org.mockito.ArgumentMatchers.<Specification<Evento>>any(), any(Pageable.class));
+        verify(participanteRepository).findAllIdAndNombre();
     }
 
     @Test
@@ -203,6 +267,19 @@ class EventoServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessage("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
         verifyNoInteractions(eventoRepository);
+    }
+
+    @Test
+    void listarPublicados_conTipoInvalido_lanzaBadRequestYNoConsulta() {
+        Pageable pageable = PageRequest.of(0, 20);
+        EventoFiltroRequestDTO filtro = EventoFiltroRequestDTO.builder()
+                .tipo("INVALIDO")
+                .build();
+
+        assertThatThrownBy(() -> eventoService.listarPublicados(filtro, pageable))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("Tipo de evento inválido: 'INVALIDO'");
+        verifyNoInteractions(eventoRepository, participanteRepository);
     }
 
     @Test

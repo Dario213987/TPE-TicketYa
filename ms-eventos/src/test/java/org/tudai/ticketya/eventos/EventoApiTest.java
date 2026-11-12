@@ -27,6 +27,7 @@ import org.tudai.ticketya.eventos.service.EventoService;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -162,6 +163,27 @@ class EventoApiTest {
     }
 
     @Test
+    void listarEventos_soloDevuelvePublicadosYAgotados() throws Exception {
+        for (EstadoEvento estado : EstadoEvento.values()) {
+            eventoRepository.save(Evento.builder()
+                    .nombre("Evento " + estado)
+                    .descripcion("Listado por estado")
+                    .tipo(TipoEvento.RECITAL)
+                    .fecha(LocalDateTime.now().plusDays(10))
+                    .lugar(lugar)
+                    .organizadorId(7L)
+                    .estado(estado)
+                    .build());
+        }
+
+        mvc.perform(get("/api/eventos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.content[*].estado",
+                        containsInAnyOrder("PUBLICADO", "AGOTADO")));
+    }
+
+    @Test
     void listarEventos_filtraPorTipoCiudadYOrganizador() throws Exception {
         Lugar otroLugar = guardarLugar("Mar del Plata");
         guardarEvento("Recital Tandil", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
@@ -208,8 +230,8 @@ class EventoApiTest {
                 lugar, LocalDateTime.of(2027, 1, 1, 0, 30));
 
         mvc.perform(get("/api/eventos")
-                        .param("fechaDesde", "01/12/2026")
-                        .param("fechaHasta", "31/12/2026"))
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].nombre").value("Primer día"))
@@ -217,35 +239,39 @@ class EventoApiTest {
     }
 
     @Test
-    void listarEventos_sinFiltros_devuelveSoloVisibles() throws Exception {
-        guardarEvento("Publicado", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
-                lugar, LocalDateTime.of(2026, 12, 1, 20, 0));
-        guardarEvento("Agotado", TipoEvento.FESTIVAL, EstadoEvento.AGOTADO, 7L,
-                lugar, LocalDateTime.of(2026, 12, 2, 20, 0));
-        guardarEvento("Borrador", TipoEvento.RECITAL, EstadoEvento.BORRADOR, 7L,
-                lugar, LocalDateTime.of(2026, 12, 3, 20, 0));
-        guardarEvento("Cancelado", TipoEvento.RECITAL, EstadoEvento.CANCELADO, 7L,
-                lugar, LocalDateTime.of(2026, 12, 4, 20, 0));
-        guardarEvento("Suspendido", TipoEvento.RECITAL, EstadoEvento.SUSPENDIDO, 7L,
-                lugar, LocalDateTime.of(2026, 12, 5, 20, 0));
-        guardarEvento("Finalizado", TipoEvento.RECITAL, EstadoEvento.FINALIZADO, 7L,
-                lugar, LocalDateTime.of(2026, 12, 6, 20, 0));
-
-        mvc.perform(get("/api/eventos"))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.totalElements").value(2))
-                .andExpect(jsonPath("$.content[0].nombre").value("Publicado"))
-                .andExpect(jsonPath("$.content[1].nombre").value("Agotado"));
-    }
-
-    @Test
     void listarEventos_conRangoInvertido_devuelve400() throws Exception {
         mvc.perform(get("/api/eventos")
-                        .param("fechaDesde", "31/12/2026")
-                        .param("fechaHasta", "01/12/2026"))
+                        .param("fechaDesde", "2026-12-31")
+                        .param("fechaHasta", "2026-12-01"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail")
                         .value("La fecha 'desde' no puede ser posterior a la fecha 'hasta'"));
+    }
+
+    @Test
+    void listarEventos_conTipoInvalido_devuelve400() throws Exception {
+        mvc.perform(get("/api/eventos").param("tipo", "INVALIDO"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                        "Tipo de evento inválido: 'INVALIDO'. Valores válidos: RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO"));
+    }
+
+    @Test
+    void listarEventos_participanteParcial_noDevuelveCoincidencias() throws Exception {
+        guardarEvento("Recital Soda", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 11, 20, 0),
+                Participante.builder().nombre("Soda Stereo").build());
+
+        mvc.perform(get("/api/eventos").param("participante", "Soda"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_devuelve400() throws Exception {
+        mvc.perform(get("/api/eventos").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
     }
 
     @Test
