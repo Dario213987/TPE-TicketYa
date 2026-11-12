@@ -33,6 +33,12 @@ public class EstadoVentaController {
         disponibilidadService.actualizarEstadoVenta(eventoId, EstadoVenta.SUSPENDIDA);
     }
 
+    @PutMapping("/{eventoId}/agotar")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void agotar(@PathVariable Long eventoId) {
+        disponibilidadService.actualizarEstadoVenta(eventoId, EstadoVenta.AGOTADA);
+    }
+
     @PutMapping("/{eventoId}/reactivar")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     public void reactivar(@PathVariable Long eventoId) {

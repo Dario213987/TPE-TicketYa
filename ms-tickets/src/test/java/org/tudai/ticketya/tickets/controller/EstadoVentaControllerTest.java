@@ -46,6 +46,14 @@ class EstadoVentaControllerTest {
     }
 
     @Test
+    void agotar_marcaLaVentaComoAgotadaYCierraElIngresoALaFila() throws Exception {
+        mvc.perform(put("/api/tickets/internal/eventos/5/agotar"))
+                .andExpect(status().isNoContent());
+
+        verify(service).actualizarEstadoVenta(5L, EstadoVenta.AGOTADA);
+    }
+
+    @Test
     void reactivar_reabreLaVenta() throws Exception {
         mvc.perform(put("/api/tickets/internal/eventos/5/reactivar"))
                 .andExpect(status().isNoContent());

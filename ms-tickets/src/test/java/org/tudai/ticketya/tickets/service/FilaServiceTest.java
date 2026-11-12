@@ -100,6 +100,19 @@ class FilaServiceTest {
     }
 
     @Test
+    void entrar_eventoAgotado_lanzaConflictYNoTocaRedis() {
+        when(eventoRepository.findById(7L))
+                .thenReturn(Optional.of(evento(true, EstadoVenta.AGOTADA)));
+
+        assertThatThrownBy(() -> service.entrar(7L, 42L))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no está abierta")
+                .hasMessageContaining("AGOTADA");
+
+        verifyNoInteractions(filaRepository);
+    }
+
+    @Test
     void entrar_eventoSinDisponibilidad_lanzaNotFoundYNoTocaRedis() {
         when(eventoRepository.findById(7L)).thenReturn(Optional.empty());
 

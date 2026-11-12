@@ -19,6 +19,7 @@ La venta se considera abierta solo si `disponibilidad_eventos.estado_venta` es `
 | Estado | Cuándo |
 |---|---|
 | `ABIERTA` | El evento se publicó y admite reservas e ingresos a la fila. |
+| `AGOTADA` | `ms-eventos` marcó el evento como agotado. |
 | `SUSPENDIDA` | `ms-eventos` suspendió el evento. |
 | `CANCELADA` | `ms-eventos` canceló el evento. |
 | `FINALIZADA` | `ms-eventos` finalizó el evento. |
@@ -32,6 +33,7 @@ Estos endpoints son servicio-a-servicio, no requieren headers de usuario y son i
 | Método | Ruta | Efecto |
 |---|---|---|
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/cancelar` | Pasa la venta a `CANCELADA`. |
+| `PUT` | `/api/tickets/internal/eventos/{eventoId}/agotar` | Pasa la venta a `AGOTADA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/suspender` | Pasa la venta a `SUSPENDIDA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/reactivar` | Vuelve la venta a `ABIERTA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/finalizar` | Pasa la venta a `FINALIZADA`. |

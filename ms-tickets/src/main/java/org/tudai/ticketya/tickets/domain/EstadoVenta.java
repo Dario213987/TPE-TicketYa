@@ -9,6 +9,7 @@ package org.tudai.ticketya.tickets.domain;
  */
 public enum EstadoVenta {
     ABIERTA,
+    AGOTADA,
     SUSPENDIDA,
     CANCELADA,
     FINALIZADA

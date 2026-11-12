@@ -26,6 +26,8 @@ public interface TicketsClient {
     void actualizarAltaDemanda(@PathVariable("eventoId") Long eventoId,
                                @RequestParam("altaDemanda") boolean altaDemanda);
 
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/agotar")
+    void agotarEvento(@PathVariable("eventoId") Long eventoId);
 
     @PutMapping("/api/tickets/internal/eventos/{eventoId}/cancelar")
     void cancelarEvento(@PathVariable("eventoId") Long eventoId);
