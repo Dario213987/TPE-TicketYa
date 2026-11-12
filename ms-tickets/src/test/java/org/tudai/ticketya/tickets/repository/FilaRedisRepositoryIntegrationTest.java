@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.DataType;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.testcontainers.containers.GenericContainer;
@@ -43,6 +44,9 @@ class FilaRedisRepositoryIntegrationTest {
         connectionFactory = new LettuceConnectionFactory(
                 REDIS.getHost(), REDIS.getMappedPort(6379));
         connectionFactory.afterPropertiesSet();
+        try (RedisConnection connection = connectionFactory.getConnection()) {
+            connection.serverCommands().flushAll();
+        }
         redisTemplate = new StringRedisTemplate(connectionFactory);
         repository = new FilaRedisRepository(redisTemplate);
     }
