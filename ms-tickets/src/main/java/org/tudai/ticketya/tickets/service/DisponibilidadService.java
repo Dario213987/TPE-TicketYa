@@ -155,6 +155,28 @@ public class DisponibilidadService {
         eventoRepository.save(evento);
     }
 
+    /**
+     * Sincroniza la condición de alta demanda de la disponibilidad de un evento.
+     * <p>
+     * Lo usa {@code ms-eventos} al reintentar una publicación que quedó a medias:
+     * la disponibilidad ya existe en {@code ms-tickets} pero el evento todavía
+     * está en {@code BORRADOR} y el organizador pudo haber cambiado el flag.
+     * Es idempotente y no hace nada si todavía no hay disponibilidad.
+     *
+     * @param eventoId    id del evento
+     * @param altaDemanda nuevo valor del flag
+     */
+    @Transactional
+    public void actualizarAltaDemanda(Long eventoId, boolean altaDemanda) {
+        eventoRepository.findByIdForUpdate(eventoId).ifPresent(evento -> {
+            if (evento.isAltaDemanda() == altaDemanda) {
+                return;
+            }
+            evento.setAltaDemanda(altaDemanda);
+            eventoRepository.save(evento);
+        });
+    }
+
     @Transactional
     public DisponibilidadEventoResponseDTO consultar(Long eventoId) {
         List<DisponibilidadSector> sectores = sectorRepository.findByEvento_EventoIdOrderByIdAsc(eventoId);

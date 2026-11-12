@@ -6,6 +6,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadResponse;
 import org.tudai.ticketya.eventos.client.dto.PublicarEventoRequest;
@@ -20,6 +21,11 @@ public interface TicketsClient {
 
     @GetMapping("/api/tickets/eventos/{eventoId}/disponibilidad")
     DisponibilidadEventoResponse consultarDisponibilidad(@PathVariable("eventoId") Long eventoId);
+
+    @PutMapping("/api/tickets/internal/eventos/{eventoId}/alta-demanda")
+    void actualizarAltaDemanda(@PathVariable("eventoId") Long eventoId,
+                               @RequestParam("altaDemanda") boolean altaDemanda);
+
 
     @PutMapping("/api/tickets/internal/eventos/{eventoId}/cancelar")
     void cancelarEvento(@PathVariable("eventoId") Long eventoId);

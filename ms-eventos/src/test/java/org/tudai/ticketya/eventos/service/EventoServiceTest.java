@@ -598,6 +598,38 @@ class EventoServiceTest {
     }
 
     @Test
+    void publicarEvento_cuandoLaDisponibilidadYaExistia_sincronizaAltaDemandaAntesDeCrear() {
+        Evento evento = eventoPublicable();
+        evento.setAltaDemanda(true);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(any(Evento.class))).thenAnswer(inv -> inv.getArgument(0));
+
+        eventoService.publicarEvento(1L, 7L, false);
+
+        InOrder orden = inOrder(ticketsClient);
+        orden.verify(ticketsClient).actualizarAltaDemanda(1L, true);
+        orden.verify(ticketsClient).crearDisponibilidad(eq(1L), any(PublicarEventoRequest.class));
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+    }
+
+    @Test
+    void publicarEvento_siFallaLaSincronizacionDeAltaDemanda_noCreaDisponibilidad() {
+        Evento evento = eventoPublicable();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        doThrow(mock(RetryableException.class)).when(ticketsClient)
+                .actualizarAltaDemanda(1L, false);
+
+        assertThatThrownBy(() -> eventoService.publicarEvento(1L, 7L, false))
+                .isInstanceOf(RemoteServiceException.class)
+                .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.BORRADOR);
+        verify(ticketsClient, never()).crearDisponibilidad(any(), any());
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
     void publicarEvento_yaPublicado_esIdempotente() {
         Evento evento = Evento.builder()
                 .id(1L)

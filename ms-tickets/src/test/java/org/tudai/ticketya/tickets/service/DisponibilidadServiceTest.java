@@ -335,6 +335,44 @@ class DisponibilidadServiceTest {
         verify(eventoRepository, never()).save(any(DisponibilidadEvento.class));
     }
 
+    @Test
+    void actualizarAltaDemanda_cuandoExiste_actualizaElFlag() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.now())
+                .altaDemanda(false)
+                .build();
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existente));
+
+        service.actualizarAltaDemanda(7L, true);
+
+        assertThat(existente.isAltaDemanda()).isTrue();
+        verify(eventoRepository).save(existente);
+    }
+
+    @Test
+    void actualizarAltaDemanda_conElMismoValor_esIdempotenteYNoGuarda() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.now())
+                .altaDemanda(true)
+                .build();
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(existente));
+
+        service.actualizarAltaDemanda(7L, true);
+
+        verify(eventoRepository, never()).save(any(DisponibilidadEvento.class));
+    }
+
+    @Test
+    void actualizarAltaDemanda_cuandoNoExiste_noHaceNada() {
+        when(eventoRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+
+        service.actualizarAltaDemanda(99L, true);
+
+        verify(eventoRepository, never()).save(any(DisponibilidadEvento.class));
+    }
+
     private DisponibilidadSector sector(Long id, Long sectorIdExterno, TipoSector tipo,
                                         int capacidadTotal, int disponibles) {
         return DisponibilidadSector.builder()

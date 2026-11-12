@@ -35,6 +35,7 @@ Estos endpoints son servicio-a-servicio, no requieren headers de usuario y son i
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/suspender` | Pasa la venta a `SUSPENDIDA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/reactivar` | Vuelve la venta a `ABIERTA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/finalizar` | Pasa la venta a `FINALIZADA`. |
+| `PUT` | `/api/tickets/internal/eventos/{eventoId}/alta-demanda?altaDemanda={bool}` | Sincroniza el flag de alta demanda mientras el evento no está publicado. |
 
 Todos responden `204 No Content`. Si el evento no tiene disponibilidad publicada responden `404`.
 

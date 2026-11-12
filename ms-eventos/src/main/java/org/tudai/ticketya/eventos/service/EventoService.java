@@ -117,6 +117,8 @@ public class EventoService {
             return pendiente.yaPublicado();
         }
 
+        boolean altaDemanda = Boolean.TRUE.equals(pendiente.request().getAltaDemanda());
+        ejecutarTickets(() -> ticketsClient.actualizarAltaDemanda(idEvento, altaDemanda));
         ejecutarTickets(() -> ticketsClient.crearDisponibilidad(idEvento, pendiente.request()));
 
         return transactionTemplate.execute(status -> confirmarPublicacion(idEvento));
