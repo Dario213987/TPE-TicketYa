@@ -11,6 +11,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.domain.Evento;
@@ -25,6 +26,7 @@ import org.tudai.ticketya.eventos.service.EventoService;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -154,6 +156,27 @@ class EventoApiTest {
                 .andExpect(status().isBadRequest());
 
         assertThat(eventoRepository.count()).isZero();
+    }
+
+    @Test
+    void listarEventos_soloDevuelvePublicadosYAgotados() throws Exception {
+        for (EstadoEvento estado : EstadoEvento.values()) {
+            eventoRepository.save(Evento.builder()
+                    .nombre("Evento " + estado)
+                    .descripcion("Listado por estado")
+                    .tipo(TipoEvento.RECITAL)
+                    .fecha(LocalDateTime.now().plusDays(10))
+                    .lugar(lugar)
+                    .organizadorId(7L)
+                    .estado(estado)
+                    .build());
+        }
+
+        mvc.perform(get("/api/eventos"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.content[*].estado",
+                        containsInAnyOrder("PUBLICADO", "AGOTADO")));
     }
 
     @Test

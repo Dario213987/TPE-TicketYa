@@ -15,7 +15,7 @@ paths:
       tags: [eventos]
       operationId: listarEventos
       summary: Lista los eventos publicados
-      description: Paginado. Devuelve únicamente eventos publicados, agotados o finalizados. Ordenado por fecha por defecto.
+      description: Paginado. Devuelve únicamente eventos publicados o agotados. Ordenado por fecha por defecto.
       parameters:
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
