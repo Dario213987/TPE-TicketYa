@@ -363,6 +363,11 @@ components:
       required: [reservaId, eventoId, clienteId, medioPago, estadoPago, total, tickets]
       properties:
         reservaId: { type: integer, format: int64 }
+        ventaId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Venta registrada al emitir las entradas (solo cuando estadoPago es APROBADO)
         eventoId: { type: integer, format: int64 }
         clienteId: { type: integer, format: int64 }
         medioPago: { type: string }

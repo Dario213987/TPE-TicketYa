@@ -14,6 +14,7 @@ import java.util.List;
 public class CompraResponseDTO {
 
     private Long reservaId;
+    private Long ventaId;
     private Long eventoId;
     private Long clienteId;
     private String medioPago;

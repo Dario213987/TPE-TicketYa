@@ -51,7 +51,9 @@ class LiquibaseMigrationTest {
                         "disponibilidad_asientos",
                         "tickets",
                         "reservas",
-                        "bloqueos_job");
+                        "bloqueos_job",
+                        "ventas",
+                        "venta_items");
     }
 
     @Test
@@ -71,7 +73,15 @@ class LiquibaseMigrationTest {
         assertThat(columnas("tickets"))
                 .containsExactlyInAnyOrder("id", "codigo_qr", "estado_ticket", "precio",
                         "fecha_emision", "cliente_id", "expira_el", "evento_id", "sector_id",
-                        "asiento_id", "reserva_id", "pago_en_curso");
+                        "asiento_id", "reserva_id", "venta_id", "pago_en_curso");
+
+        assertThat(columnas("ventas"))
+                .containsExactlyInAnyOrder("id", "reserva_id", "cliente_id", "evento_id", "total",
+                        "medio_pago", "creado_el");
+
+        assertThat(columnas("venta_items"))
+                .containsExactlyInAnyOrder("id", "venta_id", "ticket_id", "sector_id_externo", "fila",
+                        "numero", "precio", "transaccion_id");
 
         assertThat(columnas("reservas"))
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
@@ -116,7 +126,7 @@ class LiquibaseMigrationTest {
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
                 "bloqueos_job");
-        assertThat(contarCambiosAplicados()).isEqualTo(7);
+        assertThat(contarCambiosAplicados()).isEqualTo(8);
     }
 
     @Test
