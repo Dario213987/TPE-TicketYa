@@ -393,7 +393,236 @@
       ]
     },
     {
-      "name": "3. Errores",
+      "name": "3. Accesos",
+      "item": [
+        {
+          "name": "Validar acceso (OK)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"resultado OK\", () => pm.expect(j.resultado).to.eql(\"OK\"));",
+                  "pm.test(\"ticket USADO\", () => pm.expect(j.estadoTicket).to.eql(\"USADO\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Validar acceso ya usado (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"informa que ya fue utilizado\", () => pm.expect(pm.response.json().detail).to.include(\"utilizado\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "404 QR inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"QR-INEXISTENTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol CLIENTE al validar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Errores",
       "item": [
         {
           "name": "400 cantidad invalida",
@@ -775,6 +1004,14 @@
     {
       "key": "organizadorId",
       "value": "1"
+    },
+    {
+      "key": "personalAccesoId",
+      "value": "7"
+    },
+    {
+      "key": "codigoQrAcceso",
+      "value": "REEMPLAZAR_POR_QR_VENDIDO"
     }
   ]
 }

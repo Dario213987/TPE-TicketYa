@@ -9,6 +9,7 @@ info:
     Roles:
     - CLIENTE: puede reservar entradas y pagar sus reservas.
     - ORGANIZADOR y ADMINISTRADOR: pueden publicar la disponibilidad de un evento.
+    - PERSONAL_ACCESO: puede validar el ingreso de entradas por QR.
     - La consulta de disponibilidad es publica.
 
     Las reservas vencidas se liberan de forma perezosa antes de reservar y antes de consultar
@@ -18,6 +19,7 @@ info:
 tags:
   - name: reservas
   - name: disponibilidad
+  - name: accesos
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
     post:
@@ -169,6 +171,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/eventos/{eventoId}/accesos/validar:
+    post:
+      tags: [accesos]
+      operationId: validarAcceso
+      summary: Valida el ingreso de una entrada por QR
+      description: |
+        Solo el rol PERSONAL_ACCESO puede validar accesos. Marca la entrada como USADA de forma
+        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Responde
+        404 si el QR no existe y 409 si pertenece a otro evento, ya fue usado, fue devuelto o
+        no esta vendido.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidarAccesoRequestDTO'
+      responses:
+        '200':
+          description: Entrada valida; el ticket quedo en estado USADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoAccesoDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
@@ -323,9 +358,24 @@ components:
     EstadoPago:
       type: string
       enum: [APROBADO, RECHAZADO]
+    ValidarAccesoRequestDTO:
+      type: object
+      required: [codigoQr]
+      properties:
+        codigoQr: { type: string }
+    ResultadoAccesoDTO:
+      type: object
+      required: [resultado, valido, codigoQr, eventoId, estadoTicket]
+      properties:
+        resultado: { type: string, example: OK }
+        valido: { type: boolean }
+        codigoQr: { type: string }
+        eventoId: { type: integer, format: int64 }
+        estadoTicket:
+          $ref: '#/components/schemas/EstadoTicket'
     EstadoTicket:
       type: string
-      enum: [RESERVADO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO]
+      enum: [RESERVADO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
     PagoRequestDTO:
       type: object
       required: [medioPago]

@@ -3,6 +3,7 @@ package org.tudai.ticketya.tickets.repository;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -11,6 +12,7 @@ import org.tudai.ticketya.tickets.domain.Ticket;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
@@ -30,6 +32,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                 @Param("ahora") Instant ahora);
 
     List<Ticket> findByReserva_IdOrderByIdAsc(Long reservaId);
+
+    @Query("""
+            select t from Ticket t
+            join fetch t.evento
+            where t.codigo_qr = :codigoQr
+            """)
+    Optional<Ticket> buscarPorCodigoQr(@Param("codigoQr") String codigoQr);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Ticket t
+               set t.estadoTicket = :usado
+             where t.codigo_qr = :codigoQr
+               and t.evento.eventoId = :eventoId
+               and t.estadoTicket = :vendido
+            """)
+    int marcarComoUsado(@Param("codigoQr") String codigoQr,
+                        @Param("eventoId") Long eventoId,
+                        @Param("vendido") EstadoTicket vendido,
+                        @Param("usado") EstadoTicket usado);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Ticket> findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
