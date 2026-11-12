@@ -9,6 +9,8 @@ import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 import org.tudai.ticketya.core.Authorize;
+import org.tudai.ticketya.core.Operation;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -104,7 +106,15 @@ public class EventoController {
     @PostMapping("/{id}/cancelar")
     @ResponseStatus(HttpStatus.ACCEPTED)
     public EventoEstadoResponse cancelarEvento(@PathVariable Long id) {
-        return eventoService.cancelarEvento(id);
+        Long userId = userContext.userId();
+        try {
+            EventoEstadoResponse response = eventoService.cancelarEvento(id);
+            OperationLogger.ok(Operation.EVENT_CANCEL, userId, "Evento", id);
+            return response;
+        } catch (RuntimeException e) {
+            OperationLogger.failed(Operation.EVENT_CANCEL, userId, "Evento", id, e.getMessage());
+            throw e;
+        }
     }
 
     // Endpoints internos: los consume ms-tickets servicio-a-servicio.

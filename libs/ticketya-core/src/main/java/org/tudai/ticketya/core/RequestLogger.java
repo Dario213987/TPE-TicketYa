@@ -39,7 +39,7 @@ public final class RequestLogger {
         }
     }
 
-    private static String sanitizeUser(String userId) {
+    static String sanitizeUser(String userId) {
         if (userId == null || userId.isBlank()) {
             return ANONYMOUS;
         }

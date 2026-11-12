@@ -1,8 +1,12 @@
 package org.tudai.ticketya.eventos.controller;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.modelmapper.ModelMapper;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -11,6 +15,7 @@ import org.springframework.data.web.PageableHandlerMethodArgumentResolver;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -33,6 +38,7 @@ import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -436,6 +442,72 @@ class EventoControllerTest {
         mvc.perform(post("/api/eventos/1/cancelar"))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
+    }
+
+    @Test
+    void cancelarEvento_exitoso_registraLaOperacion() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.cancelarEvento(1L)).thenReturn(eventoCancelado());
+
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/eventos/1/cancelar")).andExpect(status().isAccepted()));
+
+        assertThat(operaciones).singleElement().satisfies(event ->
+                assertThat(event.getMDCPropertyMap())
+                        .containsEntry("operation", "EVENT_CANCEL")
+                        .containsEntry("result", "OK")
+                        .containsEntry("userId", "7")
+                        .containsEntry("entity", "Evento")
+                        .containsEntry("entityId", "1"));
+    }
+
+    @Test
+    void cancelarEvento_fallido_registraLaOperacionConElMotivo() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(userContext.userId()).thenReturn(7L);
+        when(eventoService.cancelarEvento(1L))
+                .thenThrow(new RemoteServiceException(502, "ms-tickets no disponible"));
+
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/eventos/1/cancelar")).andExpect(status().isBadGateway()));
+
+        assertThat(operaciones).singleElement().satisfies(event ->
+                assertThat(event.getMDCPropertyMap())
+                        .containsEntry("operation", "EVENT_CANCEL")
+                        .containsEntry("result", "FAILED")
+                        .containsEntry("userId", "7")
+                        .containsEntry("entityId", "1")
+                        .containsEntry("reason", "ms-tickets no disponible"));
+    }
+
+    @Test
+    void cancelarEvento_sinPermiso_noRegistraOperacion() throws Exception {
+        when(userContext.role()).thenReturn(Role.CLIENTE);
+        when(userContext.userId()).thenReturn(7L);
+
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/eventos/1/cancelar")).andExpect(status().isForbidden()));
+
+        assertThat(operaciones).isEmpty();
+    }
+
+    private List<ILoggingEvent> capturarOperaciones(ThrowingRunnable request) throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(OperationLogger.LOGGER_NAME);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            request.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+        return appender.list;
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 
     @Test
