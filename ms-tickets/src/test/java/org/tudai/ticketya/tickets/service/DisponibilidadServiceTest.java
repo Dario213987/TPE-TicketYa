@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.DisponibilidadAsiento;
@@ -204,6 +205,96 @@ class DisponibilidadServiceTest {
         DisponibilidadEventoResponseDTO respuesta = service.consultar(7L);
 
         assertThat(respuesta.getLimiteEntradasPorCliente()).isEqualTo(4);
+    }
+
+    @Test
+    void publicar_conOrganizadorYPrecio_losGuardaParaElPago() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .build();
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any()))
+                .thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.empty());
+
+        service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .organizadorId(5L)
+                .sectores(List.of(SectorDisponibilidadDTO.builder()
+                        .sectorId(3L)
+                        .tipo(TipoSector.NO_NUMERADO)
+                        .capacidadMaxima(100)
+                        .precio(1500.0)
+                        .build()))
+                .build());
+
+        org.mockito.ArgumentCaptor<DisponibilidadSector> guardado =
+                org.mockito.ArgumentCaptor.forClass(DisponibilidadSector.class);
+        verify(sectorRepository).save(guardado.capture());
+        assertThat(guardado.getValue().getPrecio()).isEqualTo(1500.0);
+        assertThat(existente.getOrganizadorId()).isEqualTo(5L);
+        verify(eventoRepository).save(existente);
+    }
+
+    @Test
+    void publicar_conOtroOrganizadorQueElGuardado_lanzaConflictSinPisarlo() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .organizadorId(5L)
+                .build();
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any())).thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+
+        assertThatThrownBy(() -> service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .organizadorId(6L)
+                .sectores(List.of(SectorDisponibilidadDTO.builder()
+                        .sectorId(3L)
+                        .tipo(TipoSector.NO_NUMERADO)
+                        .capacidadMaxima(100)
+                        .build()))
+                .build()))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("otro organizador");
+
+        assertThat(existente.getOrganizadorId()).isEqualTo(5L);
+        verify(eventoRepository, never()).save(existente);
+    }
+
+    @Test
+    void publicar_sectorExistenteSinPrecio_completaElPrecio() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .build();
+        DisponibilidadSector sinPrecio = sector(10L, 3L, TipoSector.NO_NUMERADO, 100, 100);
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any())).thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.of(sinPrecio));
+
+        DisponibilidadResponseDTO respuesta = service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .organizadorId(5L)
+                .sectores(List.of(SectorDisponibilidadDTO.builder()
+                        .sectorId(3L)
+                        .tipo(TipoSector.NO_NUMERADO)
+                        .capacidadMaxima(100)
+                        .precio(1500.0)
+                        .build()))
+                .build());
+
+        assertThat(sinPrecio.getPrecio()).isEqualTo(1500.0);
+        assertThat(sinPrecio.getCapacidadTotal()).isEqualTo(100);
+        assertThat(existente.getOrganizadorId()).isEqualTo(5L);
+        assertThat(respuesta.getSectoresProcesados()).isZero();
+        verify(sectorRepository).save(sinPrecio);
     }
 
     private DisponibilidadSector sector(Long id, Long sectorIdExterno, TipoSector tipo,

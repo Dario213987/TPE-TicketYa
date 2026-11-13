@@ -22,6 +22,7 @@ import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import java.util.List;
 
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -41,7 +42,7 @@ class DisponibilidadControllerTest {
     void setUp() {
         service = mock(DisponibilidadService.class);
         userContext = mock(UserContext.class);
-        mvc = MockMvcBuilders.standaloneSetup(new DisponibilidadController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new DisponibilidadController(service, userContext))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addInterceptors(new AuthorizeInterceptor(userContext))
                 .build();
@@ -132,6 +133,49 @@ class DisponibilidadControllerTest {
                 .andExpect(jsonPath("$.eventoId").value(5));
 
         verify(service).publicar(any(PublicarEventoRequestDTO.class));
+    }
+
+    @Test
+    void crearDisponibilidad_comoOrganizador_publicaASuNombre() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(service.publicar(any(PublicarEventoRequestDTO.class)))
+                .thenReturn(DisponibilidadResponseDTO.builder().eventoId(5L).yaExistia(false).build());
+
+        mvc.perform(post("/api/tickets/eventos/5/disponibilidad")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoPublicacion()))
+                .andExpect(status().isCreated());
+
+        verify(service).publicar(argThat(dto -> Long.valueOf(42L).equals(dto.getOrganizadorId())));
+    }
+
+    @Test
+    void crearDisponibilidad_organizadorConOtroOrganizadorId_respondeForbidden() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+
+        mvc.perform(post("/api/tickets/eventos/5/disponibilidad")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoPublicacion().replace("\"eventoId\": 5,", "\"eventoId\": 5, \"organizadorId\": 99,")))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void crearDisponibilidad_comoAdministrador_respetaElOrganizadorDelCuerpo() throws Exception {
+        when(userContext.userId()).thenReturn(1L);
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(service.publicar(any(PublicarEventoRequestDTO.class)))
+                .thenReturn(DisponibilidadResponseDTO.builder().eventoId(5L).yaExistia(false).build());
+
+        mvc.perform(post("/api/tickets/eventos/5/disponibilidad")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(cuerpoPublicacion().replace("\"eventoId\": 5,", "\"eventoId\": 5, \"organizadorId\": 99,")))
+                .andExpect(status().isCreated());
+
+        verify(service).publicar(argThat(dto -> Long.valueOf(99L).equals(dto.getOrganizadorId())));
     }
 
     private String cuerpoPublicacion() {

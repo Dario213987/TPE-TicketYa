@@ -29,6 +29,8 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                 @Param("estado") EstadoTicket estado,
                                 @Param("ahora") Instant ahora);
 
+    List<Ticket> findByReserva_IdOrderByIdAsc(Long reservaId);
+
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Ticket> findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(
             Long eventoId, EstadoTicket estado, Instant ahora);

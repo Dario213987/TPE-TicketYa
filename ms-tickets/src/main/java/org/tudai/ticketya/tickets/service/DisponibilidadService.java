@@ -5,6 +5,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
+import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.config.ReservaProperties;
 import org.tudai.ticketya.tickets.domain.*;
@@ -58,13 +59,31 @@ public class DisponibilidadService {
             eventoRepository.save(evento);
         }
 
+        // El organizador recibe los pagos: se completa si falta, pero nunca se reemplaza por otro.
+        if (request.getOrganizadorId() != null
+                && !request.getOrganizadorId().equals(evento.getOrganizadorId())) {
+            if (evento.getOrganizadorId() != null) {
+                throw new ConflictException("El evento " + request.getEventoId()
+                        + " ya tiene otro organizador informado");
+            }
+            evento.setOrganizadorId(request.getOrganizadorId());
+            eventoRepository.save(evento);
+        }
+
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
         int asientosOmitidos = 0;
 
         for (SectorDisponibilidadDTO dto : request.getSectores()) {
-            if (sectorRepository.findByEvento_EventoIdAndSectorIdExterno(
-                    request.getEventoId(), dto.getSectorId()).isPresent()) {
+            var existente = sectorRepository.findByEvento_EventoIdAndSectorIdExterno(
+                    request.getEventoId(), dto.getSectorId());
+            if (existente.isPresent()) {
+                // Republicar completa el precio de los sectores publicados antes de que se informara.
+                DisponibilidadSector sector = existente.get();
+                if (sector.getPrecio() == null && dto.getPrecio() != null) {
+                    sector.setPrecio(dto.getPrecio());
+                    sectorRepository.save(sector);
+                }
                 continue;
             }
 
@@ -85,6 +104,7 @@ public class DisponibilidadService {
                     .tipo(dto.getTipo())
                     .capacidadTotal(capacidad)
                     .disponibles(capacidad)
+                    .precio(dto.getPrecio())
                     .build();
 
             sectorRepository.save(sector);
