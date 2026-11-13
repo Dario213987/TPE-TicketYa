@@ -198,6 +198,67 @@ class EventoApiTest {
                 .isEqualTo(EstadoEvento.PUBLICADO);
     }
 
+    @Test
+    void obtenerEvento_publicado_devuelveElDetalleSinAutenticacion() throws Exception {
+        Evento evento = guardarEvento(EstadoEvento.PUBLICADO, 7L);
+
+        mvc.perform(get("/api/eventos/{id}", evento.getId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(evento.getId()))
+                .andExpect(jsonPath("$.nombre").value("Evento de integración"))
+                .andExpect(jsonPath("$.estado").value("PUBLICADO"))
+                .andExpect(jsonPath("$.organizadorId").value(7))
+                .andExpect(jsonPath("$.lugar.ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.sectores").isEmpty());
+    }
+
+    @Test
+    void obtenerEvento_borradorDelDueno_devuelve200() throws Exception {
+        Evento evento = guardarEvento(EstadoEvento.BORRADOR, 7L);
+
+        mvc.perform(get("/api/eventos/{id}", evento.getId())
+                        .header("X-User-Id", "7")
+                        .header("X-User-Role", "ORGANIZADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("BORRADOR"));
+    }
+
+    @Test
+    void obtenerEvento_borradorAjeno_devuelve404() throws Exception {
+        Evento evento = guardarEvento(EstadoEvento.BORRADOR, 7L);
+
+        mvc.perform(get("/api/eventos/{id}", evento.getId())
+                        .header("X-User-Id", "99")
+                        .header("X-User-Role", "ORGANIZADOR"))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void obtenerEvento_borradorSinAutenticacion_devuelve404() throws Exception {
+        Evento evento = guardarEvento(EstadoEvento.BORRADOR, 7L);
+
+        mvc.perform(get("/api/eventos/{id}", evento.getId()))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void obtenerEvento_inexistente_devuelve404() throws Exception {
+        mvc.perform(get("/api/eventos/{id}", 999999L))
+                .andExpect(status().isNotFound());
+    }
+
+    private Evento guardarEvento(EstadoEvento estado, Long organizadorId) {
+        return eventoRepository.save(Evento.builder()
+                .nombre("Evento de integración")
+                .descripcion("Detalle")
+                .tipo(TipoEvento.RECITAL)
+                .fecha(LocalDateTime.now().plusDays(10))
+                .estado(estado)
+                .organizadorId(organizadorId)
+                .lugar(lugar)
+                .build());
+    }
+
     private MockHttpServletRequestBuilder crearEvento(LocalDateTime fecha, String participantes) {
         return crearEvento(fecha, participantes, lugar.getId());
     }
