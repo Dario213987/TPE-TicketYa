@@ -9,7 +9,10 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 @SpringBootApplication
 @ConfigurationPropertiesScan
 @EnableScheduling
-@EnableFeignClients(basePackages = "org.tudai.ticketya.contract")
+@EnableFeignClients(basePackages = {
+        "org.tudai.ticketya.contract",
+        "org.tudai.ticketya.tickets.client"
+})
 public class TicketsApplication {
     public static void main(String[] args) {
         SpringApplication.run(TicketsApplication.class, args);
