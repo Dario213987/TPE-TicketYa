@@ -146,6 +146,8 @@ public class EventoService {
             return pendiente.yaPublicado();
         }
 
+        boolean altaDemanda = Boolean.TRUE.equals(pendiente.request().getAltaDemanda());
+        ejecutarTickets(() -> ticketsClient.actualizarAltaDemanda(idEvento, altaDemanda));
         ejecutarTickets(() -> ticketsClient.crearDisponibilidad(idEvento, pendiente.request()));
 
         return transactionTemplate.execute(status -> confirmarPublicacion(idEvento));
@@ -430,20 +432,18 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
      */
-    @Transactional
     public EventoEstadoResponse marcarAgotado(Long id) {
-        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+        String mensaje = "Evento no encontrado con id: " + id;
+        EventoEstadoResponse yaAgotado = transactionTemplate.execute(
+                status -> validarMarcarAgotado(id, mensaje));
 
-        if (evento.getEstado() == EstadoEvento.AGOTADO) {
-            return toEstadoDTO(evento);
+        if (yaAgotado != null) {
+            return yaAgotado;
         }
 
-        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
-            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
-        }
+        ejecutarTickets(() -> ticketsClient.agotarEvento(id));
 
-        evento.setEstado(EstadoEvento.AGOTADO);
-        return toEstadoDTO(eventoRepository.save(evento));
+        return transactionTemplate.execute(status -> confirmarMarcarAgotado(id, mensaje));
     }
 
     /**
@@ -462,9 +462,65 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
      */
-    @Transactional
     public EventoEstadoResponse marcarPublicado(Long id) {
-        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+        String mensaje = "Evento no encontrado con id: " + id;
+        EventoEstadoResponse yaPublicado = transactionTemplate.execute(
+                status -> validarMarcarPublicado(id, mensaje));
+
+        if (yaPublicado != null) {
+            return yaPublicado;
+        }
+
+        ejecutarTickets(() -> ticketsClient.reactivarEvento(id));
+
+        return transactionTemplate.execute(status -> confirmarMarcarPublicado(id, mensaje));
+    }
+
+    private EventoEstadoResponse validarMarcarAgotado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaValidacion(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.AGOTADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarMarcarAgotado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaCambioEstado(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.AGOTADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+        evento.setEstado(EstadoEvento.AGOTADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    private EventoEstadoResponse validarMarcarPublicado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaValidacion(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("Solo un evento agotado puede pasar a publicado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarMarcarPublicado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaCambioEstado(id, mensaje);
 
         if (evento.getEstado() == EstadoEvento.PUBLICADO) {
             return toEstadoDTO(evento);
@@ -479,8 +535,12 @@ public class EventoService {
     }
 
     private Evento buscarEventoParaValidacion(Long id) {
+        return buscarEventoParaValidacion(id, "No se encontró el evento solicitado");
+    }
+
+    private Evento buscarEventoParaValidacion(Long id, String mensaje) {
         return eventoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("No se encontró el evento solicitado"));
+                .orElseThrow(() -> new NotFoundException(mensaje));
     }
 
     private Evento buscarEventoParaCambioEstado(Long id) {
@@ -568,6 +628,13 @@ public class EventoService {
             }
         }
 
+        if (dto.getAltaDemanda() != null
+                && !Objects.equals(dto.getAltaDemanda(), evento.isAltaDemanda())
+                && !esBorrador) {
+            throw new ConflictException(
+                    "No se puede modificar la condición de alta demanda de un evento ya publicado.");
+        }
+
         if (dto.getSectores() != null
                 && !Objects.equals(Set.copyOf(dto.getSectores()), sectoresDelEvento(evento))) {
             if (!esBorrador) {
@@ -596,6 +663,10 @@ public class EventoService {
 
         if (dto.getTipo() != null) {
             evento.setTipo(dto.getTipo());
+        }
+
+        if (dto.getAltaDemanda() != null) {
+            evento.setAltaDemanda(dto.getAltaDemanda());
         }
 
         if (dto.getFecha() != null) {
@@ -677,6 +748,7 @@ public class EventoService {
         return PublicarEventoRequest.builder()
                 .eventoId(evento.getId())
                 .organizadorId(evento.getOrganizadorId())
+                .altaDemanda(evento.isAltaDemanda())
                 .sectores(items)
                 .build();
     }
@@ -764,6 +836,7 @@ public class EventoService {
                 .lugar(lugar)
                 .fecha(fecha)
                 .estado(EstadoEvento.BORRADOR)
+                .altaDemanda(Boolean.TRUE.equals(request.getAltaDemanda()))
                 .build();
 
         if (request.getParticipantes() != null && !request.getParticipantes().isEmpty()) {

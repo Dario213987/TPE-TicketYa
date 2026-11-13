@@ -14,5 +14,6 @@ import java.util.List;
 public class PublicarEventoRequest {
     private Long eventoId;
     private Long organizadorId;
+    private Boolean altaDemanda;
     private List<SectorDisponibilidadRequest> sectores;
 }

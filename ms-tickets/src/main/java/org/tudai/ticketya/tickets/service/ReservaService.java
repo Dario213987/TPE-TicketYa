@@ -66,6 +66,12 @@ public class ReservaService {
                 .orElseThrow(() -> new ConflictException(
                         "El evento " + eventoId + " no está publicado"));
 
+        if (evento.getEstadoVenta() != EstadoVenta.ABIERTA) {
+            throw new ConflictException(
+                    "La venta del evento " + eventoId + " no está abierta ("
+                            + evento.getEstadoVenta() + ")");
+        }
+
         reservaVencidaService.liberarVencidas(eventoId, ahora);
 
         DisponibilidadSector sector = sectorRepository

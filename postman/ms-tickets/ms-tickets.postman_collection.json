@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5d3f9a2e-7c41-4b8e-9f10-2a6c1e8b3d47",
     "name": "ms-tickets",
-    "description": "Gestion de disponibilidad y reservas de entradas. Requiere X-User-Id (numerico) y X-User-Role. Las rutas se exponen a traves del gateway bajo /api/tickets. Ejecutar en orden: la carpeta 1 crea la disponibilidad que usan las demas.",
+    "description": "Gestion de disponibilidad y reservas de entradas. Requiere X-User-Id (numerico) y X-User-Role. Las rutas se exponen a traves del gateway bajo /api/tickets. Ejecutar en orden: la carpeta 1 crea la disponibilidad que usan las demas y marca el evento principal como alta demanda para la carpeta 3.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -21,7 +21,8 @@
                   "const j = pm.response.json();",
                   "pm.test(\"devuelve el eventoId\", () => pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))));",
                   "pm.test(\"informa sectores procesados\", () => pm.expect(j.sectoresProcesados).to.be.a(\"number\"));",
-                  "pm.test(\"informa asientos insertados/omitidos\", () => { pm.expect(j.asientosInsertados).to.be.a(\"number\"); pm.expect(j.asientosOmitidos).to.be.a(\"number\"); });"
+                  "pm.test(\"informa asientos insertados/omitidos\", () => { pm.expect(j.asientosInsertados).to.be.a(\"number\"); pm.expect(j.asientosOmitidos).to.be.a(\"number\"); });",
+                  "pm.test(\"altaDemanda true\", () => pm.expect(pm.response.json().altaDemanda).to.eql(true));"
                 ]
               }
             }
@@ -44,7 +45,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"altaDemanda\": true,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -76,7 +77,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
-                  "pm.test(\"yaExistia true\", () => pm.expect(pm.response.json().yaExistia).to.eql(true));"
+                  "pm.test(\"yaExistia true\", () => pm.expect(pm.response.json().yaExistia).to.eql(true));",
+                  "pm.test(\"mantiene altaDemanda\", () => pm.expect(pm.response.json().altaDemanda).to.eql(true));"
                 ]
               }
             }
@@ -99,7 +101,7 @@
             ],
             "body": {
               "mode": "raw",
-              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
+              "raw": "{\n  \"eventoId\": {{eventoId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"altaDemanda\": true,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNumeradoId}},\n      \"tipo\": \"NUMERADO\",\n      \"filas\": 2,\n      \"asientosPorFila\": 3\n    },\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 10\n    }\n  ]\n}",
               "options": {
                 "raw": {
                   "language": "json"
@@ -123,6 +125,63 @@
           "response": []
         },
         {
+          "name": "Publicar disponibilidad sin alta demanda (otro evento)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200 o 201\", () => pm.expect([200, 201]).to.include(pm.response.code));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve el eventoId\", () => pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoSinAltaDemandaId\"))));",
+                  "pm.test(\"altaDemanda false\", () => pm.expect(j.altaDemanda).to.eql(false));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"eventoId\": {{eventoSinAltaDemandaId}},\n  \"limiteEntradasPorCliente\": 4,\n  \"altaDemanda\": false,\n  \"sectores\": [\n    {\n      \"sectorId\": {{sectorNoNumeradoId}},\n      \"tipo\": \"NO_NUMERADO\",\n      \"capacidadMaxima\": 5\n    }\n  ]\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoSinAltaDemandaId}}/disponibilidad",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoSinAltaDemandaId}}",
+                "disponibilidad"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "Consultar disponibilidad",
           "event": [
             {
@@ -135,7 +194,8 @@
                   "pm.test(\"devuelve los sectores\", () => pm.expect(j.sectores).to.be.an(\"array\").that.is.not.empty);",
                   "pm.test(\"incluye limite por cliente\", () => pm.expect(j.limiteEntradasPorCliente).to.be.a(\"number\"));",
                   "const numerado = j.sectores.find(s => s.tipoSector === \"NUMERADO\");",
-                  "pm.test(\"el sector numerado informa asientos\", () => pm.expect(numerado.asientos).to.be.an(\"array\").that.is.not.empty);"
+                  "pm.test(\"el sector numerado informa asientos\", () => pm.expect(numerado.asientos).to.be.an(\"array\").that.is.not.empty);",
+                  "pm.test(\"informa altaDemanda\", () => pm.expect(pm.response.json().altaDemanda).to.eql(true));"
                 ]
               }
             }
@@ -393,7 +453,288 @@
       ]
     },
     {
-      "name": "3. Errores",
+      "name": "3. Fila virtual",
+      "description": "Requiere que el evento {{eventoId}} tenga disponibilidad publicada con altaDemanda=true (lo hace la carpeta 1). Cada corrida usa un cliente nuevo ({{clienteFila}}) para que el 201 sea repetible sin borrar la clave de Redis.",
+      "item": [
+        {
+          "name": "Entrar a la fila (201)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"clienteFila\", String(Math.floor(Math.random() * 1000000) + 1));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve evento y cliente\", () => { pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))); pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteFila\"))); });",
+                  "pm.test(\"ingresa al final de la fila\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); pm.expect(j.yaEstabaEnFila).to.eql(false); });",
+                  "pm.test(\"informa el momento de ingreso\", () => pm.expect(j.ingresadoEl).to.be.a(\"string\"));",
+                  "pm.collectionVariables.set(\"posicionFila\", String(j.posicion));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Reintentar entrada (200, conserva posición)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"yaEstabaEnFila true\", () => pm.expect(j.yaEstabaEnFila).to.eql(true));",
+                  "pm.test(\"conserva la posición anterior\", () => pm.expect(String(j.posicion)).to.eql(pm.collectionVariables.get(\"posicionFila\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar posición (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve posición y personas delante\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.personasDelante).to.eql(j.posicion - 1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar posición sin estar en la fila (404)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.collectionVariables.set(\"clienteFueraFila\", String(Math.floor(Math.random() * 1000000) + 2000000));"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFueraFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol ORGANIZADOR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "409 evento sin alta demanda",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"explica el motivo\", () => pm.expect(pm.response.json().detail).to.contain(\"no es de alta demanda\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoSinAltaDemandaId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoSinAltaDemandaId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Errores",
       "item": [
         {
           "name": "400 cantidad invalida",
@@ -775,6 +1116,10 @@
     {
       "key": "organizadorId",
       "value": "1"
+    },
+    {
+      "key": "eventoSinAltaDemandaId",
+      "value": "6"
     }
   ]
 }

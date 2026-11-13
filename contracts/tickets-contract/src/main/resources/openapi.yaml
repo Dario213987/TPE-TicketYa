@@ -18,6 +18,8 @@ info:
 tags:
   - name: reservas
   - name: disponibilidad
+  - name: fila
+  - name: interno
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
     post:
@@ -61,6 +63,71 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/eventos/{eventoId}/fila:
+    get:
+      tags: [fila]
+      operationId: consultarPosicionFila
+      summary: Consulta la posición del cliente en la fila virtual
+      description: |
+        Solo el rol CLIENTE puede consultar su posición. El cliente se toma de
+        X-User-Id, nunca del cuerpo.
+
+        Pensado para polling frecuente: solo lee Redis y no consulta la base de
+        datos. Si el cliente no está en la fila responde 404.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: El cliente está en la fila
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosicionFilaResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+    post:
+      tags: [fila]
+      operationId: entrarEnFila
+      summary: Reserva un turno en la fila virtual de un evento de alta demanda
+      description: |
+        Solo el rol CLIENTE puede entrar a la fila. El cliente se toma de X-User-Id,
+        nunca del cuerpo.
+
+        El evento debe tener la disponibilidad publicada, estar marcado como
+        altaDemanda y tener la venta abierta. Si no tiene disponibilidad responde
+        404; si tiene disponibilidad pero no es de alta demanda o la venta no está
+        ABIERTA responde 409.
+
+        La fila se guarda en un sorted set de Redis ordenado por el momento de
+        llegada. La operación es idempotente: si el cliente ya está en la fila,
+        no se duplica ni se modifica su posición y responde 200. Si es la primera
+        vez, responde 201.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: El cliente ya estaba en la fila; se devuelve su posición actual
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TurnoFilaResponseDTO'
+        '201':
+          description: El cliente ingresó a la fila
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TurnoFilaResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/disponibilidad:
     post:
       tags: [disponibilidad]
@@ -72,8 +139,9 @@ paths:
 
         Es idempotente por evento: si el evento ya tenia disponibilidad, no se recrean los
         sectores existentes, pero si se procesan los sectores nuevos y se actualiza el limite
-        de entradas por cliente cuando se informa. En ese caso responde 200 con yaExistia=true;
-        si es la primera publicacion responde 201 con yaExistia=false.
+        de entradas por cliente. El flag altaDemanda solo se define en la primera publicacion;
+        si se intenta cambiar despues responde 409. En ese caso responde 200 con
+        yaExistia=true; si es la primera publicacion responde 201 con yaExistia=false.
       parameters:
         - name: eventoId
           in: path
@@ -123,6 +191,70 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/cancelar:
+    put:
+      tags: [interno]
+      operationId: cancelarVenta
+      summary: Cancela la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a CANCELADA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/suspender:
+    put:
+      tags: [interno]
+      operationId: suspenderVenta
+      summary: Suspende la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a SUSPENDIDA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/reactivar:
+    put:
+      tags: [interno]
+      operationId: reactivarVenta
+      summary: Reactiva la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a ABIERTA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/finalizar:
+    put:
+      tags: [interno]
+      operationId: finalizarVenta
+      summary: Finaliza la venta de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Pasa estado_venta a FINALIZADA. Es idempotente. No requiere headers de usuario.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204': { description: Estado actualizado }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
@@ -203,6 +335,10 @@ components:
         limiteEntradasPorCliente:
           type: integer
           minimum: 1
+        altaDemanda:
+          type: boolean
+          default: false
+          description: Habilita la fila virtual del evento en ms-tickets.
         sectores:
           type: array
           minItems: 1
@@ -214,6 +350,7 @@ components:
       properties:
         eventoId: { type: integer, format: int64 }
         yaExistia: { type: boolean }
+        altaDemanda: { type: boolean }
         sectoresProcesados: { type: integer }
         asientosInsertados: { type: integer }
         asientosOmitidos: { type: integer }
@@ -224,6 +361,7 @@ components:
       properties:
         eventoId: { type: integer, format: int64 }
         limiteEntradasPorCliente: { type: integer }
+        altaDemanda: { type: boolean }
         sectores:
           type: array
           items:
@@ -265,6 +403,45 @@ components:
           description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
           items:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    TurnoFilaResponseDTO:
+      type: object
+      required: [eventoId, clienteId, posicion, totalEnFila, yaEstabaEnFila, ingresadoEl]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        posicion:
+          type: integer
+          format: int64
+          description: Posición actual en la fila, empezando en 1.
+        totalEnFila:
+          type: integer
+          format: int64
+          description: Cantidad de clientes en la fila al momento de la consulta.
+        yaEstabaEnFila:
+          type: boolean
+          description: true si el cliente ya tenía un turno y se conservó su posición.
+        ingresadoEl:
+          type: string
+          format: date-time
+          description: Momento en que el cliente ingresó a la fila.
+    PosicionFilaResponseDTO:
+      type: object
+      required: [eventoId, clienteId, posicion, personasDelante, totalEnFila]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        posicion:
+          type: integer
+          format: int64
+          description: Posición actual en la fila, empezando en 1.
+        personasDelante:
+          type: integer
+          format: int64
+          description: Cantidad de personas delante del cliente (posicion - 1).
+        totalEnFila:
+          type: integer
+          format: int64
+          description: Cantidad de clientes en la fila al momento de la consulta.
     Problema:
       type: object
       properties:
