@@ -1,0 +1,133 @@
+openapi: 3.0.3
+info:
+  title: ms-devoluciones
+  version: 1.0.0
+  description: |
+    Gestión de devoluciones de entradas / tickets. Servicio que permite a los clientes
+    solicitar la devolución de una entrada hasta 72 horas antes del evento.
+    Requiere los headers X-User-Id y X-User-Role.
+tags:
+  - name: devoluciones
+paths:
+  /api/devoluciones:
+    post:
+      tags: [devoluciones]
+      operationId: solicitarDevolucion
+      summary: Solicita la devolución de una entrada
+      description: |
+        Crea una solicitud de devolución en estado PENDIENTE si el ticket está VENDIDO,
+        no fue utilizado, pertenece al cliente autenticado y faltan al menos 72 horas para el evento.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudDevolucionRequest'
+      responses:
+        '201':
+          description: Solicitud de devolución creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/{id}:
+    get:
+      tags: [devoluciones]
+      operationId: obtenerDevolucion
+      summary: Obtiene una devolución por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: La devolución
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/ticket/{ticketId}:
+    get:
+      tags: [devoluciones]
+      operationId: obtenerDevolucionPorTicket
+      summary: Obtiene la devolución de un ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: La devolución del ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  responses:
+    Error:
+      description: Error (400 inválido, 401 no autenticado, 403 sin permiso, 404 no encontrado, 409 conflicto)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    EstadoDevolucion:
+      type: string
+      enum: [PENDIENTE, DENEGADA, APROBADA]
+    SolicitudDevolucionRequest:
+      type: object
+      required: [ticketId]
+      properties:
+        ticketId:
+          type: integer
+          format: int64
+        clienteId:
+          type: integer
+          format: int64
+        motivo:
+          type: string
+    DevolucionResponse:
+      type: object
+      required: [id, clienteId, ticketId, fecha, estado]
+      properties:
+        id:
+          type: integer
+          format: int64
+        clienteId:
+          type: integer
+          format: int64
+        ticketId:
+          type: integer
+          format: int64
+        fecha:
+          type: string
+          format: date-time
+        estado:
+          $ref: '#/components/schemas/EstadoDevolucion'
+        transaccionId:
+          type: integer
+          format: int64
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+    Problema:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
