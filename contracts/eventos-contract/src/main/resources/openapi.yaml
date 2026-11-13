@@ -14,18 +14,22 @@ paths:
     get:
       tags: [eventos]
       operationId: listarEventos
-      summary: Lista los eventos publicados
-      description: Paginado. Devuelve únicamente eventos en estado PUBLICADO o AGOTADO. Los filtros opcionales se combinan con AND. Ordenado por fecha por defecto.
+      summary: Lista los eventos visibles
+      description: |
+        Paginado. Devuelve únicamente eventos PUBLICADO o AGOTADO. Sin `orden`, si viene `sort`
+        se respeta el orden legado; si no, ordena por fecha ascendente y desempata por id.
+        Si se envían ambos, `orden` tiene prioridad. Los filtros presentes se combinan con AND.
       parameters:
+        - $ref: '#/components/parameters/TipoEventoFiltro'
+        - $ref: '#/components/parameters/OrganizadorIdFiltro'
+        - $ref: '#/components/parameters/ParticipanteFiltro'
+        - $ref: '#/components/parameters/CiudadFiltro'
+        - $ref: '#/components/parameters/FechaDesdeFiltro'
+        - $ref: '#/components/parameters/FechaHastaFiltro'
+        - $ref: '#/components/parameters/Orden'
+        - $ref: '#/components/parameters/Sort'
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/EventosSize'
-        - $ref: '#/components/parameters/Sort'
-        - $ref: '#/components/parameters/TipoEventoFiltro'
-        - $ref: '#/components/parameters/OrganizadorId'
-        - $ref: '#/components/parameters/Participante'
-        - $ref: '#/components/parameters/Ciudad'
-        - $ref: '#/components/parameters/FechaDesde'
-        - $ref: '#/components/parameters/FechaHasta'
       responses:
         '200':
           description: Página de eventos visibles
@@ -130,8 +134,10 @@ paths:
       summary: Cancela un evento
       description: |
         Solo administradores. El evento puede estar PUBLICADO, SUSPENDIDO o AGOTADO. Pasa el
-        evento a CANCELADO y bloquea nuevas reservas y compras en ms-tickets. El reintegro
-        masivo corresponde a US-07.05 y no lo ejecuta este endpoint.
+        evento a CANCELADO, bloquea nuevas reservas y compras en ms-tickets y dispara el
+        reintegro masivo (US-07.05) delegando en ms-devoluciones. Si ms-tickets o
+        ms-devoluciones no están disponibles o responden con error, la cancelación no se
+        persiste y se devuelve 502.
         Es idempotente si el evento ya está cancelado.
       parameters:
         - $ref: '#/components/parameters/EventoId'
@@ -439,7 +445,10 @@ components:
     Sort:
       name: sort
       in: query
-      description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos válidos: lugares (id, nombre, tipo, ciudad); eventos (id, nombre, fecha, tipo). Por defecto nombre,asc en lugares y fecha,asc en eventos"
+      deprecated: true
+      description: |
+        Parámetro legado en la convención de Spring: `campo,asc` o `campo,desc`.
+        Campos válidos para eventos: id, nombre, fecha, tipo. Se ignora si se envía `orden`.
       schema: { type: string }
     TipoEventoFiltro:
       name: tipo
@@ -447,22 +456,22 @@ components:
       description: Tipo de evento. La comparación no distingue mayúsculas/minúsculas. Un valor inválido devuelve 400.
       schema:
         $ref: '#/components/schemas/TipoEvento'
-    OrganizadorId:
+    OrganizadorIdFiltro:
       name: organizadorId
       in: query
-      description: ID del organizador del evento.
+      description: Filtra por el id del organizador del evento.
       schema: { type: integer, format: int64 }
-    Participante:
+    ParticipanteFiltro:
       name: participante
       in: query
       description: Nombre de un participante/artista. Coincidencia exacta, no parcial, sin distinguir mayúsculas ni tildes.
       schema: { type: string }
-    Ciudad:
+    CiudadFiltro:
       name: ciudad
       in: query
-      description: Ciudad del lugar del evento. La comparación no distingue mayúsculas/minúsculas.
+      description: Filtra por la ciudad del lugar sin distinguir mayúsculas/minúsculas.
       schema: { type: string }
-    FechaDesde:
+    FechaDesdeFiltro:
       name: fechaDesde
       in: query
       description: Fecha mínima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
@@ -470,7 +479,7 @@ components:
         type: string
         format: date
         example: '2026-12-01'
-    FechaHasta:
+    FechaHastaFiltro:
       name: fechaHasta
       in: query
       description: Fecha máxima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
@@ -478,6 +487,21 @@ components:
         type: string
         format: date
         example: '2026-12-31'
+    Orden:
+      name: orden
+      in: query
+      required: false
+      description: |
+        Criterio de orden del listado. Si se envía junto con `sort`, `orden` tiene prioridad.
+        Sin `orden`, si viene `sort` se respeta el orden legado; si no, ordena por fecha ascendente
+        y desempata por id.
+        - `fecha`: fecha ascendente, desempata por id.
+        - `precio`: precio mínimo de los sectores del evento, ascendente.
+        - `relevancia`: PUBLICADO antes que AGOTADO; dentro de cada estado, fecha ascendente y luego id.
+          CANCELADO no se lista.
+      schema:
+        type: string
+        enum: [fecha, precio, relevancia]
     EventoId:
       name: eventoId
       in: path

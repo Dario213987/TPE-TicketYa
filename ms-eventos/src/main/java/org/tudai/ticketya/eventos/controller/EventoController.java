@@ -38,9 +38,9 @@ public class EventoController {
 
     @GetMapping
     public PagedModel<EventoResumen> listarEventos(
-            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado
+            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado y ordenamiento
             @ModelAttribute EventoFiltroRequestDTO filtro,
-            @PageableDefault(size = 20, sort = "fecha") Pageable pageable) {
+            @PageableDefault(size = 20) Pageable pageable) {
 
         Pageable pageableValidado = ordenable(pageable);
         validarSize(pageableValidado);

@@ -8,7 +8,9 @@ import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -27,6 +29,7 @@ import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
@@ -78,6 +81,7 @@ public class EventoService {
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
+    private final DevolucionesClient devolucionesClient;
     private final LugarRepository lugarRepository;
     private final ParticipanteRepository participanteRepository;
     private final ModelMapper modelMapper;
@@ -96,20 +100,50 @@ public class EventoService {
     }
 
     /**
-     * Lista los eventos visibles aplicando los filtros
-     * opcionales recibidos. Los filtros presentes se combinan con AND y el resultado
-     * se devuelve paginado. Sin filtros, devuelve todos los eventos visibles.
+     * Lista los eventos visibles aplicando los filtros opcionales recibidos. Los filtros
+     * presentes se combinan con AND y el resultado se devuelve paginado. Sin filtros,
+     * devuelve todos los eventos visibles.
+     * <p>
+     * El orden se elige con {@code filtro.orden}:
+     * <ul>
+     *   <li>{@code precio}: ordena por el precio mínimo de los sectores del evento, directamente en la base.</li>
+     *   <li>{@code relevancia}: ordena los eventos PUBLICADO antes que los AGOTADO (dentro de estados visibles);
+     *   dentro de cada estado, por fecha ascendente y luego por id. {@code CANCELADO} no se lista.</li>
+     *   <li>{@code fecha}: ordena por fecha ascendente (desempata por id).</li>
+     *   <li>sin valor: si el {@code Pageable} trae un {@code sort} explícito, se respeta como
+     *   parámetro legado; si no, ordena por fecha ascendente y desempata por id.</li>
+     * </ul>
+     * Si se envían {@code orden} y {@code sort}, {@code orden} tiene prioridad.
      *
-     * @param filtro filtros opcionales: tipo, organizador, participante, ciudad y rango de fechas
-     * @param pageable paginación y orden del resultado
+     * @param filtro   filtros opcionales: tipo, organizador, participante, ciudad, rango de fechas y orden
+     * @param pageable paginación y orden legado del resultado
      *
      * @return una página con los eventos visibles que cumplen todos los filtros
+     *
+     * @throws BadRequestException si el rango de fechas es inválido o el orden no está permitido
      */
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(EventoFiltroRequestDTO filtro, Pageable pageable) {
         TipoEvento tipo = validarFiltros(filtro);
         Set<Long> participantes = buscarIdsParticipantes(filtro.getParticipante());
-        return eventoRepository.findAll(construirSpecification(filtro, tipo, participantes), pageable);
+        Specification<Evento> specification = construirSpecification(filtro, tipo, participantes);
+        OrdenEvento orden = resolverOrden(filtro.getOrden());
+
+        if (orden == OrdenEvento.PRECIO) {
+            return eventoRepository.buscarPorPrecio(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.RELEVANCIA) {
+            return eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.FECHA || !pageable.getSort().isSorted()) {
+            return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
+        }
+
+        // Compatibilidad con el parámetro legado `sort`: si no se pidió `orden`,
+        // se respeta el orden explícito que haya llegado en el Pageable.
+        return eventoRepository.findAll(specification, pageable);
     }
 
     /**
@@ -124,6 +158,73 @@ public class EventoService {
     private TipoEvento validarFiltros(EventoFiltroRequestDTO filtro) {
         validarRangoDeFechas(filtro);
         return StringUtils.hasText(filtro.getTipo()) ? resolverTipo(filtro.getTipo()) : null;
+    }
+
+    /**
+     * Convierte el texto del parámetro {@code orden} en un OrdenEvento.
+     * No distingue mayúsculas ni espacios al inicio o al final.
+     *
+     * @param orden texto recibido (puede ser nulo o vacío)
+     *
+     * @return el orden correspondiente, o {@code null} si no se indicó ninguno
+     *
+     * @throws BadRequestException si el orden no es uno de los valores permitidos
+     *                             (fecha, precio, relevancia)
+     */
+    private OrdenEvento resolverOrden(String orden) {
+        if (!StringUtils.hasText(orden)) {
+            return null;
+        }
+
+        return switch (orden.trim().toLowerCase(Locale.ROOT)) {
+            case "fecha" -> OrdenEvento.FECHA;
+            case "precio" -> OrdenEvento.PRECIO;
+            case "relevancia" -> OrdenEvento.RELEVANCIA;
+            default -> throw new BadRequestException(
+                    "Orden inválido: '" + orden + "'. Valores permitidos: fecha, precio, relevancia");
+        };
+    }
+
+    /**
+     * Arma el {@code Pageable} para ordenar por fecha ascendente, con el id como desempate
+     * para que la paginación sea estable. Ignora el orden que traiga el {@code Pageable}.
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} con orden por fecha e id
+     */
+    private Pageable aplicarOrdenFecha(Pageable pageable) {
+        Sort sort = Sort.by(Sort.Direction.ASC, "fecha")
+                .and(Sort.by(Sort.Direction.ASC, "id"));
+
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged(sort);
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    /**
+     * Devuelve el {@code Pageable} sin criterio de orden, conservando página y tamaño.
+     * Se usa cuando el orden lo define la propia consulta (por precio o relevancia).
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} sin orden
+     */
+    private Pageable sinOrden(Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged();
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    }
+
+    /** Criterios de orden admitidos para el listado de eventos. */
+    private enum OrdenEvento {
+        FECHA,
+        PRECIO,
+        RELEVANCIA
     }
 
     /**
@@ -291,11 +392,12 @@ public class EventoService {
      * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
      * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
-     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
-     * después cambia el estado a CANCELADO.
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, dispara
+     * el reintegro masivo delegando en ms-devoluciones, y recién después cambia el estado a
+     * CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo ni a llamar a ms-tickets.
+     * sin volver a modificarlo ni a llamar a ms-tickets ni a ms-devoluciones.
      *
      * @param id id del evento a cancelar
      *
@@ -303,7 +405,7 @@ public class EventoService {
      *
      * @throws NotFoundException      si el evento no existe
      * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     * @throws RemoteServiceException si ms-tickets o ms-devoluciones no están disponibles o responden con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
@@ -314,6 +416,8 @@ public class EventoService {
         }
 
         ejecutarTickets(() -> ticketsClient.cancelarEvento(id));
+
+        ejecutarDevoluciones(() -> devolucionesClient.reintegrarEvento(id));
 
         return transactionTemplate.execute(status -> confirmarCancelacion(id));
     }
@@ -451,8 +555,6 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.CANCELADO);
-
-        //TO DO : REINTEGRO MASIVO
 
         return toEstadoDTO(eventoRepository.save(evento));
     }
@@ -645,6 +747,16 @@ public class EventoService {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
             throw new RemoteServiceException(502, "ms-tickets respondió con error");
+        }
+    }
+
+    private void ejecutarDevoluciones(Runnable llamada) {
+        try {
+            llamada.run();
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones no disponible");
+        } catch (FeignException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones respondió con error");
         }
     }
 

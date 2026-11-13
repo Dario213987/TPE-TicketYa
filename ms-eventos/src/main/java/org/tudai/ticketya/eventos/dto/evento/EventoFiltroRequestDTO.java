@@ -17,6 +17,7 @@ public class EventoFiltroRequestDTO {
     private Long organizadorId;
     private String participante;
     private String ciudad;
+    private String orden;
 
     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
     private LocalDate fechaDesde;

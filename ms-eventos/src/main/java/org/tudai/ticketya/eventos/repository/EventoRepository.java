@@ -19,7 +19,7 @@ import java.util.List;
 import java.util.Optional;
 
 @Repository
-public interface EventoRepository extends JpaRepository<Evento, Long>, JpaSpecificationExecutor<Evento> {
+public interface EventoRepository extends JpaRepository<Evento, Long>, JpaSpecificationExecutor<Evento>, EventoRepositoryCustom {
 
     Page<Evento> findByEstadoIn(Collection<EstadoEvento> estados, Pageable pageable);
 
