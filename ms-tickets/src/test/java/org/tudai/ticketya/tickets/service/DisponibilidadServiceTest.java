@@ -206,6 +206,38 @@ class DisponibilidadServiceTest {
         assertThat(respuesta.getLimiteEntradasPorCliente()).isEqualTo(4);
     }
 
+    @Test
+    void publicar_conOrganizadorYPrecio_losGuardaParaElPago() {
+        DisponibilidadEvento existente = DisponibilidadEvento.builder()
+                .eventoId(7L)
+                .creadoEl(Instant.parse("2026-01-01T00:00:00Z"))
+                .limiteEntradasPorCliente(4)
+                .build();
+        when(eventoRepository.insertarSiNoExiste(any(), any(Instant.class), any()))
+                .thenReturn(0);
+        when(eventoRepository.findById(7L)).thenReturn(Optional.of(existente));
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.empty());
+
+        service.publicar(PublicarEventoRequestDTO.builder()
+                .eventoId(7L)
+                .organizadorId(5L)
+                .sectores(List.of(SectorDisponibilidadDTO.builder()
+                        .sectorId(3L)
+                        .tipo(TipoSector.NO_NUMERADO)
+                        .capacidadMaxima(100)
+                        .precio(1500.0)
+                        .build()))
+                .build());
+
+        org.mockito.ArgumentCaptor<DisponibilidadSector> guardado =
+                org.mockito.ArgumentCaptor.forClass(DisponibilidadSector.class);
+        verify(sectorRepository).save(guardado.capture());
+        assertThat(guardado.getValue().getPrecio()).isEqualTo(1500.0);
+        assertThat(existente.getOrganizadorId()).isEqualTo(5L);
+        verify(eventoRepository).save(existente);
+    }
+
     private DisponibilidadSector sector(Long id, Long sectorIdExterno, TipoSector tipo,
                                         int capacidadTotal, int disponibles) {
         return DisponibilidadSector.builder()

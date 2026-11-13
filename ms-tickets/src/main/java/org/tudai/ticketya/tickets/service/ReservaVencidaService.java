@@ -73,8 +73,28 @@ public class ReservaVencidaService {
             if (ticket.isPagoEnCurso() || enPago(ticket)) {
                 continue;
             }
+            liberables.add(ticket);
+        }
 
-            ticket.setEstadoTicket(EstadoTicket.LIBERADO);
+        if (liberables.isEmpty()) {
+            return 0;
+        }
+
+        liberar(liberables, EstadoTicket.LIBERADO);
+        return liberables.size();
+    }
+
+    /**
+     * Libera los lugares tomados por los tickets: los asientos vuelven a LIBRE, el sector
+     * recupera la capacidad y cada ticket queda en el estado final indicado.
+     *
+     * @param tickets     tickets a liberar
+     * @param estadoFinal estado en el que quedan los tickets (LIBERADO, EXPIRADO, CANCELADO)
+     */
+    @Transactional
+    public void liberar(List<Ticket> tickets, EstadoTicket estadoFinal) {
+        for (Ticket ticket : tickets) {
+            ticket.setEstadoTicket(estadoFinal);
             if (ticket.getAsiento() != null) {
                 ticket.getAsiento().setEstado(EstadoDisponibilidad.LIBRE);
                 ticket.setAsiento(null);
@@ -84,13 +104,11 @@ public class ReservaVencidaService {
             if (sector.getDisponibles() < sector.getCapacidadTotal()) {
                 sector.setDisponibles(sector.getDisponibles() + 1);
             }
-            liberables.add(ticket);
         }
 
-        if (!liberables.isEmpty()) {
-            ticketRepository.saveAll(liberables);
+        if (!tickets.isEmpty()) {
+            ticketRepository.saveAll(tickets);
         }
-        return liberables.size();
     }
 
     private boolean enPago(Ticket ticket) {
