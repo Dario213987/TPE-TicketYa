@@ -1,0 +1,8 @@
+# Use this workspace to collaborate
+workspace:
+  id: b25dc867-a43e-4e03-8992-f64d497bf2f0
+
+localResources:
+  specs:
+    - ../contracts/transacciones-contract/src/main/resources/openapi.yaml
+    - ../contracts/devoluciones-contract/src/src/main/resources/openapi.yaml

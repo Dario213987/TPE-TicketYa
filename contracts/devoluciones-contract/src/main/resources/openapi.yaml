@@ -1,0 +1,236 @@
+openapi: 3.0.3
+info:
+  title: ms-devoluciones
+  version: 1.0.0
+  description: |
+    Gestión de devoluciones de entradas / tickets. Servicio que permite a los clientes
+    solicitar la devolución de una entrada hasta 72 horas antes del evento.
+    Requiere los headers X-User-Id y X-User-Role.
+tags:
+  - name: devoluciones
+paths:
+  /api/devoluciones:
+    post:
+      tags: [devoluciones]
+      operationId: solicitarDevolucion
+      summary: Solicita la devolución de una entrada
+      description: |
+        Crea una solicitud de devolución en estado PENDIENTE si el ticket está VENDIDO,
+        no fue utilizado, pertenece al cliente autenticado y faltan al menos 72 horas para el evento.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/SolicitudDevolucionRequest'
+      responses:
+        '201':
+          description: Solicitud de devolución creada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+    get:
+      tags: [devoluciones]
+      operationId: listarDevoluciones
+      summary: Lista las solicitudes de devolución
+      description: |
+        Paginado y filtrable por estado. Un cliente solo ve sus propias solicitudes,
+        mientras que un administrador puede ver todas.
+      parameters:
+        - name: estado
+          in: query
+          required: false
+          schema:
+            $ref: '#/components/schemas/EstadoDevolucion'
+        - name: clienteId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
+        - $ref: '#/components/parameters/Page'
+        - $ref: '#/components/parameters/Size'
+        - $ref: '#/components/parameters/Sort'
+      responses:
+        '200':
+          description: Página de solicitudes de devolución
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PagedModel'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/{id}:
+    get:
+      tags: [devoluciones]
+      operationId: obtenerDevolucion
+      summary: Obtiene una devolución por ID
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: La devolución
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/{id}/rechazar:
+    post:
+      tags: [devoluciones]
+      operationId: rechazarDevolucion
+      summary: Rechaza una solicitud de devolución
+      description: |
+        Pasa una solicitud de devolución en estado PENDIENTE a DENEGADA indicando el motivo.
+        El ticket asociado sigue VENDIDO.
+        Si la solicitud ya fue resuelta, responde 409 Conflict.
+        Solo accesible por administradores.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RechazarDevolucionRequest'
+      responses:
+        '200':
+          description: Solicitud de devolución rechazada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/ticket/{ticketId}:
+    get:
+      tags: [devoluciones]
+      operationId: obtenerDevolucionPorTicket
+      summary: Obtiene la devolución de un ticket
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: La devolución del ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionResponse'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    Page:
+      name: page
+      in: query
+      description: Número de página, desde 0
+      schema: { type: integer, minimum: 0, default: 0 }
+    Size:
+      name: size
+      in: query
+      description: Elementos por página (máximo 100)
+      schema: { type: integer, minimum: 1, maximum: 100, default: 20 }
+    Sort:
+      name: sort
+      in: query
+      description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`."
+      schema: { type: string }
+  responses:
+    Error:
+      description: Error (400 inválido, 401 no autenticado, 403 sin permiso, 404 no encontrado, 409 conflicto)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    EstadoDevolucion:
+      type: string
+      enum: [PENDIENTE, DENEGADA, APROBADA]
+    SolicitudDevolucionRequest:
+      type: object
+      required: [ticketId]
+      properties:
+        ticketId:
+          type: integer
+          format: int64
+        clienteId:
+          type: integer
+          format: int64
+        motivo:
+          type: string
+    RechazarDevolucionRequest:
+      type: object
+      required: [motivo]
+      properties:
+        motivo:
+          type: string
+    DevolucionResponse:
+      type: object
+      required: [id, clienteId, ticketId, fecha, estado]
+      properties:
+        id:
+          type: integer
+          format: int64
+        clienteId:
+          type: integer
+          format: int64
+        ticketId:
+          type: integer
+          format: int64
+        fecha:
+          type: string
+          format: date-time
+        estado:
+          $ref: '#/components/schemas/EstadoDevolucion'
+        transaccionId:
+          type: integer
+          format: int64
+          nullable: true
+        motivo:
+          type: string
+          nullable: true
+    PagedModel:
+      type: object
+      description: Página en el formato de Spring Data (org.springframework.data.web.PagedModel)
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/DevolucionResponse'
+        page:
+          type: object
+          properties:
+            size: { type: integer }
+            number: { type: integer }
+            totalElements: { type: integer, format: int64 }
+            totalPages: { type: integer }
+    Problema:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
