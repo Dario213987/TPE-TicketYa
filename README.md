@@ -18,7 +18,7 @@ Verificá con `mvn -v` que Maven use Java 25.
 | `libs/`                                                                    | Librerías compartidas de infraestructura (`ticketya-core`, `ticketya-web-starter`) |
 | `contracts/`                                                               | Contratos OpenAPI, uno por microservicio |
 | `eureka-server/`, `api-gateway/`                                           | Descubrimiento y punto de entrada único |
-| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, etc | Microservicios de negocio |
+| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, `ms-preferencias/` | Microservicios de negocio |
 | `specs/`                                                                   | Propuestas y specs |
 | `postman/`                                                                 | Colección de requests |
 
@@ -39,7 +39,7 @@ Verificá con `mvn -v` que Maven use Java 25.
     cp infra/.env.example infra/.env   # completar contraseñas
     docker compose -f infra/docker-compose.yml up -d
 
-Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto):
+Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto, MongoDB en `ms-preferencias`):
 
 | Servicio | Puerto en el host |
 |---|---|
@@ -47,8 +47,11 @@ Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto
 | ms-tickets | 5434 |
 | ms-transacciones | 5435 |
 | ms-devoluciones | 5436 |
+| ms-preferencias (MongoDB) | 5437 |
 
 Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los pasos de la plantilla comentada en `infra/docker-compose.yml` (bloque del compose, driver en el pom y `DB_URL`).
+
+`ms-preferencias` guarda documentos en MongoDB (`db-preferencias`, puerto 5437) y se configura con la variable `MONGODB_URI`.
 
 Redis está desactivado por ahora (ver el comentario en el compose).
 

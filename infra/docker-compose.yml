@@ -61,6 +61,18 @@ services:
     ports: ["127.0.0.1:5436:5432"]
     volumes: [devoluciones-data:/var/lib/postgresql]
 
+  # ms-preferencias usa MongoDB (un documento por cliente).
+  db-preferencias:
+    image: mongo:7
+    restart: unless-stopped
+    ports: ["127.0.0.1:5437:27017"]
+    volumes: [preferencias-data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # MySQL (plantilla). Para pasar un servicio a MySQL:
   #   1. Comentar su bloque db-* de PostgreSQL y descomentar este, cambiando
   #      nombre, base, usuario y contraseña. Mantener el MISMO puerto del host y
@@ -101,3 +113,4 @@ volumes:
   tickets-data:
   transacciones-data:
   devoluciones-data:
+  preferencias-data:
