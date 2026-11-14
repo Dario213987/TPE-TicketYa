@@ -11,13 +11,13 @@ import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
 import org.tudai.ticketya.eventos.domain.Participante;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
-import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.time.LocalDateTime;
@@ -33,7 +33,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "ticketya.eventos.notificaciones.enabled=false",
         "ticketya.logging.dir=target/test-logs"
 })
-@Testcontainers
+@Testcontainers(disabledWithoutDocker = true)
 class EventoFiltroMySQLTest {
 
     @Container
@@ -81,7 +81,7 @@ class EventoFiltroMySQLTest {
         eventoRepository.saveAndFlush(evento);
 
         Page<Evento> resultado = eventoService.listarPublicados(
-                EventoFiltroRequestDTO.builder().participante("CAFE TACVBA").build(),
+                new EventoFiltroRequest().participante("CAFE TACVBA"),
                 PageRequest.of(0, 20));
 
         assertThat(resultado.getTotalElements()).isEqualTo(1);
@@ -97,7 +97,7 @@ class EventoFiltroMySQLTest {
         Evento eventoBarato = guardarEvento("evento-barato", lugarCaro, 100.0);
 
         Page<Evento> resultado = eventoService.listarPublicados(
-                EventoFiltroRequestDTO.builder().orden("precio").build(),
+                new EventoFiltroRequest().orden("precio"),
                 PageRequest.of(0, 20));
 
         assertThat(resultado.getContent())

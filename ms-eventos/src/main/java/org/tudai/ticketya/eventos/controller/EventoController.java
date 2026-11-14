@@ -3,6 +3,7 @@ package org.tudai.ticketya.eventos.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
@@ -15,12 +16,12 @@ import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
-import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.util.Set;
@@ -39,12 +40,11 @@ public class EventoController {
 
     @GetMapping
     public PagedModel<EventoResumen> listarEventos(
-            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado y ordenamiento
-            @ModelAttribute EventoFiltroRequestDTO filtro,
+            // Vincula los parámetros del request con los campos de EventoFiltroRequest
+            @ModelAttribute EventoFiltroRequest filtro,
             @PageableDefault(size = 20) Pageable pageable) {
 
-        Pageable pageableValidado = ordenable(pageable);
-        validarSize(pageableValidado);
+        Pageable pageableValidado = ordenable(limitarSize(pageable));
         return new PagedModel<>(eventoService.listarPublicados(filtro, pageableValidado)
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
     }
@@ -108,10 +108,11 @@ public class EventoController {
         return pageable;
     }
 
-    private static void validarSize(Pageable pageable) {
-        if (pageable.getPageSize() > MAX_SIZE) {
-            throw new BadRequestException("El tamaño de página no puede superar " + MAX_SIZE);
+    private static Pageable limitarSize(Pageable pageable) {
+        if (pageable.isUnpaged() || pageable.getPageSize() <= MAX_SIZE) {
+            return pageable;
         }
+        return PageRequest.of(pageable.getPageNumber(), MAX_SIZE, pageable.getSort());
     }
 
     @PostMapping

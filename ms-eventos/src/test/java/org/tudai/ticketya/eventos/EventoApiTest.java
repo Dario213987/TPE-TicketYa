@@ -230,8 +230,8 @@ class EventoApiTest {
                 lugar, LocalDateTime.of(2027, 1, 1, 0, 30));
 
         mvc.perform(get("/api/eventos")
-                        .param("fechaDesde", "2026-12-01")
-                        .param("fechaHasta", "2026-12-31"))
+                        .param("desde", "2026-12-01")
+                        .param("hasta", "2026-12-31"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(2))
                 .andExpect(jsonPath("$.content[0].nombre").value("Primer día"))
@@ -239,10 +239,22 @@ class EventoApiTest {
     }
 
     @Test
+    void listarEventos_conAliasDeFechas_mantieneCompatibilidad() throws Exception {
+        guardarEvento("Primer día", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 1, 20, 0));
+
+        mvc.perform(get("/api/eventos")
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1));
+    }
+
+    @Test
     void listarEventos_conRangoInvertido_devuelve400() throws Exception {
         mvc.perform(get("/api/eventos")
-                        .param("fechaDesde", "2026-12-31")
-                        .param("fechaHasta", "2026-12-01"))
+                        .param("desde", "2026-12-31")
+                        .param("hasta", "2026-12-01"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.detail")
                         .value("La fecha 'desde' no puede ser posterior a la fecha 'hasta'"));
@@ -257,21 +269,41 @@ class EventoApiTest {
     }
 
     @Test
-    void listarEventos_participanteParcial_noDevuelveCoincidencias() throws Exception {
+    void listarEventos_participanteParcial_devuelveCoincidencias() throws Exception {
         guardarEvento("Recital Soda", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
                 lugar, LocalDateTime.of(2026, 12, 11, 20, 0),
                 Participante.builder().nombre("Soda Stereo").build());
+        guardarEvento("Festival Cafe", TipoEvento.FESTIVAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 12, 20, 0),
+                Participante.builder().nombre("Café Tacvba").build());
 
-        mvc.perform(get("/api/eventos").param("participante", "Soda"))
+        mvc.perform(get("/api/eventos").param("participante", "SODA"))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.page.totalElements").value(0));
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value("Recital Soda"));
     }
 
     @Test
-    void listarEventos_conSizeMayorA50_devuelve400() throws Exception {
+    void listarEventos_filtraPorParticipanteId() throws Exception {
+        Evento eventoSoda = guardarEvento("Recital Soda", TipoEvento.RECITAL, EstadoEvento.PUBLICADO,
+                7L, lugar, LocalDateTime.of(2026, 12, 11, 20, 0),
+                Participante.builder().nombre("Soda Stereo").build());
+        guardarEvento("Festival Cafe", TipoEvento.FESTIVAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 12, 20, 0),
+                Participante.builder().nombre("Café Tacvba").build());
+        Long sodaId = eventoSoda.getParticipantes().iterator().next().getId();
+
+        mvc.perform(get("/api/eventos").param("participanteId", sodaId.toString()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value("Recital Soda"));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_loRecortaA50() throws Exception {
         mvc.perform(get("/api/eventos").param("size", "51"))
-                .andExpect(status().isBadRequest())
-                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.size").value(50));
     }
 
     @Test

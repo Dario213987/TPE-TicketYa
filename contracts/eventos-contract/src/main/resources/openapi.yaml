@@ -23,7 +23,10 @@ paths:
         - $ref: '#/components/parameters/TipoEventoFiltro'
         - $ref: '#/components/parameters/OrganizadorIdFiltro'
         - $ref: '#/components/parameters/ParticipanteFiltro'
+        - $ref: '#/components/parameters/ParticipanteIdFiltro'
         - $ref: '#/components/parameters/CiudadFiltro'
+        - $ref: '#/components/parameters/DesdeFiltro'
+        - $ref: '#/components/parameters/HastaFiltro'
         - $ref: '#/components/parameters/FechaDesdeFiltro'
         - $ref: '#/components/parameters/FechaHastaFiltro'
         - $ref: '#/components/parameters/Orden'
@@ -459,8 +462,8 @@ components:
     EventosSize:
       name: size
       in: query
-      description: Elementos por página (máximo 50)
-      schema: { type: integer, minimum: 1, maximum: 50, default: 20 }
+      description: Elementos por página. Si se pide más de 50, se recorta a 50.
+      schema: { type: integer, minimum: 1, default: 20 }
     Sort:
       name: sort
       in: query
@@ -483,17 +486,39 @@ components:
     ParticipanteFiltro:
       name: participante
       in: query
-      description: Nombre de un participante/artista. Coincidencia exacta, no parcial, sin distinguir mayúsculas ni tildes.
+      description: Nombre o parte del nombre de un participante/artista. Coincidencia parcial, sin distinguir mayúsculas ni tildes.
       schema: { type: string }
+    ParticipanteIdFiltro:
+      name: participanteId
+      in: query
+      description: Id exacto de un participante/artista.
+      schema: { type: integer, format: int64 }
     CiudadFiltro:
       name: ciudad
       in: query
-      description: Filtra por la ciudad del lugar sin distinguir mayúsculas/minúsculas.
+      description: Filtra por la ciudad del lugar sin distinguir mayúsculas/minúsculas ni tildes.
       schema: { type: string }
+    DesdeFiltro:
+      name: desde
+      in: query
+      description: Fecha mínima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd). Tiene prioridad sobre `fechaDesde`.
+      schema:
+        type: string
+        format: date
+        example: '2026-12-01'
+    HastaFiltro:
+      name: hasta
+      in: query
+      description: Fecha máxima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd). Tiene prioridad sobre `fechaHasta`.
+      schema:
+        type: string
+        format: date
+        example: '2026-12-31'
     FechaDesdeFiltro:
       name: fechaDesde
       in: query
-      description: Fecha mínima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
+      deprecated: true
+      description: Alias legado de `desde`, en formato ISO-8601 (yyyy-MM-dd).
       schema:
         type: string
         format: date
@@ -501,7 +526,8 @@ components:
     FechaHastaFiltro:
       name: fechaHasta
       in: query
-      description: Fecha máxima inclusive del evento, en formato ISO-8601 (yyyy-MM-dd).
+      deprecated: true
+      description: Alias legado de `hasta`, en formato ISO-8601 (yyyy-MM-dd).
       schema:
         type: string
         format: date
@@ -542,6 +568,36 @@ components:
     EstadoEvento:
       type: string
       enum: [BORRADOR, CANCELADO, FINALIZADO, PUBLICADO, SUSPENDIDO, AGOTADO]
+    EventoFiltroRequest:
+      type: object
+      description: |
+        Filtros opcionales del listado de eventos. Cada campo se envía como query param
+        individual. Los filtros presentes se combinan con AND.
+      properties:
+        tipo:
+          type: string
+          description: Tipo de evento. Se valida contra TipoEvento en el servicio.
+        organizadorId: { type: integer, format: int64 }
+        participante:
+          type: string
+          description: Nombre o parte del nombre de un artista, sin distinguir mayúsculas ni tildes.
+        participanteId: { type: integer, format: int64 }
+        ciudad:
+          type: string
+          description: Ciudad del lugar, sin distinguir mayúsculas ni tildes.
+        desde: { type: string, format: date }
+        hasta: { type: string, format: date }
+        fechaDesde:
+          type: string
+          format: date
+          deprecated: true
+        fechaHasta:
+          type: string
+          format: date
+          deprecated: true
+        orden:
+          type: string
+          description: Criterio de orden. Valores permitidos de fecha, precio o relevancia.
     EventoResumen:
       type: object
       required: [id, nombre, tipo, fecha, estado]

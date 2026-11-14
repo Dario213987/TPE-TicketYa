@@ -24,6 +24,7 @@ import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
@@ -46,7 +47,6 @@ import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
-import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
@@ -54,6 +54,7 @@ import org.tudai.ticketya.eventos.repository.LugarRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
 import java.text.Normalizer;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.LocalTime;
 import java.util.ArrayList;
@@ -116,7 +117,8 @@ public class EventoService {
      * </ul>
      * Si se envían {@code orden} y {@code sort}, {@code orden} tiene prioridad.
      *
-     * @param filtro   filtros opcionales: tipo, organizador, participante, ciudad, rango de fechas y orden
+     * @param filtro   filtros opcionales: tipo, organizador, participante, participanteId,
+     *                 ciudad, rango de fechas y orden
      * @param pageable paginación y orden legado del resultado
      *
      * @return una página con los eventos visibles que cumplen todos los filtros
@@ -124,10 +126,11 @@ public class EventoService {
      * @throws BadRequestException si el rango de fechas es inválido o el orden no está permitido
      */
     @Transactional(readOnly = true)
-    public Page<Evento> listarPublicados(EventoFiltroRequestDTO filtro, Pageable pageable) {
+    public Page<Evento> listarPublicados(EventoFiltroRequest filtro, Pageable pageable) {
         TipoEvento tipo = validarFiltros(filtro);
         Set<Long> participantes = buscarIdsParticipantes(filtro.getParticipante());
-        Specification<Evento> specification = construirSpecification(filtro, tipo, participantes);
+        Set<Long> lugares = buscarIdsLugares(filtro.getCiudad());
+        Specification<Evento> specification = construirSpecification(filtro, tipo, participantes, lugares);
         OrdenEvento orden = resolverOrden(filtro.getOrden());
 
         if (orden == OrdenEvento.PRECIO) {
@@ -154,9 +157,9 @@ public class EventoService {
      *
      * @return el tipo de evento validado, o {@code null} si no se recibió
      *
-     * @throws BadRequestException si la fechaDesde > fechaHasta o si el tipo no existe
+     * @throws BadRequestException si la fecha desde es posterior a la fecha hasta o si el tipo no existe
      */
-    private TipoEvento validarFiltros(EventoFiltroRequestDTO filtro) {
+    private TipoEvento validarFiltros(EventoFiltroRequest filtro) {
         validarRangoDeFechas(filtro);
         return StringUtils.hasText(filtro.getTipo()) ? resolverTipo(filtro.getTipo()) : null;
     }
@@ -233,13 +236,39 @@ public class EventoService {
      *
      * @param filtro filtro aplicado
      *
-     * @throws BadRequestException si la fechaDesde > fechaHasta
+     * @throws BadRequestException si la fecha desde es posterior a la fecha hasta
      * */
-    private void validarRangoDeFechas(EventoFiltroRequestDTO filtro) {
-        if (filtro.getFechaDesde() != null && filtro.getFechaHasta() != null
-                && filtro.getFechaDesde().isAfter(filtro.getFechaHasta())) {
+    private void validarRangoDeFechas(EventoFiltroRequest filtro) {
+        LocalDate desde = resolverFechaDesde(filtro);
+        LocalDate hasta = resolverFechaHasta(filtro);
+
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
             throw new BadRequestException("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
         }
+    }
+
+    /**
+     * Devuelve la fecha mínima efectiva. El parámetro {@code desde} tiene prioridad sobre
+     * el alias legado {@code fechaDesde}.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return fecha mínima, o {@code null} si no se indicó
+     */
+    private static LocalDate resolverFechaDesde(EventoFiltroRequest filtro) {
+        return filtro.getDesde() != null ? filtro.getDesde() : filtro.getFechaDesde();
+    }
+
+    /**
+     * Devuelve la fecha máxima efectiva. El parámetro {@code hasta} tiene prioridad sobre
+     * el alias legado {@code fechaHasta}.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return fecha máxima, o {@code null} si no se indicó
+     */
+    private static LocalDate resolverFechaHasta(EventoFiltroRequest filtro) {
+        return filtro.getHasta() != null ? filtro.getHasta() : filtro.getFechaHasta();
     }
 
     /**
@@ -264,11 +293,13 @@ public class EventoService {
     }
 
     /**
-     * Busca en Java los ids de participantes cuyo nombre normalizado coincide exactamente
-     * con el texto recibido. Así el filtro funciona igual en PostgreSQL, H2 y MySQL, sin
-     * depender de funciones propias de un motor.
+     * Busca en Java los ids de participantes cuyo nombre normalizado contiene el texto
+     * recibido. Así el filtro funciona igual en PostgreSQL, H2 y MySQL, sin depender de
+     * funciones propias de un motor.
+     * <p>
+     * Para el alcance del TP se recorre la tabla completa de participantes en memoria.
      *
-     * @param participante nombre buscado
+     * @param participante nombre o parte del nombre buscado
      *
      * @return ids coincidentes, o {@code null} si no se recibió el filtro
      */
@@ -277,10 +308,33 @@ public class EventoService {
             return null;
         }
         String buscado = normalizar(participante);
-        return participanteRepository.findAllIdAndNombre().stream()
+        return participanteRepository.findAll().stream()
                 .filter(p -> p.getNombre() != null)
-                .filter(p -> normalizar(p.getNombre()).equals(buscado))
-                .map(ParticipanteRepository.ParticipanteIdNombre::getId)
+                .filter(p -> normalizar(p.getNombre()).contains(buscado))
+                .map(Participante::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Busca en Java los ids de lugares cuya ciudad normalizada coincide con el texto
+     * recibido. Así la comparación ignora mayúsculas y tildes sin depender de funciones
+     * propias de un motor.
+     * <p>
+     * Para el alcance del TP se recorre la tabla completa de lugares en memoria.
+     *
+     * @param ciudad ciudad buscada
+     *
+     * @return ids coincidentes, o {@code null} si no se recibió el filtro
+     */
+    private Set<Long> buscarIdsLugares(String ciudad) {
+        if (!StringUtils.hasText(ciudad)) {
+            return null;
+        }
+        String buscada = normalizar(ciudad);
+        return lugarRepository.findAll().stream()
+                .filter(l -> l.getCiudad() != null)
+                .filter(l -> normalizar(l.getCiudad()).equals(buscada))
+                .map(Lugar::getId)
                 .collect(Collectors.toSet());
     }
 
@@ -289,22 +343,29 @@ public class EventoService {
      * restringe el resultado a los eventos en estado visible ({@code ESTADOS_VISIBLES}).
      *
      * Los filtros que vienen nulos o vacíos se ignoran:
-     * tipo y ciudad: coincidencia sin distinguir mayúsculas/minúsculas y sin espacios al inicio ni al final.
+     * tipo: coincidencia exacta con el enum.
      * organizador: coincidencia por id.
+     * ciudad: coincidencia exacta con la ciudad del lugar, sin distinguir mayúsculas ni
+     * tildes (los ids de lugares se resuelven en Java).
      * fecha desde / hasta: rango inclusivo sobre la fecha del evento.
-     * participante: coincidencia exacta con el nombre de algún artista, sin distinguir
-     * mayúsculas ni tildes (los nombres se normalizan en Java). Hace un join con los artistas
+     * participante: coincidencia parcial con el nombre de algún artista, sin distinguir
+     * mayúsculas ni tildes (los ids se resuelven en Java).
+     * participanteId: coincidencia exacta por id de participante.
+     * Si se filtra por participante y/o participanteId, hace un único join con los artistas
      * y usa {@code distinct} para no repetir eventos.
      *
-     * @param filtro filtros opcionales: tipo, organizador, participante, ciudad y rango de fechas
+     * @param filtro filtros opcionales: tipo, organizador, participante, participanteId,
+     *               ciudad y rango de fechas
      * @param tipo tipo de evento ya validado, o {@code null}
      * @param participantes ids de participantes que coinciden, o {@code null} si no se filtró
+     * @param lugares ids de lugares que coinciden con la ciudad, o {@code null} si no se filtró
      *
      * @return Specification lista para usar en el repository
      */
-    private Specification<Evento> construirSpecification(EventoFiltroRequestDTO filtro,
+    private Specification<Evento> construirSpecification(EventoFiltroRequest filtro,
                                                          TipoEvento tipo,
-                                                         Set<Long> participantes) {
+                                                         Set<Long> participantes,
+                                                         Set<Long> lugares) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
             predicates.add(root.get("estado").in(ESTADOS_VISIBLES));
@@ -317,26 +378,40 @@ public class EventoService {
                 predicates.add(cb.equal(root.get("organizadorId"), filtro.getOrganizadorId()));
             }
 
-            if (StringUtils.hasText(filtro.getCiudad())) {
-                predicates.add(cb.equal(cb.lower(root.get("lugar").get("ciudad").as(String.class)),
-                        filtro.getCiudad().trim().toLowerCase(Locale.ROOT)));
-            }
-            if (filtro.getFechaDesde() != null) {
-                predicates.add(cb.greaterThanOrEqualTo(root.get("fecha"),
-                        filtro.getFechaDesde().atStartOfDay()));
-            }
-            if (filtro.getFechaHasta() != null) {
-                predicates.add(cb.lessThanOrEqualTo(root.get("fecha"),
-                        filtro.getFechaHasta().atTime(LocalTime.MAX)));
-            }
-            if (participantes != null) {
-                if (participantes.isEmpty()) {
+            if (lugares != null) {
+                if (lugares.isEmpty()) {
                     predicates.add(cb.disjunction());
                 } else {
-                    Join<Evento, Participante> participante = root.join("participantes");
-                    predicates.add(participante.get("id").in(participantes));
-                    query.distinct(true);
+                    predicates.add(root.get("lugar").get("id").in(lugares));
                 }
+            }
+
+            LocalDate fechaDesde = resolverFechaDesde(filtro);
+            LocalDate fechaHasta = resolverFechaHasta(filtro);
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fecha"),
+                        fechaDesde.atStartOfDay()));
+            }
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fecha"),
+                        fechaHasta.atTime(LocalTime.MAX)));
+            }
+
+            Long participanteId = filtro.getParticipanteId();
+            if (participantes != null || participanteId != null) {
+                Join<Evento, Participante> participante = root.join("participantes");
+
+                if (participantes != null) {
+                    if (participantes.isEmpty()) {
+                        predicates.add(cb.disjunction());
+                    } else {
+                        predicates.add(participante.get("id").in(participantes));
+                    }
+                }
+                if (participanteId != null) {
+                    predicates.add(cb.equal(participante.get("id"), participanteId));
+                }
+                query.distinct(true);
             }
 
             return cb.and(predicates.toArray(new Predicate[0]));
