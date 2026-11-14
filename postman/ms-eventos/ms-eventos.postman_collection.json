@@ -307,6 +307,69 @@
 							]
 						}
 					}
+				},
+				{
+					"name": "Obtener detalle de un evento",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"const j = pm.response.json();",
+									"pm.test(\"trae los datos base\", () => { pm.expect(j.id).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))); pm.expect(j.nombre).to.be.a(\"string\"); pm.expect(j.estado).to.be.a(\"string\"); });",
+									"pm.test(\"fecha en formato date-time\", () => pm.expect(j.fecha).to.match(/^\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}/));",
+									"pm.test(\"incluye organizadorId\", () => pm.expect(j.organizadorId).to.be.a(\"number\"));",
+									"pm.test(\"incluye lugar, participantes, sectores y precios\", () => { pm.expect(j).to.have.property(\"lugar\"); pm.expect(j.participantes).to.be.an(\"array\"); pm.expect(j.sectores).to.be.an(\"array\"); pm.expect(j.preciosSectores).to.be.an(\"object\"); });"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos/{{eventoId}}",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos",
+								"{{eventoId}}"
+							]
+						}
+					}
+				},
+				{
+					"name": "Detalle de evento inexistente devuelve 404",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos/999999",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos",
+								"999999"
+							]
+						}
+					}
 				}
 			]
 		},

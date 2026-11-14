@@ -22,6 +22,7 @@ import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
@@ -346,6 +347,34 @@ public class EventoService {
         return Normalizer.normalize(valor.trim(), Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(Locale.ROOT);
+    }
+
+
+    /**
+     * Devuelve el detalle de un evento.
+     * <p>
+     * Es público para cualquier evento que no esté en BORRADOR. Un BORRADOR solo lo puede ver
+     * su organizador o un administrador; para el resto se responde 404 para no revelar su
+     * existencia. No incluye la disponibilidad por sector: esa se consulta en ms-tickets.
+     *
+     * @param eventoId id del evento
+     * @param userId   id del usuario que consulta, o {@code null} si es anónimo
+     * @param esAdmin  {@code true} si el usuario es administrador
+     *
+     * @return el detalle del evento
+     *
+     * @throws NotFoundException si el evento no existe o es un BORRADOR ajeno
+     */
+    @Transactional(readOnly = true)
+    public EventoDetalleResponse obtenerEvento(Long eventoId, Long userId, boolean esAdmin) {
+        Evento evento = buscarEvento(eventoId);
+
+        if (evento.getEstado() == EstadoEvento.BORRADOR
+                && !esAdmin && !Objects.equals(evento.getOrganizadorId(), userId)) {
+            throw new NotFoundException("Evento no encontrado con id: " + eventoId);
+        }
+
+        return toDetalleResponse(evento);
     }
 
 
@@ -871,6 +900,11 @@ public class EventoService {
 
     private EventoResponse toResponse(Evento evento) {
         return modelMapper.map(evento, EventoResponse.class);
+    }
+
+    private EventoDetalleResponse toDetalleResponse(Evento evento) {
+        EventoResponse base = modelMapper.map(evento, EventoResponse.class);
+        return modelMapper.map(base, EventoDetalleResponse.class);
     }
 
     @Transactional

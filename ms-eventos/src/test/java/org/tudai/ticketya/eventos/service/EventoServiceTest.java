@@ -25,6 +25,7 @@ import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
@@ -280,6 +281,104 @@ class EventoServiceTest {
                 .isInstanceOf(BadRequestException.class)
                 .hasMessageContaining("Tipo de evento inválido: 'INVALIDO'");
         verifyNoInteractions(eventoRepository, participanteRepository);
+    }
+
+    @Test
+    void obtenerEvento_deUnEventoPublicado_devuelveElDetalleCompleto() {
+        Evento evento = eventoDeDetalle(EstadoEvento.PUBLICADO, 7L);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        EventoDetalleResponse response = eventoService.obtenerEvento(1L, null, false);
+
+        assertThat(response.getId()).isEqualTo(1L);
+        assertThat(response.getNombre()).isEqualTo("Recital");
+        assertThat(response.getDescripcion()).isEqualTo("Presentación en vivo");
+        assertThat(response.getTipo()).isEqualTo(TipoEvento.RECITAL);
+        assertThat(response.getFecha()).isEqualTo(LocalDateTime.of(2026, 12, 1, 20, 0));
+        assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        assertThat(response.getOrganizadorId()).isEqualTo(7L);
+        assertThat(response.getLugar().getNombre()).isEqualTo("Estadio");
+        assertThat(response.getLugar().getCiudad()).isEqualTo("Tandil");
+        assertThat(response.getParticipantes()).extracting("nombre").containsExactly("La Renga");
+        assertThat(response.getSectores()).hasSize(1);
+        assertThat(response.getSectores().get(0).getPrecio()).isEqualTo(15000.0);
+        assertThat(response.getPreciosSectores()).containsEntry("100", 15000.0);
+    }
+
+    @Test
+    void obtenerEvento_inexistente_lanzaNotFound() {
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
+
+        assertThatThrownBy(() -> eventoService.obtenerEvento(99L, null, false))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void obtenerEvento_borradorDelDueno_loDevuelve() {
+        Evento evento = eventoDeDetalle(EstadoEvento.BORRADOR, 7L);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThat(eventoService.obtenerEvento(1L, 7L, false).getEstado())
+                .isEqualTo(EstadoEvento.BORRADOR);
+    }
+
+    @Test
+    void obtenerEvento_borradorVistoPorUnAdmin_loDevuelve() {
+        Evento evento = eventoDeDetalle(EstadoEvento.BORRADOR, 7L);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThat(eventoService.obtenerEvento(1L, 99L, true).getEstado())
+                .isEqualTo(EstadoEvento.BORRADOR);
+    }
+
+    @Test
+    void obtenerEvento_borradorAjeno_lanzaNotFound() {
+        Evento evento = eventoDeDetalle(EstadoEvento.BORRADOR, 7L);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> eventoService.obtenerEvento(1L, 99L, false))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void obtenerEvento_borradorVistoPorUnAnonimo_lanzaNotFound() {
+        Evento evento = eventoDeDetalle(EstadoEvento.BORRADOR, 7L);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> eventoService.obtenerEvento(1L, null, false))
+                .isInstanceOf(NotFoundException.class);
+    }
+
+    @Test
+    void obtenerEvento_estadosDistintosDeBorrador_sonVisiblesParaCualquiera() {
+        List<EstadoEvento> estados = List.of(EstadoEvento.PUBLICADO, EstadoEvento.AGOTADO,
+                EstadoEvento.SUSPENDIDO, EstadoEvento.CANCELADO, EstadoEvento.FINALIZADO);
+
+        for (EstadoEvento estado : estados) {
+            Evento evento = eventoDeDetalle(estado, 7L);
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+            assertThat(eventoService.obtenerEvento(1L, null, false).getEstado()).isEqualTo(estado);
+        }
+    }
+
+    private Evento eventoDeDetalle(EstadoEvento estado, Long organizadorId) {
+        SectorNumerado sector = SectorNumerado.builder().id(100L).nombre("Platea").build();
+        Lugar lugar = Lugar.builder().id(10L).nombre("Estadio").ciudad("Tandil").build();
+        lugar.addSector(sector);
+        Evento evento = Evento.builder()
+                .id(1L)
+                .nombre("Recital")
+                .descripcion("Presentación en vivo")
+                .tipo(TipoEvento.RECITAL)
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
+                .estado(estado)
+                .organizadorId(organizadorId)
+                .lugar(lugar)
+                .build();
+        evento.addParticipante(Participante.builder().id(3L).nombre("La Renga").build());
+        evento.definirPrecioSector(100L, 15000.0);
+        return evento;
     }
 
     @Test

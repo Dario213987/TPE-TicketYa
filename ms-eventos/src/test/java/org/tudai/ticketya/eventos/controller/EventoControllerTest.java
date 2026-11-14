@@ -19,6 +19,7 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
@@ -190,6 +191,57 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
 
         verifyNoInteractions(eventoService);
+    }
+
+    @Test
+    void obtenerEvento_publico_devuelveElDetalle() throws Exception {
+        EventoDetalleResponse detalle = new EventoDetalleResponse(1L, "Festival de Verano",
+                TipoEvento.FESTIVAL, LocalDateTime.of(2026, 12, 1, 20, 0), EstadoEvento.PUBLICADO, 7L)
+                .descripcion("Al aire libre");
+        when(eventoService.obtenerEvento(1L, null, false)).thenReturn(detalle);
+
+        mvc.perform(get("/api/eventos/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(1))
+                .andExpect(jsonPath("$.nombre").value("Festival de Verano"))
+                .andExpect(jsonPath("$.estado").value("PUBLICADO"))
+                .andExpect(jsonPath("$.organizadorId").value(7));
+    }
+
+    @Test
+    void obtenerEvento_conUsuarioDueno_pasaElUsuarioAlServicio() throws Exception {
+        when(userContext.isPresent()).thenReturn(true);
+        when(userContext.userId()).thenReturn(7L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(eventoService.obtenerEvento(1L, 7L, false))
+                .thenReturn(new EventoDetalleResponse(1L, "Recital", TipoEvento.RECITAL,
+                        LocalDateTime.now().plusDays(5), EstadoEvento.BORRADOR, 7L));
+
+        mvc.perform(get("/api/eventos/1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("BORRADOR"));
+    }
+
+    @Test
+    void obtenerEvento_comoAdmin_pasaEsAdminAlServicio() throws Exception {
+        when(userContext.isPresent()).thenReturn(true);
+        when(userContext.userId()).thenReturn(7L);
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(eventoService.obtenerEvento(1L, 7L, true))
+                .thenReturn(new EventoDetalleResponse(1L, "Recital", TipoEvento.RECITAL,
+                        LocalDateTime.now().plusDays(5), EstadoEvento.BORRADOR, 99L));
+
+        mvc.perform(get("/api/eventos/1"))
+                .andExpect(status().isOk());
+    }
+
+    @Test
+    void obtenerEvento_inexistente_devuelve404() throws Exception {
+        when(eventoService.obtenerEvento(99L, null, false))
+                .thenThrow(new NotFoundException("Evento no encontrado con id: 99"));
+
+        mvc.perform(get("/api/eventos/99"))
+                .andExpect(status().isNotFound());
     }
 
     @Test

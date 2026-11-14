@@ -61,6 +61,25 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
   /api/eventos/{eventoId}:
+    get:
+      tags: [eventos]
+      operationId: obtenerEvento
+      summary: Devuelve el detalle de un evento
+      description: |
+        Endpoint público. Devuelve el detalle de un evento con su lugar, participantes,
+        sectores y precios. Los eventos en BORRADOR solo los puede ver su organizador o un
+        administrador; para el resto responde 404. La disponibilidad por sector no forma
+        parte del detalle: se consulta en GET /api/eventos/{eventoId}/disponibilidad.
+      parameters:
+        - $ref: '#/components/parameters/EventoId'
+      responses:
+        '200':
+          description: El detalle del evento
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EventoDetalleResponse'
+        '404': { $ref: '#/components/responses/Error' }
     put:
       tags: [eventos]
       operationId: actualizarEvento
@@ -565,6 +584,34 @@ components:
           items:
             $ref: '#/components/schemas/ParticipanteRequest'
     EventoResponse:
+      type: object
+      required: [id, nombre, tipo, fecha, estado, organizadorId]
+      properties:
+        id: { type: integer, format: int64 }
+        nombre: { type: string }
+        descripcion: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date-time }
+        estado:
+          $ref: '#/components/schemas/EstadoEvento'
+        organizadorId: { type: integer, format: int64 }
+        lugar:
+          $ref: '#/components/schemas/LugarResponse'
+        participantes:
+          type: array
+          items:
+            $ref: '#/components/schemas/ParticipanteResponse'
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/SectorResponse'
+        preciosSectores:
+          type: object
+          additionalProperties:
+            type: number
+            format: double
+    EventoDetalleResponse:
       type: object
       required: [id, nombre, tipo, fecha, estado, organizadorId]
       properties:
