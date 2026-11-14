@@ -2,13 +2,16 @@ package org.tudai.ticketya.preferencias.service;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
+import org.modelmapper.ModelMapper;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.contract.preferencias.model.PreferenciaRequestDTO;
 import org.tudai.ticketya.contract.preferencias.model.PreferenciaResponseDTO;
 import org.tudai.ticketya.contract.preferencias.model.TipoEvento;
+import org.tudai.ticketya.preferencias.config.ModelMapperConfig;
 import org.tudai.ticketya.preferencias.domain.Preferencia;
 import org.tudai.ticketya.preferencias.repository.PreferenciaRepository;
 
@@ -26,6 +29,9 @@ class PreferenciaServiceTest {
 
     @Mock
     private PreferenciaRepository preferenciaRepository;
+
+    @Spy
+    private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
 
     @InjectMocks
     private PreferenciaService preferenciaService;

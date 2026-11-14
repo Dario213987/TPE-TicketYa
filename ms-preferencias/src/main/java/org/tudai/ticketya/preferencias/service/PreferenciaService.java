@@ -1,6 +1,7 @@
 package org.tudai.ticketya.preferencias.service;
 
 import lombok.RequiredArgsConstructor;
+import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.tudai.ticketya.contract.preferencias.model.PreferenciaRequestDTO;
 import org.tudai.ticketya.contract.preferencias.model.PreferenciaResponseDTO;
@@ -16,6 +17,7 @@ import java.util.List;
 public class PreferenciaService {
 
     private final PreferenciaRepository preferenciaRepository;
+    private final ModelMapper modelMapper;
 
     /**
      * Devuelve las preferencias del cliente.
@@ -32,10 +34,7 @@ public class PreferenciaService {
     public PreferenciaResponseDTO obtener(Long clienteId) {
         return preferenciaRepository.findById(clienteId)
                 .map(this::toResponse)
-                .orElseGet(() -> respuesta(clienteId)
-                        .tiposFavoritos(List.of())
-                        .artistasFavoritos(List.of())
-                        .ciudad(null));
+                .orElseGet(() -> toResponse(Preferencia.builder().clienteId(clienteId).build()));
     }
 
     /**
@@ -51,25 +50,17 @@ public class PreferenciaService {
      * @return preferencias guardadas
      */
     public PreferenciaResponseDTO guardar(Long clienteId, PreferenciaRequestDTO request) {
-        Preferencia preferencia = Preferencia.builder()
-                .clienteId(clienteId)
-                .tiposFavoritos(sinRepetidos(request.getTiposFavoritos()))
-                .artistasFavoritos(sinRepetidos(request.getArtistasFavoritos()))
-                .ciudad(request.getCiudad() == null ? null : request.getCiudad().trim())
-                .build();
+        Preferencia preferencia = modelMapper.map(request, Preferencia.class);
+        preferencia.setClienteId(clienteId);
+        preferencia.setTiposFavoritos(sinRepetidos(preferencia.getTiposFavoritos()));
+        preferencia.setArtistasFavoritos(sinRepetidos(preferencia.getArtistasFavoritos()));
+        preferencia.setCiudad(preferencia.getCiudad() == null ? null : preferencia.getCiudad().trim());
 
         return toResponse(preferenciaRepository.save(preferencia));
     }
 
     private PreferenciaResponseDTO toResponse(Preferencia preferencia) {
-        return respuesta(preferencia.getClienteId())
-                .tiposFavoritos(List.copyOf(preferencia.getTiposFavoritos()))
-                .artistasFavoritos(List.copyOf(preferencia.getArtistasFavoritos()))
-                .ciudad(preferencia.getCiudad());
-    }
-
-    private static PreferenciaResponseDTO respuesta(Long clienteId) {
-        return new PreferenciaResponseDTO().clienteId(clienteId);
+        return modelMapper.map(preferencia, PreferenciaResponseDTO.class);
     }
 
     private static <T> List<T> sinRepetidos(List<T> valores) {
