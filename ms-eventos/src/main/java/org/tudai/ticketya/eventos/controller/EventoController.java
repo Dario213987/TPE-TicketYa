@@ -20,6 +20,7 @@ import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.util.Set;
@@ -30,6 +31,7 @@ import java.util.Set;
 public class EventoController {
 
     private static final Set<String> ORDENABLES = Set.of("id", "nombre", "fecha", "tipo");
+    private static final int MAX_SIZE = 50;
 
     private final EventoService eventoService;
     private final ModelMapper modelMapper;
@@ -37,9 +39,13 @@ public class EventoController {
 
     @GetMapping
     public PagedModel<EventoResumen> listarEventos(
-            @PageableDefault(size = 20, sort = "fecha") Pageable pageable) {
+            //Vincula los parámetros del request con los campos de EventoFiltroRequestDTO para filtrado y ordenamiento
+            @ModelAttribute EventoFiltroRequestDTO filtro,
+            @PageableDefault(size = 20) Pageable pageable) {
 
-        return new PagedModel<>(eventoService.listarPublicados(ordenable(pageable))
+        Pageable pageableValidado = ordenable(pageable);
+        validarSize(pageableValidado);
+        return new PagedModel<>(eventoService.listarPublicados(filtro, pageableValidado)
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
     }
 
@@ -100,6 +106,12 @@ public class EventoController {
             }
         });
         return pageable;
+    }
+
+    private static void validarSize(Pageable pageable) {
+        if (pageable.getPageSize() > MAX_SIZE) {
+            throw new BadRequestException("El tamaño de página no puede superar " + MAX_SIZE);
+        }
     }
 
     @PostMapping

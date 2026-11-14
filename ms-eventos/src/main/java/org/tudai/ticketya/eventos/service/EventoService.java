@@ -2,14 +2,20 @@ package org.tudai.ticketya.eventos.service;
 
 import feign.FeignException;
 import feign.RetryableException;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
@@ -22,7 +28,9 @@ import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
@@ -38,15 +46,22 @@ import org.tudai.ticketya.eventos.domain.Sector;
 import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
+import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
+import java.text.Normalizer;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Objects;
@@ -67,7 +82,9 @@ public class EventoService {
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
+    private final DevolucionesClient devolucionesClient;
     private final LugarRepository lugarRepository;
+    private final ParticipanteRepository participanteRepository;
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
     private final ParticipanteService participanteService;
@@ -81,6 +98,255 @@ public class EventoService {
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(Pageable pageable) {
         return eventoRepository.findByEstadoIn(ESTADOS_VISIBLES, pageable);
+    }
+
+    /**
+     * Lista los eventos visibles aplicando los filtros opcionales recibidos. Los filtros
+     * presentes se combinan con AND y el resultado se devuelve paginado. Sin filtros,
+     * devuelve todos los eventos visibles.
+     * <p>
+     * El orden se elige con {@code filtro.orden}:
+     * <ul>
+     *   <li>{@code precio}: ordena por el precio mínimo de los sectores del evento, directamente en la base.</li>
+     *   <li>{@code relevancia}: ordena los eventos PUBLICADO antes que los AGOTADO (dentro de estados visibles);
+     *   dentro de cada estado, por fecha ascendente y luego por id. {@code CANCELADO} no se lista.</li>
+     *   <li>{@code fecha}: ordena por fecha ascendente (desempata por id).</li>
+     *   <li>sin valor: si el {@code Pageable} trae un {@code sort} explícito, se respeta como
+     *   parámetro legado; si no, ordena por fecha ascendente y desempata por id.</li>
+     * </ul>
+     * Si se envían {@code orden} y {@code sort}, {@code orden} tiene prioridad.
+     *
+     * @param filtro   filtros opcionales: tipo, organizador, participante, ciudad, rango de fechas y orden
+     * @param pageable paginación y orden legado del resultado
+     *
+     * @return una página con los eventos visibles que cumplen todos los filtros
+     *
+     * @throws BadRequestException si el rango de fechas es inválido o el orden no está permitido
+     */
+    @Transactional(readOnly = true)
+    public Page<Evento> listarPublicados(EventoFiltroRequestDTO filtro, Pageable pageable) {
+        TipoEvento tipo = validarFiltros(filtro);
+        Set<Long> participantes = buscarIdsParticipantes(filtro.getParticipante());
+        Specification<Evento> specification = construirSpecification(filtro, tipo, participantes);
+        OrdenEvento orden = resolverOrden(filtro.getOrden());
+
+        if (orden == OrdenEvento.PRECIO) {
+            return eventoRepository.buscarPorPrecio(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.RELEVANCIA) {
+            return eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.FECHA || !pageable.getSort().isSorted()) {
+            return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
+        }
+
+        // Compatibilidad con el parámetro legado `sort`: si no se pidió `orden`,
+        // se respeta el orden explícito que haya llegado en el Pageable.
+        return eventoRepository.findAll(specification, pageable);
+    }
+
+    /**
+     * Valida el rango de fechas y el tipo de evento recibidos.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return el tipo de evento validado, o {@code null} si no se recibió
+     *
+     * @throws BadRequestException si la fechaDesde > fechaHasta o si el tipo no existe
+     */
+    private TipoEvento validarFiltros(EventoFiltroRequestDTO filtro) {
+        validarRangoDeFechas(filtro);
+        return StringUtils.hasText(filtro.getTipo()) ? resolverTipo(filtro.getTipo()) : null;
+    }
+
+    /**
+     * Convierte el texto del parámetro {@code orden} en un OrdenEvento.
+     * No distingue mayúsculas ni espacios al inicio o al final.
+     *
+     * @param orden texto recibido (puede ser nulo o vacío)
+     *
+     * @return el orden correspondiente, o {@code null} si no se indicó ninguno
+     *
+     * @throws BadRequestException si el orden no es uno de los valores permitidos
+     *                             (fecha, precio, relevancia)
+     */
+    private OrdenEvento resolverOrden(String orden) {
+        if (!StringUtils.hasText(orden)) {
+            return null;
+        }
+
+        return switch (orden.trim().toLowerCase(Locale.ROOT)) {
+            case "fecha" -> OrdenEvento.FECHA;
+            case "precio" -> OrdenEvento.PRECIO;
+            case "relevancia" -> OrdenEvento.RELEVANCIA;
+            default -> throw new BadRequestException(
+                    "Orden inválido: '" + orden + "'. Valores permitidos: fecha, precio, relevancia");
+        };
+    }
+
+    /**
+     * Arma el {@code Pageable} para ordenar por fecha ascendente, con el id como desempate
+     * para que la paginación sea estable. Ignora el orden que traiga el {@code Pageable}.
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} con orden por fecha e id
+     */
+    private Pageable aplicarOrdenFecha(Pageable pageable) {
+        Sort sort = Sort.by(Sort.Direction.ASC, "fecha")
+                .and(Sort.by(Sort.Direction.ASC, "id"));
+
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged(sort);
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    /**
+     * Devuelve el {@code Pageable} sin criterio de orden, conservando página y tamaño.
+     * Se usa cuando el orden lo define la propia consulta (por precio o relevancia).
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} sin orden
+     */
+    private Pageable sinOrden(Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged();
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    }
+
+    /** Criterios de orden admitidos para el listado de eventos. */
+    private enum OrdenEvento {
+        FECHA,
+        PRECIO,
+        RELEVANCIA
+    }
+
+    /**
+     * Verifica que el rango de fechas sea apto.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @throws BadRequestException si la fechaDesde > fechaHasta
+     * */
+    private void validarRangoDeFechas(EventoFiltroRequestDTO filtro) {
+        if (filtro.getFechaDesde() != null && filtro.getFechaHasta() != null
+                && filtro.getFechaDesde().isAfter(filtro.getFechaHasta())) {
+            throw new BadRequestException("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
+        }
+    }
+
+    /**
+     * Convierte el texto recibido al enum {@link TipoEvento}, sin distinguir mayúsculas/minúsculas.
+     *
+     * @param valor tipo recibido
+     *
+     * @return el tipo de evento correspondiente
+     *
+     * @throws BadRequestException si el valor no pertenece al enum
+     */
+    private TipoEvento resolverTipo(String valor) {
+        try {
+            return TipoEvento.valueOf(valor.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            String validos = Arrays.stream(TipoEvento.values())
+                    .map(Enum::name)
+                    .collect(Collectors.joining(", "));
+            throw new BadRequestException("Tipo de evento inválido: '" + valor.trim()
+                    + "'. Valores válidos: " + validos);
+        }
+    }
+
+    /**
+     * Busca en Java los ids de participantes cuyo nombre normalizado coincide exactamente
+     * con el texto recibido. Así el filtro funciona igual en PostgreSQL, H2 y MySQL, sin
+     * depender de funciones propias de un motor.
+     *
+     * @param participante nombre buscado
+     *
+     * @return ids coincidentes, o {@code null} si no se recibió el filtro
+     */
+    private Set<Long> buscarIdsParticipantes(String participante) {
+        if (!StringUtils.hasText(participante)) {
+            return null;
+        }
+        String buscado = normalizar(participante);
+        return participanteRepository.findAllIdAndNombre().stream()
+                .filter(p -> p.getNombre() != null)
+                .filter(p -> normalizar(p.getNombre()).equals(buscado))
+                .map(ParticipanteRepository.ParticipanteIdNombre::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Construye la Specification que combina con AND los filtros presentes y siempre
+     * restringe el resultado a los eventos en estado visible ({@code ESTADOS_VISIBLES}).
+     *
+     * Los filtros que vienen nulos o vacíos se ignoran:
+     * tipo y ciudad: coincidencia sin distinguir mayúsculas/minúsculas y sin espacios al inicio ni al final.
+     * organizador: coincidencia por id.
+     * fecha desde / hasta: rango inclusivo sobre la fecha del evento.
+     * participante: coincidencia exacta con el nombre de algún artista, sin distinguir
+     * mayúsculas ni tildes (los nombres se normalizan en Java). Hace un join con los artistas
+     * y usa {@code distinct} para no repetir eventos.
+     *
+     * @param filtro filtros opcionales: tipo, organizador, participante, ciudad y rango de fechas
+     * @param tipo tipo de evento ya validado, o {@code null}
+     * @param participantes ids de participantes que coinciden, o {@code null} si no se filtró
+     *
+     * @return Specification lista para usar en el repository
+     */
+    private Specification<Evento> construirSpecification(EventoFiltroRequestDTO filtro,
+                                                         TipoEvento tipo,
+                                                         Set<Long> participantes) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(root.get("estado").in(ESTADOS_VISIBLES));
+
+            if (tipo != null) {
+                predicates.add(cb.equal(root.get("tipo"), tipo));
+            }
+
+            if (filtro.getOrganizadorId() != null) {
+                predicates.add(cb.equal(root.get("organizadorId"), filtro.getOrganizadorId()));
+            }
+
+            if (StringUtils.hasText(filtro.getCiudad())) {
+                predicates.add(cb.equal(cb.lower(root.get("lugar").get("ciudad").as(String.class)),
+                        filtro.getCiudad().trim().toLowerCase(Locale.ROOT)));
+            }
+            if (filtro.getFechaDesde() != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fecha"),
+                        filtro.getFechaDesde().atStartOfDay()));
+            }
+            if (filtro.getFechaHasta() != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fecha"),
+                        filtro.getFechaHasta().atTime(LocalTime.MAX)));
+            }
+            if (participantes != null) {
+                if (participantes.isEmpty()) {
+                    predicates.add(cb.disjunction());
+                } else {
+                    Join<Evento, Participante> participante = root.join("participantes");
+                    predicates.add(participante.get("id").in(participantes));
+                    query.distinct(true);
+                }
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private static String normalizar(String valor) {
+        return Normalizer.normalize(valor.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
     }
 
 
@@ -155,11 +421,12 @@ public class EventoService {
      * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
      * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
-     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
-     * después cambia el estado a CANCELADO.
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, dispara
+     * el reintegro masivo delegando en ms-devoluciones, y recién después cambia el estado a
+     * CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo ni a llamar a ms-tickets.
+     * sin volver a modificarlo ni a llamar a ms-tickets ni a ms-devoluciones.
      *
      * @param id id del evento a cancelar
      *
@@ -167,7 +434,7 @@ public class EventoService {
      *
      * @throws NotFoundException      si el evento no existe
      * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     * @throws RemoteServiceException si ms-tickets o ms-devoluciones no están disponibles o responden con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
@@ -178,6 +445,8 @@ public class EventoService {
         }
 
         ejecutarTickets(() -> ticketsClient.cancelarEvento(id));
+
+        ejecutarDevoluciones(() -> devolucionesClient.reintegrarEvento(id));
 
         return transactionTemplate.execute(status -> confirmarCancelacion(id));
     }
@@ -315,8 +584,6 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.CANCELADO);
-
-        //TO DO : REINTEGRO MASIVO
 
         return toEstadoDTO(eventoRepository.save(evento));
     }
@@ -509,6 +776,16 @@ public class EventoService {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
             throw new RemoteServiceException(502, "ms-tickets respondió con error");
+        }
+    }
+
+    private void ejecutarDevoluciones(Runnable llamada) {
+        try {
+            llamada.run();
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones no disponible");
+        } catch (FeignException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones respondió con error");
         }
     }
 

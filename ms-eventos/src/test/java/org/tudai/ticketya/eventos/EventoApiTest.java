@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.Lugar;
@@ -66,6 +67,9 @@ class EventoApiTest {
 
     @MockitoBean
     TicketsClient ticketsClient;
+
+    @MockitoBean
+    DevolucionesClient devolucionesClient;
 
     private Lugar lugar;
 
@@ -180,6 +184,97 @@ class EventoApiTest {
     }
 
     @Test
+    void listarEventos_filtraPorTipoCiudadYOrganizador() throws Exception {
+        Lugar otroLugar = guardarLugar("Mar del Plata");
+        guardarEvento("Recital Tandil", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 5, 20, 0));
+        guardarEvento("Festival Tandil", TipoEvento.FESTIVAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 6, 20, 0));
+        guardarEvento("Recital Mar del Plata", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                otroLugar, LocalDateTime.of(2026, 12, 7, 20, 0));
+        guardarEvento("Recital de otro organizador", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 9L,
+                lugar, LocalDateTime.of(2026, 12, 8, 20, 0));
+
+        mvc.perform(get("/api/eventos")
+                        .param("tipo", " recital ")
+                        .param("ciudad", "TANDIL")
+                        .param("organizadorId", "7"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value("Recital Tandil"));
+    }
+
+    @Test
+    void listarEventos_filtraPorParticipanteSinTildesYNoDuplica() throws Exception {
+        Participante conTilde = Participante.builder().nombre("Café Tacvba").build();
+        Participante sinTilde = Participante.builder().nombre("Cafe Tacvba").build();
+        guardarEvento("Festival Cafe", TipoEvento.FESTIVAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 10, 20, 0), conTilde, sinTilde);
+        guardarEvento("Recital Soda", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 11, 20, 0),
+                Participante.builder().nombre("Soda Stereo").build());
+
+        mvc.perform(get("/api/eventos").param("participante", "CAFE TACVBA"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].nombre").value("Festival Cafe"));
+    }
+
+    @Test
+    void listarEventos_filtraPorRangoDeFechasInclusivo() throws Exception {
+        guardarEvento("Primer día", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 1, 20, 0));
+        guardarEvento("Último día", TipoEvento.FESTIVAL, EstadoEvento.AGOTADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 31, 23, 30));
+        guardarEvento("Fuera de rango", TipoEvento.TEATRO, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2027, 1, 1, 0, 30));
+
+        mvc.perform(get("/api/eventos")
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].nombre").value("Primer día"))
+                .andExpect(jsonPath("$.content[1].nombre").value("Último día"));
+    }
+
+    @Test
+    void listarEventos_conRangoInvertido_devuelve400() throws Exception {
+        mvc.perform(get("/api/eventos")
+                        .param("fechaDesde", "2026-12-31")
+                        .param("fechaHasta", "2026-12-01"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail")
+                        .value("La fecha 'desde' no puede ser posterior a la fecha 'hasta'"));
+    }
+
+    @Test
+    void listarEventos_conTipoInvalido_devuelve400() throws Exception {
+        mvc.perform(get("/api/eventos").param("tipo", "INVALIDO"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value(
+                        "Tipo de evento inválido: 'INVALIDO'. Valores válidos: RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO"));
+    }
+
+    @Test
+    void listarEventos_participanteParcial_noDevuelveCoincidencias() throws Exception {
+        guardarEvento("Recital Soda", TipoEvento.RECITAL, EstadoEvento.PUBLICADO, 7L,
+                lugar, LocalDateTime.of(2026, 12, 11, 20, 0),
+                Participante.builder().nombre("Soda Stereo").build());
+
+        mvc.perform(get("/api/eventos").param("participante", "Soda"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.page.totalElements").value(0));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_devuelve400() throws Exception {
+        mvc.perform(get("/api/eventos").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
+    }
+
+    @Test
     void cancelarEvento_cuandoMsTicketsFalla_noPersisteElCambioDeEstado() {
         Evento evento = eventoRepository.save(Evento.builder()
                 .nombre("Festival de integración")
@@ -196,6 +291,32 @@ class EventoApiTest {
 
         assertThat(eventoRepository.findById(evento.getId()).orElseThrow().getEstado())
                 .isEqualTo(EstadoEvento.PUBLICADO);
+    }
+
+    private Lugar guardarLugar(String ciudad) {
+        return lugarRepository.save(Lugar.builder()
+                .nombre("Lugar de " + ciudad)
+                .tipo("TEATRO")
+                .direccion("Calle de prueba 123")
+                .ciudad(ciudad)
+                .ubicacion(Ubicacion.builder().latitud(-37.32).longitud(-59.14).build())
+                .build());
+    }
+
+    private Evento guardarEvento(String nombre, TipoEvento tipo, EstadoEvento estado, Long organizadorId,
+                                 Lugar lugar, LocalDateTime fecha, Participante... participantes) {
+        Evento evento = Evento.builder()
+                .nombre(nombre)
+                .tipo(tipo)
+                .estado(estado)
+                .organizadorId(organizadorId)
+                .lugar(lugar)
+                .fecha(fecha)
+                .build();
+        for (Participante participante : participantes) {
+            evento.addParticipante(participante);
+        }
+        return eventoRepository.save(evento);
     }
 
     @Test

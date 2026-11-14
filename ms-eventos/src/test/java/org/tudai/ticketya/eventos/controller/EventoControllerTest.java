@@ -2,6 +2,7 @@ package org.tudai.ticketya.eventos.controller;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -26,14 +27,17 @@ import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.domain.Evento;
+import org.tudai.ticketya.eventos.dto.evento.EventoFiltroRequestDTO;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -71,8 +75,8 @@ class EventoControllerTest {
                 .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
                 .estado(EstadoEvento.PUBLICADO)
                 .build();
-        Pageable pageable = PageRequest.of(0, 20, Sort.by("fecha"));
-        when(eventoService.listarPublicados(pageable))
+        Pageable pageable = PageRequest.of(0, 20);
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
                 .thenReturn(new PageImpl<>(List.of(evento), pageable, 1));
 
         mvc.perform(get("/api/eventos"))
@@ -82,6 +86,95 @@ class EventoControllerTest {
                 .andExpect(jsonPath("$.content[0].tipo").value("FESTIVAL"))
                 .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.page.totalElements").value(1));
+
+        verify(eventoService).listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable));
+    }
+
+    @Test
+    void listarEventos_conFiltros_bindeaTodosLosParametros() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20);
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        mvc.perform(get("/api/eventos")
+                        .param("tipo", "RECITAL")
+                        .param("organizadorId", "7")
+                        .param("participante", "Soda Stereo")
+                        .param("ciudad", "Tandil")
+                        .param("fechaDesde", "2026-12-01")
+                        .param("fechaHasta", "2026-12-31"))
+                .andExpect(status().isOk());
+
+        ArgumentCaptor<EventoFiltroRequestDTO> captor =
+                ArgumentCaptor.forClass(EventoFiltroRequestDTO.class);
+        verify(eventoService).listarPublicados(captor.capture(), eq(pageable));
+        EventoFiltroRequestDTO filtro = captor.getValue();
+        assertThat(filtro.getTipo()).isEqualTo("RECITAL");
+        assertThat(filtro.getOrganizadorId()).isEqualTo(7L);
+        assertThat(filtro.getParticipante()).isEqualTo("Soda Stereo");
+        assertThat(filtro.getCiudad()).isEqualTo("Tandil");
+        assertThat(filtro.getFechaDesde()).isEqualTo(LocalDate.of(2026, 12, 1));
+        assertThat(filtro.getFechaHasta()).isEqualTo(LocalDate.of(2026, 12, 31));
+    }
+
+    @Test
+    void listarEventos_conOrdenRelevancia_priorizaPublicadosYAgotados() throws Exception {
+        Evento publicado = Evento.builder()
+                .id(1L)
+                .nombre("Publicado")
+                .tipo(TipoEvento.RECITAL)
+                .fecha(LocalDateTime.of(2026, 12, 10, 20, 0))
+                .estado(EstadoEvento.PUBLICADO)
+                .build();
+        Evento agotado = Evento.builder()
+                .id(2L)
+                .nombre("Agotado")
+                .tipo(TipoEvento.FESTIVAL)
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
+                .estado(EstadoEvento.AGOTADO)
+                .build();
+        Pageable pageable = PageRequest.of(0, 5);
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
+                .thenReturn(new PageImpl<>(List.of(publicado, agotado), pageable, 2));
+
+        mvc.perform(get("/api/eventos")
+                        .param("orden", "relevancia")
+                        .param("page", "0")
+                        .param("size", "5"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].estado").value("PUBLICADO"))
+                .andExpect(jsonPath("$.content[1].estado").value("AGOTADO"));
+
+        ArgumentCaptor<EventoFiltroRequestDTO> filtroCaptor =
+                ArgumentCaptor.forClass(EventoFiltroRequestDTO.class);
+        verify(eventoService).listarPublicados(filtroCaptor.capture(), any(Pageable.class));
+        assertThat(filtroCaptor.getValue().getOrden()).isEqualTo("relevancia");
+    }
+
+    @Test
+    void listarEventos_conSortLegado_loConservaEnElPageable() throws Exception {
+        Pageable pageable = PageRequest.of(0, 20, Sort.by(Sort.Direction.DESC, "nombre"));
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable)))
+                .thenReturn(new PageImpl<>(List.of(), pageable, 0));
+
+        mvc.perform(get("/api/eventos").param("sort", "nombre,desc"))
+                .andExpect(status().isOk());
+
+        verify(eventoService).listarPublicados(any(EventoFiltroRequestDTO.class), eq(pageable));
+    }
+
+    @Test
+    void listarEventos_conOrdenInvalido_devuelve400ConLosValoresPermitidos() throws Exception {
+        when(eventoService.listarPublicados(any(EventoFiltroRequestDTO.class), any(Pageable.class)))
+                .thenThrow(new BadRequestException(
+                        "Orden inválido: 'otro'. Valores permitidos: fecha, precio, relevancia"));
+
+        mvc.perform(get("/api/eventos").param("orden", "otro"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.title").value("Solicitud inválida"))
+                .andExpect(jsonPath("$.detail")
+                        .value("Orden inválido: 'otro'. Valores permitidos: fecha, precio, relevancia"));
     }
 
     @Test
@@ -89,6 +182,15 @@ class EventoControllerTest {
         mvc.perform(get("/api/eventos").param("sort", "precio,asc"))
                 .andExpect(status().isBadRequest())
                 .andExpect(jsonPath("$.title").value("Solicitud inválida"));
+    }
+
+    @Test
+    void listarEventos_conSizeMayorA50_devuelve400YNoConsultaElServicio() throws Exception {
+        mvc.perform(get("/api/eventos").param("size", "51"))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.detail").value("El tamaño de página no puede superar 50"));
+
+        verifyNoInteractions(eventoService);
     }
 
     @Test
