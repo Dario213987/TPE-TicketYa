@@ -1,0 +1,30 @@
+{
+  "info": { "name": "TicketYa - ms-usuarios", "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json" },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "userId", "value": "1" },
+    { "key": "rol", "value": "ADMINISTRADOR" },
+    { "key": "usuarioId", "value": "1" }
+  ],
+  "event": [{ "listen": "prerequest", "script": { "exec": [
+    "pm.request.headers.upsert({key: 'X-User-Id', value: pm.collectionVariables.get('userId')});",
+    "pm.request.headers.upsert({key: 'X-User-Role', value: pm.collectionVariables.get('rol')});"
+  ] } }],
+  "item": [
+    {
+      "name": "Crear usuario",
+      "event": [{ "listen": "test", "script": { "exec": ["pm.collectionVariables.set('usuarioId', pm.response.json().id);"] } }],
+      "request": { "method": "POST", "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"email\": \"ana@mail.com\",\n  \"nombre\": \"Ana\",\n  \"password\": \"secreta123\",\n  \"roles\": [\"ORGANIZADOR\"]\n}" },
+        "url": "{{baseUrl}}/api/usuarios" }
+    },
+    { "name": "Obtener por id", "request": { "method": "GET", "url": "{{baseUrl}}/api/usuarios/{{usuarioId}}" } },
+    { "name": "Listar", "request": { "method": "GET", "url": "{{baseUrl}}/api/usuarios?size=10&sort=email,asc" } },
+    {
+      "name": "Cambiar roles",
+      "request": { "method": "PUT", "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": { "mode": "raw", "raw": "{\n  \"roles\": [\"CLIENTE\", \"ORGANIZADOR\"]\n}" },
+        "url": "{{baseUrl}}/api/usuarios/{{usuarioId}}/roles" }
+    }
+  ]
+}
