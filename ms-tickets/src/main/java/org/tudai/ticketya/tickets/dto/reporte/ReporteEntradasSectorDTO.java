@@ -1,4 +1,4 @@
-package org.tudai.ticketya.tickets.dto;
+package org.tudai.ticketya.tickets.dto.reporte;
 
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -11,8 +11,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class ReporteSectorDTO {
-
+public class ReporteEntradasSectorDTO {
     private Long sectorId;
     private String sectorNombre;
     private long entradasVendidas;

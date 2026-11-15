@@ -148,6 +148,30 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reportes/eventos/{id}/ocupacion:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteOcupacion
+      summary: Reporta la ocupación por sector y total del evento
+      description: |
+        Ocupación = entradas vendidas / capacidad del sector * 100. Solo los roles ORGANIZADOR
+        y ADMINISTRADOR pueden consultar el reporte. El organizador solo puede consultar eventos
+        propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte de ocupación del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteOcupacionDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
@@ -311,6 +335,26 @@ components:
         sectorNombre: { type: string }
         entradasVendidas: { type: integer, format: int64 }
         entradasDevueltas: { type: integer, format: int64 }
+    ReporteOcupacionDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, ocupacionTotal, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        ocupacionTotal: { type: number, format: double }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteOcupacionSectorDTO'
+    ReporteOcupacionSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, ocupacion]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        ocupacion: { type: number, format: double }
     Problema:
       type: object
       properties:
