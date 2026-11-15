@@ -1,17 +1,21 @@
 package org.tudai.ticketya.eventos.service;
 
+import feign.RetryableException;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
@@ -27,6 +31,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.doThrow;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -50,8 +56,9 @@ class EventoServiceEstadosAutomaticosTest {
     @Mock
     private NotificacionTicketsService notificacionTicketsService;
 
-    @Mock
-    private TransactionTemplate transactionTemplate;
+    @Spy
+    private TransactionTemplate transactionTemplate =
+            new TransactionTemplate(mock(PlatformTransactionManager.class));
 
     @InjectMocks
     private EventoService eventoService;
@@ -93,8 +100,9 @@ class EventoServiceEstadosAutomaticosTest {
     }
 
     @Test
-    void marcarAgotado_enEventoPublicado_loPasaAAgotado() {
+    void marcarAgotado_enEventoPublicado_loPasaAAgotadoYCierraLaVentaEnTickets() {
         Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
@@ -104,14 +112,28 @@ class EventoServiceEstadosAutomaticosTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getNombre()).isEqualTo("Festival");
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
+        verify(ticketsClient).agotarEvento(1L);
         verify(eventoRepository).save(evento);
-        verifyNoInteractions(ticketsClient, lugarRepository);
+        verifyNoInteractions(lugarRepository);
     }
 
     @Test
-    void marcarAgotado_yaAgotado_esIdempotenteYNoGuarda() {
+    void marcarAgotado_siTicketsFalla_noCambiaElEstado() {
+        Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        doThrow(mock(RetryableException.class)).when(ticketsClient).agotarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.marcarAgotado(1L))
+                .isInstanceOf(RemoteServiceException.class);
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void marcarAgotado_yaAgotado_esIdempotenteYNoNotificaATickets() {
         Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
-        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
         EventoEstadoResponse response = eventoService.marcarAgotado(1L);
 
@@ -129,7 +151,7 @@ class EventoServiceEstadosAutomaticosTest {
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO)) {
             Evento evento = eventoEnEstado(estado);
-            when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
             assertThatThrownBy(() -> eventoService.marcarAgotado(1L))
                     .isInstanceOf(ConflictException.class)
@@ -141,7 +163,7 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void marcarAgotado_conEventoInexistente_lanzaNotFound() {
-        when(eventoRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> eventoService.marcarAgotado(99L))
                 .isInstanceOf(NotFoundException.class)
@@ -151,8 +173,9 @@ class EventoServiceEstadosAutomaticosTest {
     }
 
     @Test
-    void marcarPublicado_enEventoAgotado_loPasaAPublicado() {
+    void marcarPublicado_enEventoAgotado_loPasaAPublicadoYReabreLaVenta() {
         Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
         when(eventoRepository.save(evento)).thenReturn(evento);
 
@@ -162,14 +185,28 @@ class EventoServiceEstadosAutomaticosTest {
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getNombre()).isEqualTo("Festival");
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verify(ticketsClient).reactivarEvento(1L);
         verify(eventoRepository).save(evento);
-        verifyNoInteractions(ticketsClient, lugarRepository);
+        verifyNoInteractions(lugarRepository);
     }
 
     @Test
-    void marcarPublicado_yaPublicado_esIdempotenteYNoGuarda() {
+    void marcarPublicado_siTicketsFalla_noCambiaElEstado() {
+        Evento evento = eventoEnEstado(EstadoEvento.AGOTADO);
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        doThrow(mock(RetryableException.class)).when(ticketsClient).reactivarEvento(1L);
+
+        assertThatThrownBy(() -> eventoService.marcarPublicado(1L))
+                .isInstanceOf(RemoteServiceException.class);
+
+        assertThat(evento.getEstado()).isEqualTo(EstadoEvento.AGOTADO);
+        verify(eventoRepository, never()).save(any(Evento.class));
+    }
+
+    @Test
+    void marcarPublicado_yaPublicado_esIdempotenteYNoNotificaATickets() {
         Evento evento = eventoEnEstado(EstadoEvento.PUBLICADO);
-        when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
         EventoEstadoResponse response = eventoService.marcarPublicado(1L);
 
@@ -186,7 +223,7 @@ class EventoServiceEstadosAutomaticosTest {
                 EstadoEvento.CANCELADO,
                 EstadoEvento.FINALIZADO)) {
             Evento evento = eventoEnEstado(estado);
-            when(eventoRepository.findByIdForUpdate(1L)).thenReturn(Optional.of(evento));
+            when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
 
             assertThatThrownBy(() -> eventoService.marcarPublicado(1L))
                     .isInstanceOf(ConflictException.class)
@@ -198,7 +235,7 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Test
     void marcarPublicado_conEventoInexistente_lanzaNotFound() {
-        when(eventoRepository.findByIdForUpdate(99L)).thenReturn(Optional.empty());
+        when(eventoRepository.findById(99L)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> eventoService.marcarPublicado(99L))
                 .isInstanceOf(NotFoundException.class)

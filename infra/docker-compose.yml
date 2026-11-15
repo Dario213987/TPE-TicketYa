@@ -82,19 +82,17 @@ services:
   #   ports: ["127.0.0.1:5433:3306"]
   #   volumes: [eventos-data:/var/lib/mysql]
 
-  # Redis: por ahora desactivado. Cuando se necesite, copiar este bloque UNA VEZ
-  # POR SERVICIO que lo use, con su propio nombre y puerto (redis-tickets,
-  # redis-eventos, ...), igual que las bases de datos.
-  #
-  # redis-tickets:
-  #   image: redis:7-alpine
-  #   restart: unless-stopped
-  #   ports: ["127.0.0.1:6380:6379"]
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 10
+  # Redis: una instancia por servicio que lo use, igual que las bases de datos.
+  # ms-tickets lo usa para la fila virtual de eventos de alta demanda.
+  redis-tickets:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   eventos-data:
