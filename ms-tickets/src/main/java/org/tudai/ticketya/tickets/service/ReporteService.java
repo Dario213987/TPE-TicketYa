@@ -3,7 +3,6 @@ package org.tudai.ticketya.tickets.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.tickets.client.EventoClient;
 import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
 import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
@@ -21,7 +20,6 @@ import org.tudai.ticketya.tickets.repository.ReporteRepository;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -35,6 +33,7 @@ public class ReporteService {
             List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
 
     private final EventoClient eventoClient;
+    private final EventoAccessValidator eventoAccessValidator;
     private final ReporteRepository reporteRepository;
     private final DisponibilidadSectorRepository disponibilidadSectorRepository;
 
@@ -45,11 +44,7 @@ public class ReporteService {
     public ReporteEntradasVendidasDTO obtenerReporteEntradasVendidas(
             Long eventoId, Long solicitanteId, boolean esAdmin) {
 
-        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
-
-        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), solicitanteId)) {
-            throw new ForbiddenException("No tenés permiso para consultar el reporte de este evento");
-        }
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
 
         // Mapa de resumen por secor, la clave es el id del sector y el objeto el resumen
         Map<Long, Object[]> resumenPorSector = new HashMap<>();
@@ -102,11 +97,7 @@ public class ReporteService {
     @Transactional(readOnly = true)
     public ReporteOcupacionDTO obtenerReporteOcupacion(Long eventoId, Long solicitanteId, boolean esAdmin) {
 
-        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
-
-        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), solicitanteId)) {
-            throw new ForbiddenException("No tenés permiso para consultar el reporte de este evento");
-        }
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
 
         // Capacidad total de cada sector, la clave es el id del sector
         Map<Long, Integer> capacidades = disponibilidadSectorRepository
@@ -158,11 +149,7 @@ public class ReporteService {
     @Transactional(readOnly = true)
     public ReporteRecaudacionDTO obtenerReporteRecaudacion(Long eventoId, Long solicitanteId, boolean esAdmin) {
 
-        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
-
-        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), solicitanteId)) {
-            throw new ForbiddenException("No tenés permiso para consultar el reporte de este evento");
-        }
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
 
         Map<Long, Object[]> resumenPorSector = new HashMap<>();
 
@@ -203,6 +190,15 @@ public class ReporteService {
                 .build();
     }
 
+
+    /** Busca el evento en el cliente y confirma la autorizacion del solicitante*/
+    private EventoResponseDto obtenerEventoAutorizado(
+            Long eventoId, Long solicitanteId, boolean esAdmin) {
+
+        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
+        eventoAccessValidator.validarAcceso(evento, solicitanteId, esAdmin);
+        return evento;
+    }
 
     private ReporteEntradasSectorDTO aReporteSector(SectorResponseDto sector, Object[] resumen) {
         long vendidas = resumen == null ? 0 : ((Number) resumen[1]).longValue();

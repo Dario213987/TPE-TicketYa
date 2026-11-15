@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.tickets.client.EventoClient;
@@ -33,6 +34,9 @@ class ReporteServiceTest {
 
     @Mock
     private EventoClient eventoClient;
+
+    @Spy
+    private EventoAccessValidator eventoAccessValidator = new EventoAccessValidator();
 
     @Mock
     private ReporteRepository reporteRepository;
