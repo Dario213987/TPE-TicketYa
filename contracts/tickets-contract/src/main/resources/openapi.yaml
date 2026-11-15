@@ -80,10 +80,12 @@ paths:
         con otra clave responde 409.
 
         Compensacion (ver ms-tickets/docs/estados-compra.md): si ms-transacciones no responde
-        (timeout o 5xx) la reserva queda PENDIENTE_PAGO, no se libera y responde 202; el
-        reintento con la misma clave consulta el estado real. Si un debito se rechaza, se
-        reintegran los aprobados. Si falla la emision despues de cobrar, se reintegra todo,
-        se libera la reserva y responde 409.
+        (timeout o 5xx) o el debito sigue PENDIENTE, la reserva queda PENDIENTE_PAGO, no se
+        libera y responde 202; el reintento con la misma clave consulta el estado real y
+        conserva el medioPago del primer intento. Si ms-transacciones rechaza el pedido (4xx)
+        es un error de integracion: la reserva queda PENDIENTE_PAGO, no se compensa y responde
+        502. Si un debito se rechaza (FALLIDA), se reintegran los aprobados. Si falla la
+        emision despues de cobrar, se reintegra todo, se libera la reserva y responde 409.
       parameters:
         - name: reservaId
           in: path
@@ -338,14 +340,16 @@ components:
     EstadoTicket:
       type: string
       enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
+    MedioPago:
+      type: string
+      description: Valor cerrado; nunca se envian ni guardan datos de la tarjeta
+      enum: [TARJETA_CREDITO, TARJETA_DEBITO]
     PagoRequestDTO:
       type: object
       required: [medioPago]
       properties:
         medioPago:
-          type: string
-          maxLength: 30
-          description: Medio de pago usado (por ejemplo TARJETA_CREDITO, TARJETA_DEBITO)
+          $ref: '#/components/schemas/MedioPago'
     TicketEmitidoDTO:
       type: object
       required: [id, codigoQr, estado, sectorId, precio]
@@ -370,7 +374,8 @@ components:
           description: Venta registrada al emitir las entradas (solo cuando estadoPago es APROBADO)
         eventoId: { type: integer, format: int64 }
         clienteId: { type: integer, format: int64 }
-        medioPago: { type: string }
+        medioPago:
+          $ref: '#/components/schemas/MedioPago'
         estadoPago:
           $ref: '#/components/schemas/EstadoPago'
         total: { type: number, format: double }

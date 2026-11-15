@@ -69,7 +69,7 @@ public class ReservaPagoService {
      * @throws PagoRechazadoException si es un reintento de un pago rechazado o reintegrado
      */
     @Transactional
-    public Preparacion preparar(Long reservaId, Long clienteId, String clave, String medioPago) {
+    public Preparacion preparar(Long reservaId, Long clienteId, String clave, MedioPago medioPago) {
         Reserva reserva = reservaRepository.findByIdForUpdate(reservaId)
                 .orElseThrow(() -> new NotFoundException("No existe la reserva " + reservaId));
 
