@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "b0893b5f-6543-4660-98b3-a283b5cb0075",
 		"name": "ms-eventos",
-		"description": "Colección de ms-eventos (TKY-44): listado público, operaciones administrativas y endpoints internos de estados automáticos.",
+		"description": "Colección de ms-eventos (TKY-47): listado público con filtros y orden por fecha, precio o relevancia, operaciones administrativas y endpoints internos de estados automáticos.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -81,7 +81,7 @@
 					}
 				},
 				{
-					"name": "Listar ordenado por nombre",
+					"name": "Listar ordenado por fecha",
 					"event": [
 						{
 							"listen": "test",
@@ -98,7 +98,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/eventos?sort=nombre,asc",
+							"raw": "{{baseUrl}}/api/eventos?orden=fecha",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -108,22 +108,23 @@
 							],
 							"query": [
 								{
-									"key": "sort",
-									"value": "nombre,asc"
+									"key": "orden",
+									"value": "fecha"
 								}
 							]
 						}
 					}
 				},
 				{
-					"name": "Sort inválido devuelve 400",
+					"name": "Listar ordenado por precio",
 					"event": [
 						{
 							"listen": "test",
 							"script": {
 								"type": "text/javascript",
 								"exec": [
-									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
 								]
 							}
 						}
@@ -132,7 +133,7 @@
 						"method": "GET",
 						"header": [],
 						"url": {
-							"raw": "{{baseUrl}}/api/eventos?sort=organizadorId",
+							"raw": "{{baseUrl}}/api/eventos?orden=precio",
 							"host": [
 								"{{baseUrl}}"
 							],
@@ -142,8 +143,166 @@
 							],
 							"query": [
 								{
-									"key": "sort",
-									"value": "organizadorId"
+									"key": "orden",
+									"value": "precio"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Listar ordenado por relevancia",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"const content = pm.response.json().content;",
+									"pm.test(\"solo estados visibles\", () => content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));",
+									"pm.test(\"PUBLICADO antes que AGOTADO\", () => {",
+									"  const primerAgotado = content.findIndex(e => e.estado === \"AGOTADO\");",
+									"  const ultimoPublicado = content.map(e => e.estado).lastIndexOf(\"PUBLICADO\");",
+									"  if (primerAgotado !== -1 && ultimoPublicado !== -1) pm.expect(ultimoPublicado).to.be.below(primerAgotado);",
+									"});"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?orden=relevancia&size=50",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "orden",
+									"value": "relevancia"
+								},
+								{
+									"key": "size",
+									"value": "50"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filtrar por tipo y ciudad",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?tipo=FESTIVAL&ciudad=Tandil",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "tipo",
+									"value": "FESTIVAL"
+								},
+								{
+									"key": "ciudad",
+									"value": "Tandil"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Filtrar por rango de fechas",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"solo estados visibles\", () => pm.response.json().content.forEach(e => pm.expect([\"PUBLICADO\",\"AGOTADO\"]).to.include(e.estado)));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?fechaDesde=2026-01-01&fechaHasta=2026-12-31",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "fechaDesde",
+									"value": "2026-01-01"
+								},
+								{
+									"key": "fechaHasta",
+									"value": "2026-12-31"
+								}
+							]
+						}
+					}
+				},
+				{
+					"name": "Orden inválido devuelve 400",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+									"pm.test(\"informa los valores permitidos\", () => pm.expect(pm.response.json().detail).to.include(\"fecha, precio, relevancia\"));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [],
+						"url": {
+							"raw": "{{baseUrl}}/api/eventos?orden=nombre",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"eventos"
+							],
+							"query": [
+								{
+									"key": "orden",
+									"value": "nombre"
 								}
 							]
 						}
