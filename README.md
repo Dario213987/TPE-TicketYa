@@ -18,7 +18,7 @@ Verificá con `mvn -v` que Maven use Java 25.
 | `libs/`                                                                    | Librerías compartidas de infraestructura (`ticketya-core`, `ticketya-web-starter`) |
 | `contracts/`                                                               | Contratos OpenAPI, uno por microservicio |
 | `eureka-server/`, `api-gateway/`                                           | Descubrimiento y punto de entrada único |
-| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, `ms-preferencias/` | Microservicios de negocio |
+| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, etc | Microservicios de negocio |
 | `specs/`                                                                   | Propuestas y specs |
 | `postman/`                                                                 | Colección de requests |
 
