@@ -6,6 +6,9 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.LocalDateTime;
+import java.util.List;
+
 @Getter
 @Setter
 @NoArgsConstructor
@@ -14,7 +17,10 @@ import lombok.Setter;
 public class ReporteEntradasVendidasDTO {
 
     private Long eventoId;
+    private String eventoNombre;
+    private LocalDateTime eventoFecha;
+    private String eventoEstado;
     private long entradasVendidas;
-    private Long solicitanteId;
-    private boolean esAdministrador;
+    private long entradasDevueltas;
+    private List<ReporteSectorDTO> sectores;
 }

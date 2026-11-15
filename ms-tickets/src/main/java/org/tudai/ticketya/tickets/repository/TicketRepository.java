@@ -17,12 +17,6 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
     long countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
             Long eventoId, Long clienteId, Collection<EstadoTicket> estados);
 
-    long countByEvento_EventoIdAndEstadoTicketIn(
-            Long eventoId, Collection<EstadoTicket> estados);
-
-    long countByEvento_EventoIdAndEstadoTicket(
-            Long eventoId, EstadoTicket estado);
-
     @Query("""
             select count(t) from Ticket t
             where t.evento.eventoId = :eventoId

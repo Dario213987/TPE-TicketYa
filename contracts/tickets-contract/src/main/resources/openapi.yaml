@@ -18,6 +18,7 @@ info:
 tags:
   - name: reservas
   - name: disponibilidad
+  - name: reportes
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
     post:
@@ -123,6 +124,29 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/evento/reporte/{id}/entradas:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteEntradasVendidas
+      summary: Reporta entradas vendidas y devueltas por sector y totales
+      description: |
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden consultar el reporte. El organizador
+        solo puede consultar eventos propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteEntradasVendidasDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
@@ -265,6 +289,28 @@ components:
           description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
           items:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    ReporteEntradasVendidasDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, entradasVendidas, entradasDevueltas, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        entradasVendidas: { type: integer, format: int64 }
+        entradasDevueltas: { type: integer, format: int64 }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteSectorDTO'
+    ReporteSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, entradasVendidas, entradasDevueltas]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        entradasVendidas: { type: integer, format: int64 }
+        entradasDevueltas: { type: integer, format: int64 }
     Problema:
       type: object
       properties:
