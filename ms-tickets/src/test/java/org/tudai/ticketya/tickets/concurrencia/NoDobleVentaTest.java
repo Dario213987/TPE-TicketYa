@@ -15,6 +15,7 @@ import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest;
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
 import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.tickets.domain.MedioPago;
 import org.tudai.ticketya.tickets.domain.TipoSector;
 import org.tudai.ticketya.tickets.dto.*;
 import org.tudai.ticketya.tickets.service.DisponibilidadService;
@@ -149,7 +150,7 @@ class NoDobleVentaTest {
         ReservaResponseDTO reserva = reservaService.reservar(eventoId, 42L,
                 ReservaRequestDTO.builder().sectorId(1L).cantidad(2).build());
         Long reservaId = reserva.getIdReserva();
-        PagoRequestDTO pago = PagoRequestDTO.builder().medioPago("TARJETA").build();
+        PagoRequestDTO pago = PagoRequestDTO.builder().medioPago(MedioPago.TARJETA_CREDITO).build();
 
         List<CompraResponseDTO> compras = new CopyOnWriteArrayList<>();
         Resultado concurrentes = enParalelo(20, i -> () ->
