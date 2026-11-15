@@ -28,6 +28,7 @@
     <module>ms-devoluciones</module>
     <module>ms-notificaciones</module>
     <module>ms-preferencias</module>
+    <module>ms-usuarios</module>
   </modules>
 
   <properties>
