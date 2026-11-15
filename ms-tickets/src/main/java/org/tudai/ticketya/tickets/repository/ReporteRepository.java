@@ -24,4 +24,17 @@ public interface ReporteRepository extends JpaRepository<Ticket, Long> {
                                     @Param("vendidos") Collection<EstadoTicket> vendidos,
                                     @Param("devuelto") EstadoTicket devuelto,
                                     @Param("estados") Collection<EstadoTicket> estados);
+
+    @Query("""
+            select t.sector.sectorIdExterno,
+                   sum(t.precio),
+                   sum(case when t.estadoTicket = :devuelto then t.precio else 0.0 end)
+            from Ticket t
+            where t.evento.eventoId = :eventoId
+              and t.estadoTicket in :estados
+            group by t.sector.sectorIdExterno
+            """)
+    List<Object[]> resumirRecaudacionPorSector(@Param("eventoId") Long eventoId,
+                                               @Param("estados") Collection<EstadoTicket> estados,
+                                               @Param("devuelto") EstadoTicket devuelto);
 }
