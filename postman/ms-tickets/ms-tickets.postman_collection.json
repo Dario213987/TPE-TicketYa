@@ -477,6 +477,7 @@
                   "const j = pm.response.json();",
                   "pm.test(\"devuelve evento y cliente\", () => { pm.expect(j.eventoId).to.eql(Number(pm.collectionVariables.get(\"eventoId\"))); pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteFila\"))); });",
                   "pm.test(\"ingresa al final de la fila\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); pm.expect(j.yaEstabaEnFila).to.eql(false); });",
+                  "pm.test(\"queda en espera sin pase\", () => { pm.expect(j.estado).to.eql(\"EN_ESPERA\"); pm.expect(j.pase).to.eql(null); });",
                   "pm.test(\"informa el momento de ingreso\", () => pm.expect(j.ingresadoEl).to.be.a(\"string\"));",
                   "pm.collectionVariables.set(\"posicionFila\", String(j.posicion));"
                 ]
@@ -522,6 +523,7 @@
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
                   "pm.test(\"yaEstabaEnFila true\", () => pm.expect(j.yaEstabaEnFila).to.eql(true));",
+                  "pm.test(\"conserva el estado de espera\", () => pm.expect(j.estado).to.eql(\"EN_ESPERA\"));",
                   "pm.test(\"conserva la posición anterior\", () => pm.expect(String(j.posicion)).to.eql(pm.collectionVariables.get(\"posicionFila\")));"
                 ]
               }
@@ -565,7 +567,8 @@
                 "exec": [
                   "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
                   "const j = pm.response.json();",
-                  "pm.test(\"devuelve posición y personas delante\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.personasDelante).to.eql(j.posicion - 1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); });"
+                  "pm.test(\"devuelve posición y personas delante\", () => { pm.expect(j.posicion).to.be.at.least(1); pm.expect(j.personasDelante).to.eql(j.posicion - 1); pm.expect(j.totalEnFila).to.be.at.least(j.posicion); });",
+                  "pm.test(\"informa estado y pase\", () => { pm.expect(j.estado).to.be.oneOf([\"EN_ESPERA\", \"HABILITADO\"]); if (j.estado === \"EN_ESPERA\") { pm.expect(j.pase).to.eql(null); } else { pm.expect(j.pase.token).to.be.a(\"string\"); } });"
                 ]
               }
             }
@@ -734,7 +737,60 @@
       ]
     },
     {
-      "name": "4. Errores",
+      "name": "4. Habilitación por tandas (interno)",
+      "description": "Ajusta la habilitación del evento {{eventoId}}. El gateway bloquea /api/tickets/internal/**, así que este request debe apuntar directo a ms-tickets ({{msTicketsBaseUrl}}). Con tanda de 1 cliente y tick de 5 segundos, el primer cliente de la fila pasa a HABILITADO en la próxima corrida del job.",
+      "item": [
+        {
+          "name": "Ajustar tanda (1 cliente, 5s, TTL 120s)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"habilitada\": true,\n  \"tamanoTanda\": 1,\n  \"intervaloSegundos\": 5,\n  \"ttlPaseSegundos\": 120\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{msTicketsBaseUrl}}/api/tickets/internal/eventos/{{eventoId}}/habilitacion",
+              "host": [
+                "{{msTicketsBaseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "internal",
+                "eventos",
+                "{{eventoId}}",
+                "habilitacion"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "5. Errores",
       "item": [
         {
           "name": "400 cantidad invalida",
@@ -1096,6 +1152,10 @@
     {
       "key": "baseUrl",
       "value": "http://localhost:8080"
+    },
+    {
+      "key": "msTicketsBaseUrl",
+      "value": "http://localhost:8081"
     },
     {
       "key": "eventoId",

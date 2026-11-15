@@ -31,6 +31,11 @@ public class FilaRedisRepository {
     public static final String PREFIJO_CLAVE = "tickets:fila:evento:";
 
     private static final RedisScript<List> REGISTRAR = new DefaultRedisScript<>("""
+            -- Si el cliente ya tiene un pase, no se vuelve a insertar en la fila.
+            -- La comprobacion y el ZADD son atomicos respecto de la emision de pases.
+            if redis.call('EXISTS', KEYS[2]) == 1 then
+                return {2}
+            end
             local actual = redis.call('ZSCORE', KEYS[1], ARGV[1])
             if actual then
                 local score = math.floor(tonumber(actual))
@@ -60,7 +65,14 @@ public class FilaRedisRepository {
 
     public Registro registrar(Long eventoId, Long clienteId) {
         List<?> resultado = redisTemplate.execute(
-                REGISTRAR, List.of(clave(eventoId)), String.valueOf(clienteId));
+                REGISTRAR,
+                List.of(clave(eventoId), PaseRedisRepository.clave(eventoId, clienteId)),
+                String.valueOf(clienteId));
+
+        if (resultado != null && resultado.size() == 1
+                && numero(resultado.get(0)) == 2L) {
+            return new Registro(false, 0, 0, Instant.EPOCH, true);
+        }
 
         if (resultado == null || resultado.size() < 4) {
             throw new IllegalStateException(
@@ -96,6 +108,11 @@ public class FilaRedisRepository {
                 posicion + 1, posicion, numero(resultado.get(1))));
     }
 
+    public long totalEnFila(Long eventoId) {
+        Long total = redisTemplate.opsForZSet().size(clave(eventoId));
+        return total == null ? 0 : total;
+    }
+
     public static String clave(Long eventoId) {
         return PREFIJO_CLAVE + eventoId;
     }
@@ -108,7 +125,12 @@ public class FilaRedisRepository {
     }
 
     public record Registro(boolean agregado, long posicion, long totalEnFila,
-                           Instant ingresadoEl) {
+                           Instant ingresadoEl, boolean yaHabilitado) {
+
+        public Registro(boolean agregado, long posicion, long totalEnFila,
+                        Instant ingresadoEl) {
+            this(agregado, posicion, totalEnFila, ingresadoEl, false);
+        }
     }
 
     public record Posicion(long posicion, long personasDelante, long totalEnFila) {

@@ -44,7 +44,21 @@ class FilaRedisRepositoryTest {
         assertThat(registro.ingresadoEl()).isEqualTo(Instant.ofEpochSecond(1));
 
         verify(redisTemplate).execute(any(RedisScript.class),
-                eq(List.of(FilaRedisRepository.clave(7L))), eq("42"));
+                eq(List.of(FilaRedisRepository.clave(7L),
+                        PaseRedisRepository.clave(7L, 42L))),
+                eq("42"));
+    }
+
+    @Test
+    void registrar_clienteConPaseYaEmitido_noReinsertaEnLaFila() {
+        doReturn(List.of(2L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        FilaRedisRepository.Registro registro = repository.registrar(7L, 42L);
+
+        assertThat(registro.yaHabilitado()).isTrue();
+        assertThat(registro.agregado()).isFalse();
+        assertThat(registro.posicion()).isZero();
     }
 
     @Test
