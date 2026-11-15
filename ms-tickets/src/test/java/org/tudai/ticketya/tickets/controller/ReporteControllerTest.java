@@ -71,7 +71,7 @@ class ReporteControllerTest {
                                 .build()))
                         .build());
 
-        mvc.perform(get("/api/tickets/evento/reporte/5/entradas"))
+        mvc.perform(get("/api/tickets/reportes/eventos/5/entradas"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventoId").value(5))
                 .andExpect(jsonPath("$.eventoNombre").value("Recital"))
@@ -98,7 +98,7 @@ class ReporteControllerTest {
                         .sectores(List.of())
                         .build());
 
-        mvc.perform(get("/api/tickets/evento/reporte/5/entradas"))
+        mvc.perform(get("/api/tickets/reportes/eventos/5/entradas"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.eventoId").value(5));
 
@@ -110,7 +110,7 @@ class ReporteControllerTest {
         when(userContext.userId()).thenReturn(42L);
         when(userContext.role()).thenReturn(Role.CLIENTE);
 
-        mvc.perform(get("/api/tickets/evento/reporte/5/entradas"))
+        mvc.perform(get("/api/tickets/reportes/eventos/5/entradas"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.title").value("Acceso denegado"));
 

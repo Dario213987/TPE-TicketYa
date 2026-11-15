@@ -13,7 +13,7 @@ import org.tudai.ticketya.tickets.dto.ReporteEntradasVendidasDTO;
 import org.tudai.ticketya.tickets.service.ReporteService;
 
 @RestController
-@RequestMapping("/api/tickets/evento")
+@RequestMapping("/api/tickets/reportes")
 @RequiredArgsConstructor
 public class ReporteController {
 
@@ -22,7 +22,7 @@ public class ReporteController {
 
 
     /** Entradas vendidas y devueltas por evento*/
-    @GetMapping("/reporte/{id}/entradas")
+    @GetMapping("/eventos/{id}/entradas")
     @Authorize("hasAnyRole('ADMINISTRADOR','ORGANIZADOR')")
     public ResponseEntity<ReporteEntradasVendidasDTO> obtenerReporteEntradasVendidas(
             @PathVariable long id) {

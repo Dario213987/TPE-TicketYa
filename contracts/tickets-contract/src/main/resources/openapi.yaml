@@ -125,7 +125,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
         '404': { $ref: '#/components/responses/Error' }
-  /api/tickets/evento/reporte/{id}/entradas:
+  /api/tickets/reportes/eventos/{id}/entradas:
     get:
       tags: [reportes]
       operationId: obtenerReporteEntradasVendidas
