@@ -462,7 +462,8 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
-                  "pm.test(\"informa que ya fue utilizado\", () => pm.expect(pm.response.json().detail).to.include(\"utilizado\"));"
+                  "pm.test(\"informa que ya fue utilizado\", () => pm.expect(pm.response.json().detail).to.include(\"utilizado\"));",
+                  "pm.test(\"codigo YA_USADA\", () => pm.expect(pm.response.json().codigo).to.eql(\"YA_USADA\"));"
                 ]
               }
             }
@@ -517,7 +518,8 @@
               "script": {
                 "type": "text/javascript",
                 "exec": [
-                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"codigo NO_EXISTE\", () => pm.expect(pm.response.json().codigo).to.eql(\"NO_EXISTE\"));"
                 ]
               }
             }
