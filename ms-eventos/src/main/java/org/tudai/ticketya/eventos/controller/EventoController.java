@@ -13,6 +13,7 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResumen;
@@ -40,6 +41,14 @@ public class EventoController {
 
         return new PagedModel<>(eventoService.listarPublicados(ordenable(pageable))
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
+    }
+
+    @GetMapping("/{eventoId}")
+    public EventoDetalleResponse obtenerEvento(@PathVariable Long eventoId) {
+        boolean hayUsuario = userContext.isPresent();
+        Long userId = hayUsuario ? userContext.userId() : null;
+        boolean esAdmin = hayUsuario && userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.obtenerEvento(eventoId, userId, esAdmin);
     }
 
     @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
