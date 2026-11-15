@@ -35,7 +35,7 @@ paths:
             tags: [usuarios]
             operationId: listarUsuarios
             summary: Lista los usuarios
-            description: Paginado y con orden. Se puede ordenar por id, email, nombre y createdAt.
+            description: Paginado y con orden. Se puede ordenar por id, email, nombre y creadoEl.
             parameters:
                 - $ref: '#/components/parameters/Page'
                 - $ref: '#/components/parameters/Size'
@@ -112,7 +112,7 @@ components:
         Sort:
             name: sort
             in: query
-            description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos: id, email, nombre, createdAt. Por defecto createdAt,desc"
+            description: "Orden en la convención de Spring: `campo,asc` o `campo,desc`. Campos: id, email, nombre, creadoEl. Por defecto creadoEl,desc"
             schema: { type: string }
     responses:
         Error:

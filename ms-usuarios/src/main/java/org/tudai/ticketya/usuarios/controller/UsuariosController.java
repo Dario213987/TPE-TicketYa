@@ -35,7 +35,7 @@ import java.util.Set;
 @Authorize("hasRole('ADMINISTRADOR')")
 public class UsuariosController {
 
-    private static final Set<String> ORDENABLES = Set.of("id", "email", "nombre", "createdAt");
+    private static final Set<String> ORDENABLES = Set.of("id", "email", "nombre", "creadoEl");
 
     private final UsuarioService service;
     private final ModelMapper mapper;
@@ -57,7 +57,7 @@ public class UsuariosController {
     }
 
     @GetMapping
-    public PagedModel<UsuarioResponse> listarUsuarios(@PageableDefault(sort = {"createdAt", "id"}, direction = Sort.Direction.DESC) Pageable pageable) {
+    public PagedModel<UsuarioResponse> listarUsuarios(@PageableDefault(sort = {"creadoEl", "id"}, direction = Sort.Direction.DESC) Pageable pageable) {
 
         pageable.getSort().forEach(orden -> {
             if (!ORDENABLES.contains(orden.getProperty())) {
