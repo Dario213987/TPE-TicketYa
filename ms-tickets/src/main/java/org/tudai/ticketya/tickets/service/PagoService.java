@@ -22,7 +22,9 @@ import org.tudai.ticketya.tickets.service.ReservaPagoService.Cobro;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Preparacion;
 
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Orquesta el pago de una reserva: prepara (transacción local), cobra en ms-transacciones
@@ -73,6 +75,7 @@ public class PagoService {
         }
 
         List<Cobro> aprobados = new ArrayList<>();
+        Map<Long, Long> transacciones = new LinkedHashMap<>();
         String motivoRechazo = null;
         for (Cobro cobro : preparacion.cobros()) {
             TransaccionResponse debito;
@@ -90,6 +93,7 @@ public class PagoService {
 
             if (debito != null && debito.getEstado() == EstadoTransaccion.COMPLETA) {
                 aprobados.add(cobro);
+                transacciones.put(cobro.ticketId(), debito.getId());
             } else {
                 motivoRechazo = motivo(debito);
                 break;
@@ -102,7 +106,7 @@ public class PagoService {
         }
 
         try {
-            return reservaPagoService.emitir(reservaId);
+            return reservaPagoService.emitir(reservaId, transacciones);
         } catch (RuntimeException e) {
             log.error("Falló la emisión de la reserva {} con el pago aprobado: {}", reservaId, e.getMessage(), e);
             compensar(reservaId, preparacion, clienteId, aprobados, EstadoPago.REINTEGRADO, MOTIVO_FALLA_EMISION);

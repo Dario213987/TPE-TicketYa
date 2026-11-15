@@ -14,7 +14,7 @@ posterior falla.
 |---|---|---|
 | 1. Preparar | `ReservaPagoService.preparar` (transacción) | Valida la reserva, la clave y los precios. Pasa la reserva y sus tickets a `PENDIENTE_PAGO`. |
 | 2. Cobrar | `PagoService` (sin transacción) | Un débito por ticket en ms-transacciones, a nombre del organizador. |
-| 3. Emitir | `ReservaPagoService.emitir` (transacción) | Tickets y asientos a `VENDIDO`, reserva a `APROBADO`. |
+| 3. Emitir | `ReservaPagoService.emitir` (transacción) | Tickets y asientos a `VENDIDO`, reserva a `APROBADO` y registro de la venta con sus ítems (TKY-62). |
 | Compensar | `PagoService.compensar` + `ReservaPagoService.liberar` | Crédito por cada débito aprobado y liberación de los lugares. |
 
 ## Estados de la reserva (`reservas.estado_pago`)

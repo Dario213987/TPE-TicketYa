@@ -27,6 +27,7 @@ import org.tudai.ticketya.tickets.service.ReservaPagoService.Cobro;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Preparacion;
 
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -68,9 +69,11 @@ class PagoServiceTest {
     @Test
     void pagar_todosLosDebitosAprobados_emiteLasEntradas() {
         prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
-        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA).id(11L))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA).id(12L));
         CompraResponseDTO emitida = compra(EstadoPago.APROBADO);
-        when(reservaPagoService.emitir(RESERVA_ID)).thenReturn(emitida);
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenReturn(emitida);
 
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago())).isSameAs(emitida);
 
@@ -84,6 +87,7 @@ class PagoServiceTest {
                         org.assertj.core.groups.Tuple.tuple(2L, CLIENTE_ID, 1500.0));
         verify(transaccionesClient, never()).generarCredito(any());
         verify(reservaPagoService, never()).liberar(any(), any(), any());
+        verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L, 2L, 12L));
     }
 
     @Test
@@ -95,7 +99,7 @@ class PagoServiceTest {
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago())).isSameAs(original);
 
         verifyNoInteractions(transaccionesClient);
-        verify(reservaPagoService, never()).emitir(any());
+        verify(reservaPagoService, never()).emitir(any(), any());
     }
 
     @Test
@@ -115,7 +119,7 @@ class PagoServiceTest {
         assertThat(creditos.getValue().getTicketId()).isEqualTo(1L);
         assertThat(creditos.getValue().getMonto()).isEqualTo(1500.0);
         verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.RECHAZADO, "fondos insuficientes");
-        verify(reservaPagoService, never()).emitir(any());
+        verify(reservaPagoService, never()).emitir(any(), any());
         assertThat(mensajes()).anyMatch(m -> m.contains("Compensación") && m.contains("ticket=1")
                 && m.contains("reintegrado"));
     }
@@ -144,7 +148,7 @@ class PagoServiceTest {
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago())).isSameAs(pendiente);
 
         verify(reservaPagoService, never()).liberar(any(), any(), any());
-        verify(reservaPagoService, never()).emitir(any());
+        verify(reservaPagoService, never()).emitir(any(), any());
         verify(transaccionesClient, never()).generarCredito(any());
         assertThat(mensajes()).anyMatch(m -> m.contains("PENDIENTE_PAGO"));
     }
@@ -165,7 +169,7 @@ class PagoServiceTest {
     void pagar_reintentoDespuesDelTimeout_consultaElEstadoRealYEmite() {
         prepararCobros(new Cobro(1L, 1500.0));
         when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
-        when(reservaPagoService.emitir(RESERVA_ID)).thenReturn(compra(EstadoPago.APROBADO));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenReturn(compra(EstadoPago.APROBADO));
 
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()).getEstadoPago())
                 .isEqualTo(EstadoPago.APROBADO);
@@ -178,7 +182,7 @@ class PagoServiceTest {
         prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
         when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
         when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
-        when(reservaPagoService.emitir(RESERVA_ID)).thenThrow(new IllegalStateException("falla de base"));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
 
         assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
                 .isInstanceOf(ConflictException.class)
@@ -195,7 +199,7 @@ class PagoServiceTest {
         prepararCobros(new Cobro(1L, 1500.0));
         when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
         when(transaccionesClient.generarCredito(any())).thenThrow(new RemoteServiceException(503, "caído"));
-        when(reservaPagoService.emitir(RESERVA_ID)).thenThrow(new IllegalStateException("falla de base"));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
 
         assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
                 .isInstanceOf(ConflictException.class);
