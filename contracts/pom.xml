@@ -25,5 +25,6 @@
         <module>devoluciones-contract</module>
         <module>preferencias-contract</module>
         <module>notificaciones-contract</module>
+        <module>usuarios-contract</module>
     </modules>
 </project>

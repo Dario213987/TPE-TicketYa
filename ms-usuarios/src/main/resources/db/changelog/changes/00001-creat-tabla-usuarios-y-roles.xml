@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00001-creat-tabla-usuarios-y-roles" author="Darío José Carsaniga">
+
+        <createTable tableName="usuarios">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="email" type="varchar(254)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="nombre" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="password_hash" type="varchar(100)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="creado_el" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actualizado_el" type="timestamp with time zone">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addUniqueConstraint tableName="usuarios"
+                             columnNames="email"
+                             constraintName="uk_usuarios_email"/>
+
+        <createTable tableName="usuario_roles">
+            <column name="usuario_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="rol" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="usuario_roles"
+                       columnNames="usuario_id, rol"
+                       constraintName="pk_usuario_roles"/>
+
+        <addForeignKeyConstraint baseTableName="usuario_roles"
+                                 baseColumnNames="usuario_id"
+                                 referencedTableName="usuarios"
+                                 referencedColumnNames="id"
+                                 constraintName="fk_usuario_roles_usuario"
+                                 onDelete="CASCADE"/>
+    </changeSet>
+</databaseChangeLog>
