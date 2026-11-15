@@ -122,6 +122,42 @@ class HabilitacionTandaServiceTest {
     }
 
     @Test
+    void ejecutarTandas_reponerLosPasesVencidosDeLosEventosActivos() {
+        HabilitacionEvento config = config(7L, true);
+        when(habilitacionRepository.ahora()).thenReturn(Timestamp.from(AHORA));
+        when(habilitacionRepository.buscarActivos()).thenReturn(List.of(7L));
+        when(habilitacionRepository.buscarVencidos(AHORA)).thenReturn(List.of());
+        when(habilitacionRepository.findById(7L)).thenReturn(Optional.of(config));
+        when(paseRepository.reponerVencidos(
+                eq(7L), eq(Duration.ofSeconds(90)), anyString()))
+                .thenReturn(List.of(pase(1L)));
+
+        service.ejecutarTandas();
+
+        verify(paseRepository).reponerVencidos(
+                eq(7L), eq(Duration.ofSeconds(90)), anyString());
+        verify(habilitacionRepository).incrementarHabilitados(7L, 1);
+        verify(paseRepository, never()).habilitarSiguientes(
+                anyLong(), anyInt(), any(), anyString());
+    }
+
+    @Test
+    void ejecutarTandas_sinPasesVencidos_noIncrementaHabilitados() {
+        HabilitacionEvento config = config(7L, true);
+        when(habilitacionRepository.ahora()).thenReturn(Timestamp.from(AHORA));
+        when(habilitacionRepository.buscarActivos()).thenReturn(List.of(7L));
+        when(habilitacionRepository.buscarVencidos(AHORA)).thenReturn(List.of());
+        when(habilitacionRepository.findById(7L)).thenReturn(Optional.of(config));
+        when(paseRepository.reponerVencidos(
+                eq(7L), eq(Duration.ofSeconds(90)), anyString()))
+                .thenReturn(List.of());
+
+        service.ejecutarTandas();
+
+        verify(habilitacionRepository, never()).incrementarHabilitados(anyLong(), anyInt());
+    }
+
+    @Test
     void requierePase_soloParaEventosDeAltaDemandaConConfiguracionActiva() {
         DisponibilidadEvento altaDemanda = DisponibilidadEvento.builder()
                 .eventoId(7L).altaDemanda(true).build();

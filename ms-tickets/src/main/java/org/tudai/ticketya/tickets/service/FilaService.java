@@ -114,6 +114,22 @@ public class FilaService {
                 .build();
     }
 
+    /**
+     * Abandona la fila. Si el cliente ya tenia un pase, tambien se descarta:
+     * deja de ocupar ese lugar y la proxima tanda puede habilitar al siguiente.
+     * Es idempotente: si el cliente no estaba en la fila no falla.
+     */
+    public void salir(Long eventoId, Long clienteId) {
+        if (eventoId == null) {
+            throw new BadRequestException("El id del evento es obligatorio");
+        }
+        if (clienteId == null) {
+            throw new BadRequestException("El cliente es obligatorio");
+        }
+
+        filaRepository.salir(eventoId, clienteId);
+    }
+
     private TurnoFilaResponseDTO habilitado(Long eventoId, Long clienteId,
                                             PaseRedisRepository.Pase pase) {
         return TurnoFilaResponseDTO.builder()

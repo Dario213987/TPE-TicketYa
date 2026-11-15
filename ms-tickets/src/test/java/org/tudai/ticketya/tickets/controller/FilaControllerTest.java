@@ -22,6 +22,7 @@ import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -180,6 +181,39 @@ class FilaControllerTest {
         when(userContext.role()).thenReturn(Role.ORGANIZADOR);
 
         mvc.perform(get("/api/tickets/eventos/7/fila"))
+                .andExpect(status().isForbidden());
+
+        verifyNoInteractions(filaService);
+    }
+
+    @Test
+    void salirDeLaFila_respondeNoContent() throws Exception {
+        when(userContext.role()).thenReturn(Role.CLIENTE);
+        when(userContext.userId()).thenReturn(42L);
+
+        mvc.perform(delete("/api/tickets/eventos/7/fila"))
+                .andExpect(status().isNoContent());
+
+        verify(filaService).salir(7L, 42L);
+    }
+
+    @Test
+    void salirDeLaFila_sinUsuarioAutenticado_responde401() throws Exception {
+        when(userContext.userId()).thenThrow(
+                new InvalidUserContextException("Falta el header obligatorio X-User-Id"));
+
+        mvc.perform(delete("/api/tickets/eventos/7/fila"))
+                .andExpect(status().isUnauthorized());
+
+        verifyNoInteractions(filaService);
+    }
+
+    @Test
+    void salirDeLaFila_conRolOrganizador_responde403() throws Exception {
+        when(userContext.userId()).thenReturn(1L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+
+        mvc.perform(delete("/api/tickets/eventos/7/fila"))
                 .andExpect(status().isForbidden());
 
         verifyNoInteractions(filaService);

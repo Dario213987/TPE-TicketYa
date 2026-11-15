@@ -20,7 +20,9 @@ info:
     primeros N clientes de la fila y les emite un pase con TTL. Mientras la habilitacion este
     activa, reservar requiere un pase vigente. La coordinacion entre instancias se hace en la
     base (claim atomico de la proxima tanda) y en Redis (ZPOPMIN y emision del pase en un unico
-    script Lua), por lo que varias instancias nunca duplican ni saltean clientes.
+    script Lua), por lo que varias instancias nunca duplican ni saltean clientes. El cliente
+    puede abandonar la fila; si tenia un pase, se descarta. Los pases que vencen sin uso se
+    descartan y el job habilita al siguiente cliente de la cola.
 tags:
   - name: reservas
   - name: disponibilidad
@@ -145,6 +147,28 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [fila]
+      operationId: salirDeLaFila
+      summary: Saca al cliente de la fila virtual
+      description: |
+        Solo el rol CLIENTE puede abandonar la fila. El cliente se toma de
+        X-User-Id, nunca del cuerpo.
+
+        Elimina al cliente de la cola sin modificar el orden de los demas. Si
+        ya tenia un pase vigente, tambien lo descarta para liberar el lugar.
+        Es idempotente: responde 204 aunque el cliente ya no estuviera en la
+        fila.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204':
+          description: El cliente salió de la fila o ya no estaba
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/disponibilidad:
     post:
       tags: [disponibilidad]

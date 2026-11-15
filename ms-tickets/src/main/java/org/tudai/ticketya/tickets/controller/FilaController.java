@@ -31,4 +31,11 @@ public class FilaController {
     public ResponseEntity<PosicionFilaResponseDTO> consultarPosicion(@PathVariable Long eventoId) {
         return ResponseEntity.ok(filaService.consultar(eventoId, userContext.userId()));
     }
+
+    @DeleteMapping("/{eventoId}/fila")
+    @Authorize("hasRole('CLIENTE')")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void salirDeLaFila(@PathVariable Long eventoId) {
+        filaService.salir(eventoId, userContext.userId());
+    }
 }

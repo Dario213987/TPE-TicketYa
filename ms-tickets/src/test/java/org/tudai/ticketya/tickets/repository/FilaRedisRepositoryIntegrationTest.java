@@ -90,6 +90,22 @@ class FilaRedisRepositoryIntegrationTest {
     }
 
     @Test
+    void salirSacaSoloAlClienteYConservaElOrdenDeLosDemas() {
+        repository.registrar(7L, 42L);
+        repository.registrar(7L, 43L);
+        repository.registrar(7L, 44L);
+
+        assertThat(repository.salir(7L, 43L)).isTrue();
+
+        assertThat(repository.totalEnFila(7L)).isEqualTo(2);
+        assertThat(repository.consultar(7L, 44L).orElseThrow().posicion())
+                .isEqualTo(2);
+        assertThat(repository.consultar(7L, 43L)).isEmpty();
+
+        assertThat(repository.salir(7L, 43L)).isFalse();
+    }
+
+    @Test
     void registraEnParalelo_asignaPosicionesUnicasDelUnoAlTotal() throws Exception {
         int cantidad = 20;
         ExecutorService pool = Executors.newFixedThreadPool(cantidad);
