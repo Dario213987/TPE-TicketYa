@@ -2,7 +2,7 @@
 	"info": {
 		"_postman_id": "aaa510fb-36d3-4115-972c-ce9621612652",
 		"name": "ms-tickets - pagar reserva",
-		"description": "TKY-56. Flujo publicar disponibilidad → reservar → pagar, por el gateway. Requiere ms-tickets y ms-transacciones levantados (la pasarela simulada aprueba todos los pagos). Ejecutar en orden: la carpeta 1 guarda reservaId e idempotencyKey.",
+		"description": "TKY-56. TKY-56/62/63. Flujo publicar disponibilidad → reservar → pagar → mis entradas y QR, por el gateway. Requiere ms-tickets y ms-transacciones levantados (la pasarela simulada aprueba todos los pagos). Ejecutar en orden: la carpeta 1 guarda reservaId e idempotencyKey.",
 		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
 	},
 	"item": [
@@ -134,7 +134,8 @@
 									"pm.test(\"total = 2 x 1500\", () => pm.expect(j.total).to.eql(3000));",
 									"pm.test(\"registra la venta\", () => pm.expect(j.ventaId).to.be.a(\"number\"));",
 									"pm.collectionVariables.set(\"primerQr\", j.tickets[0].codigoQr);",
-									"pm.collectionVariables.set(\"ventaId\", j.ventaId);"
+									"pm.collectionVariables.set(\"ventaId\", j.ventaId);",
+									"pm.collectionVariables.set(\"ticketId\", j.tickets[0].id);"
 								]
 							}
 						}
@@ -472,6 +473,131 @@
 					}
 				}
 			]
+		},
+		{
+			"name": "3. mis entradas",
+			"item": [
+				{
+					"name": "Mis entradas",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"const j = pm.response.json();",
+									"pm.test(\"incluye la entrada comprada\", () => pm.expect(j.content.map(e => e.id)).to.include(Number(pm.collectionVariables.get(\"ticketId\"))));",
+									"pm.test(\"todas son del cliente y no usadas\", () => j.content.forEach(e => pm.expect(e.utilizado).to.be.a(\"boolean\")));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/mis-entradas",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"mis-entradas"
+							]
+						}
+					}
+				},
+				{
+					"name": "QR de una entrada",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"contenido = codigo del ticket\", () => pm.expect(pm.response.json().contenido).to.eql(pm.collectionVariables.get(\"primerQr\")));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{clienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/{{ticketId}}/qr",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"{{ticketId}}",
+								"qr"
+							]
+						}
+					}
+				},
+				{
+					"name": "QR de una entrada de otro cliente",
+					"event": [
+						{
+							"listen": "test",
+							"script": {
+								"type": "text/javascript",
+								"exec": [
+									"pm.test(\"Status 404\", () => pm.response.to.have.status(404));"
+								]
+							}
+						}
+					],
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "X-User-Id",
+								"value": "{{otroClienteId}}"
+							},
+							{
+								"key": "X-User-Role",
+								"value": "CLIENTE"
+							}
+						],
+						"url": {
+							"raw": "{{baseUrl}}/api/tickets/{{ticketId}}/qr",
+							"host": [
+								"{{baseUrl}}"
+							],
+							"path": [
+								"api",
+								"tickets",
+								"{{ticketId}}",
+								"qr"
+							]
+						}
+					}
+				}
+			]
 		}
 	],
 	"variable": [
@@ -513,6 +639,10 @@
 		},
 		{
 			"key": "ventaId",
+			"value": ""
+		},
+		{
+			"key": "ticketId",
 			"value": ""
 		}
 	]
