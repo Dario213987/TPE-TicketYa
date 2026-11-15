@@ -13,6 +13,7 @@ public class DisponibilidadResponseDTO {
 
     private Long eventoId;
     private boolean yaExistia;
+    private boolean altaDemanda;
     private int sectoresProcesados;
     private int asientosInsertados;
     private int asientosOmitidos;

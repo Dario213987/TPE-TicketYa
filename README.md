@@ -54,6 +54,7 @@ Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los 
 `ms-preferencias` guarda documentos en MongoDB (`db-preferencias`, puerto 5437) y se configura con la variable `MONGODB_URI`.
 
 Redis está desactivado por ahora (ver el comentario en el compose).
+Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
 
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 
