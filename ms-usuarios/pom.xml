@@ -90,10 +90,8 @@
             <scope>test</scope>
         </dependency>
         <dependency>
-            <groupId>org.tudai</groupId>
-            <artifactId>usuarios-contract</artifactId>
-            <version>1.0-SNAPSHOT</version>
-            <scope>compile</scope>
+            <groupId>org.springframework.security</groupId>
+            <artifactId>spring-security-oauth2-jose</artifactId>
         </dependency>
     </dependencies>
 

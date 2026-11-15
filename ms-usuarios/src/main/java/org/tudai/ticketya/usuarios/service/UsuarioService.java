@@ -57,7 +57,7 @@ public class UsuarioService {
         crear(admin, password);
     }
 
-    private static String normalizar(String email) {
+    public static String normalizar(String email) {
         return email.trim().toLowerCase(Locale.ROOT);
     }
 }
