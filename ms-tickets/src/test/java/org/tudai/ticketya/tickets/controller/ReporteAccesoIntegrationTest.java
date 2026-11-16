@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.SerializationFeature;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
 import org.junit.jupiter.params.ParameterizedTest;
 import org.junit.jupiter.params.provider.ValueSource;
 import org.springframework.http.converter.json.MappingJackson2HttpMessageConverter;
@@ -82,6 +83,15 @@ class ReporteAccesoIntegrationTest {
 
         mvc.perform(get("/api/tickets/reportes/eventos/{id}/{reporte}", EVENTO_ID, reporte))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void reporte_cuandoElEventoNoExiste_responde404() throws Exception {
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(eventoClient.obtenerEvento(EVENTO_ID)).thenReturn(null);
+
+        mvc.perform(get("/api/tickets/reportes/eventos/{id}/entradas", EVENTO_ID))
+                .andExpect(status().isNotFound());
     }
 
     private EventoResponseDto evento() {

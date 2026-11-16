@@ -3,6 +3,7 @@ package org.tudai.ticketya.tickets.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.client.EventoClient;
 import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
 import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
@@ -196,6 +197,9 @@ public class ReporteService {
             Long eventoId, Long solicitanteId, boolean esAdmin) {
 
         EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
+        if (evento == null) {
+            throw new NotFoundException("Evento no encontrado con id: " + eventoId);
+        }
         eventoAccessValidator.validarAcceso(evento, solicitanteId, esAdmin);
         return evento;
     }
