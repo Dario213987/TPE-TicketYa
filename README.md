@@ -53,7 +53,7 @@ Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los 
 
 `ms-preferencias` guarda documentos en MongoDB (`db-preferencias`, puerto 5437) y se configura con la variable `MONGODB_URI`.
 
-Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
+Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Un job periódico habilita a los clientes por tandas y emite pases con TTL; la coordinación entre instancias se apoya en `habilitacion_eventos` y en scripts Lua atómicos. Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
 
 Redis Streams se usan en `ms-preferencias` para el historial de compras y asistencias (`redis-preferencias`, puerto 6381 en el host). Ver [`docs/api/ms-preferencias.md`](docs/api/ms-preferencias.md).
 
