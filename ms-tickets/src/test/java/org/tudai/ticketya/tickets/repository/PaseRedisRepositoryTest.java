@@ -59,9 +59,55 @@ class PaseRedisRepositoryTest {
         assertThat(pases.get(0).expiraEl()).isEqualTo(Instant.ofEpochMilli(1_700_000_300_000L));
 
         verify(redisTemplate).execute(any(RedisScript.class),
-                eq(List.of(FilaRedisRepository.clave(7L))),
+                eq(List.of(FilaRedisRepository.clave(7L),
+                        PaseRedisRepository.claveActivos(7L))),
                 eq(PaseRedisRepository.prefijo(7L)),
                 eq("2"), eq("300000"), eq("tanda-1"));
+    }
+
+    @Test
+    void reponerVencidos_interpretaLosPasesDeReposicion() {
+        doReturn(List.of(
+                "43", "tanda-2:43", "2000000", "1700000000000", "1700000120000"))
+                .when(redisTemplate).execute(any(RedisScript.class), anyList(), any(), any(), any());
+
+        List<PaseRedisRepository.Pase> pases = repository.reponerVencidos(
+                7L, Duration.ofMinutes(2), "tanda-2");
+
+        assertThat(pases).hasSize(1);
+        assertThat(pases.get(0).clienteId()).isEqualTo(43L);
+        assertThat(pases.get(0).token()).isEqualTo("tanda-2:43");
+        assertThat(pases.get(0).tanda()).isEqualTo("tanda-2");
+        assertThat(pases.get(0).expiraEl())
+                .isEqualTo(Instant.ofEpochMilli(1_700_000_120_000L));
+
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(List.of(PaseRedisRepository.claveActivos(7L),
+                        FilaRedisRepository.clave(7L))),
+                eq(PaseRedisRepository.prefijo(7L)),
+                eq("120000"), eq("tanda-2"));
+    }
+
+    @Test
+    void reponerVencidos_sinVencidosNiCola_devuelveListaVacia() {
+        doReturn(List.of())
+                .when(redisTemplate).execute(any(RedisScript.class), anyList(), any(), any(), any());
+
+        assertThat(repository.reponerVencidos(
+                7L, Duration.ofMinutes(1), "tanda-2")).isEmpty();
+    }
+
+    @Test
+    void reponerVencidos_validaTtlYTanda() {
+        assertThatThrownBy(() -> repository.reponerVencidos(
+                7L, Duration.ZERO, "tanda-2"))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("TTL");
+
+        assertThatThrownBy(() -> repository.reponerVencidos(
+                7L, Duration.ofMinutes(1), " "))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("tanda");
     }
 
     @Test

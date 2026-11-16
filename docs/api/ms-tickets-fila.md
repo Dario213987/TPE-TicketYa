@@ -12,7 +12,9 @@ La fila virtual permite ordenar a los clientes por orden de llegada cuando un ev
 6. Mientras espera, consulta su posición con `GET /api/tickets/eventos/{eventoId}/fila`; si ya no está en la fila recibe `404`.
 7. Un job periódico de `ms-tickets` habilita a los primeros `N` clientes de la fila cada `intervalo` y les emite un pase con TTL. El `POST` y el `GET` de la fila pasan a devolver `estado: HABILITADO` con el pase.
 8. Con el pase vigente, el cliente reserva normalmente; si el pase venció o el cliente no fue habilitado, la reserva responde `409`.
-9. Cuando el pase vence, el cliente debe volver a entrar a la fila.
+9. Si el cliente abandona la fila con `DELETE /api/tickets/eventos/{eventoId}/fila`, sale de la cola y se descarta su pase si ya había sido habilitado. Los demás clientes conservan su orden.
+10. Si un pase vence sin que el cliente compre, el job lo descarta y habilita al siguiente cliente de la cola.
+11. El cliente cuyo pase venció y todavía quiere comprar debe volver a entrar a la fila.
 
 La venta se considera abierta solo si `disponibilidad_eventos.estado_venta` es `ABIERTA`. Si el evento no tiene disponibilidad en `ms-tickets`, la fila responde `404`; si la tiene pero `altaDemanda` es `false` o la venta no está abierta, responde `409`.
 
@@ -21,8 +23,10 @@ La venta se considera abierta solo si `disponibilidad_eventos.estado_venta` es `
 La habilitación se activa automáticamente para los eventos de alta demanda cuando se publica su disponibilidad. El job `HabilitacionTandaJob` corre cada 5 segundos por defecto y, por cada evento:
 
 1. Reclama la tanda con un `UPDATE ... WHERE proxima_tanda_el <= ahora` sobre `habilitacion_eventos`. Solo una instancia obtiene la fila; las demás no emiten pases en ese tick.
-2. Ejecuta en Redis un único script Lua que hace `ZPOPMIN` de los primeros `N` clientes de la cola y crea un pase por cliente con `PEXPIREAT`.
+2. Ejecuta en Redis un único script Lua que hace `ZPOPMIN` de los primeros `N` clientes de la cola y crea un pase por cliente con `PEXPIREAT`. Además registra el vencimiento en un sorted set de pases activos.
 3. Reprograma `proxima_tanda_el = ahora + intervalo`. Si Redis falla, vuelve a dejar la tanda para el siguiente tick.
+
+Antes de reclamar la tanda, el job recorre los eventos habilitados y repone los pases vencidos. Un único script Lua elimina del sorted set de pases activos los que ya vencieron, borra sus claves y hace `ZPOPMIN` de la cola por la misma cantidad de lugares liberados. Así, si un pase vence sin uso, el siguiente cliente queda habilitado en el siguiente tick sin esperar al intervalo de la tanda. El `ZRANGEBYSCORE`, el `ZREM` y el `ZPOPMIN` son atómicos, por lo que varias instancias no reponen el mismo lugar dos veces.
 
 Como la cola actúa de cursor (`ZPOPMIN`), los clientes pasan de `EN_ESPERA` a `HABILITADO` exactamente una vez: no se duplican entre instancias ni se saltean clientes, incluso si varias instancias ejecutan el job a la vez.
 
@@ -53,6 +57,7 @@ El pase se valida al reservar solo cuando la habilitación global está activa, 
 |---|---|---|
 | `tickets:fila:evento:{eventoId}` | ZSET | Cola ordenada por llegada; el job extrae de acá con `ZPOPMIN`. |
 | `tickets:pase:evento:{eventoId}:cliente:{clienteId}` | HASH con TTL | `clienteId`, `token`, `tanda`, `score`, `emitidoEl`, `expiraEl`. Redis borra la clave al vencer. |
+| `tickets:pases-activos:evento:{eventoId}` | ZSET | Pases vigentes ordenados por `expiraEl`; el job los usa para reponer los vencidos. |
 
 ## Estado de venta
 
@@ -149,6 +154,25 @@ Respuesta `200 OK` si el cliente ya tiene un pase vigente (no se reinserta en la
 }
 ```
 
+### `DELETE /api/tickets/eventos/{eventoId}/fila`
+
+- Rol requerido: `CLIENTE`.
+- El cliente se toma del header `X-User-Id`; no se acepta en el cuerpo.
+- No requiere cuerpo.
+- Es idempotente: responde `204 No Content` aunque el cliente ya no estuviera en la fila.
+
+Saca al cliente de la cola sin modificar el orden de los demás. Si el cliente ya tenía un pase, también lo descarta: deja de ocupar ese lugar y el job puede habilitar al siguiente.
+
+Ejemplo:
+
+```bash
+curl -i -X DELETE http://localhost:8080/api/tickets/eventos/5/fila \
+  -H "X-User-Id: 42" \
+  -H "X-User-Role: CLIENTE"
+```
+
+Respuesta `204 No Content`, sin cuerpo.
+
 ### `GET /api/tickets/eventos/{eventoId}/fila`
 
 - Rol requerido: `CLIENTE`.
@@ -208,6 +232,7 @@ Cuando el cliente ya fue habilitado, `posicion` y `personasDelante` son `null`:
 |---|---|
 | `201` | `POST`: el cliente ingresó a la fila por primera vez. |
 | `200` | `POST`: el cliente ya estaba en la fila o ya tiene un pase vigente. `GET`: el cliente está en la fila o tiene un pase. |
+| `204` | `DELETE`: el cliente salió de la fila (o ya no estaba). |
 | `401` | Falta la autenticación de usuario o `X-User-Id` no es numérico. |
 | `403` | El rol no es `CLIENTE`. |
 | `404` | `POST`: el evento no tiene disponibilidad publicada en `ms-tickets`. `GET`: el cliente no está en la fila ni tiene pase. |
@@ -229,7 +254,7 @@ Usar el reloj de Redis evita que dos instancias de `ms-tickets` con relojes desi
 
 Cuando dos clientes llegan en el mismo microsegundo, Redis desempata por orden lexicográfico del miembro. Es un empate prácticamente imposible y no altera la garantía de idempotencia.
 
-Los pases viven en claves independientes con `PEXPIREAT`; Redis las elimina solas al vencer. La cola no tiene TTL: se conserva hasta que se borre la clave.
+Los pases viven en claves independientes con `PEXPIREAT`; Redis las elimina solas al vencer. La cola no tiene TTL: se conserva hasta que se borre la clave. El sorted set `tickets:pases-activos:evento:{eventoId}` guarda el vencimiento de cada pase emitido y lo limpia el job al reponer los vencidos; no tiene TTL propio.
 
 ## Configuración
 
@@ -273,4 +298,7 @@ También se puede inspeccionar la fila y los pases directamente:
 ```bash
 redis-cli -p 6380 ZRANGE tickets:fila:evento:5 0 -1 WITHSCORES
 redis-cli -p 6380 --scan --pattern 'tickets:pase:evento:5:*'
+redis-cli -p 6380 ZRANGE tickets:pases-activos:evento:5 0 -1 WITHSCORES
 ```
+
+Para probar el abandono, llamar `DELETE /api/tickets/eventos/5/fila` con un `X-User-Id` que esté en la fila y verificar que desaparece del sorted set. Para probar el vencimiento, ajustar un TTL corto (por ejemplo `{"ttlPaseSegundos": 5}`), esperar a que venza el pase y comprobar que el job habilita al siguiente cliente de la cola en el tick siguiente.

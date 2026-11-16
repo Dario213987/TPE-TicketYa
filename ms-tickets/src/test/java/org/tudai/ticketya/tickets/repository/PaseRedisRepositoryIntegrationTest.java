@@ -130,6 +130,30 @@ class PaseRedisRepositoryIntegrationTest {
     }
 
     @Test
+    void elPaseVencidoSeDescartaYSeHabilitaAlSiguiente() throws Exception {
+        filaRepository.registrar(7L, 42L);
+        filaRepository.registrar(7L, 43L);
+        paseRepository.habilitarSiguientes(
+                7L, 1, Duration.ofMillis(150), "tanda-1");
+
+        long limite = System.currentTimeMillis() + 3_000;
+        while (paseRepository.existe(7L, 42L) && System.currentTimeMillis() < limite) {
+            Thread.sleep(50);
+        }
+        assertThat(paseRepository.existe(7L, 42L)).isFalse();
+
+        List<PaseRedisRepository.Pase> repuestos = paseRepository.reponerVencidos(
+                7L, Duration.ofMinutes(5), "tanda-2");
+
+        assertThat(repuestos).extracting(PaseRedisRepository.Pase::clienteId)
+                .containsExactly(43L);
+        assertThat(paseRepository.buscar(7L, 43L)).isPresent();
+        assertThat(filaRepository.totalEnFila(7L)).isZero();
+        assertThat(redisTemplate.opsForZSet().size(PaseRedisRepository.claveActivos(7L)))
+                .isEqualTo(1);
+    }
+
+    @Test
     void elPaseVenceSolo() throws Exception {
         filaRepository.registrar(7L, 42L);
         paseRepository.habilitarSiguientes(7L, 1, Duration.ofMillis(150), "tanda-1");

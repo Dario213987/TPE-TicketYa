@@ -123,4 +123,24 @@ class FilaRedisRepositoryTest {
     void clave_usaElPrefijoYElEvento() {
         assertThat(FilaRedisRepository.clave(5L)).isEqualTo("tickets:fila:evento:5");
     }
+
+    @Test
+    void salir_eliminaDeLaColaElPaseYElPaseActivoDelCliente() {
+        doReturn(1L).when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.salir(7L, 42L)).isTrue();
+
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(List.of(FilaRedisRepository.clave(7L),
+                        PaseRedisRepository.clave(7L, 42L),
+                        PaseRedisRepository.claveActivos(7L))),
+                eq("42"));
+    }
+
+    @Test
+    void salir_siElClienteNoEstaba_devuelveFalse() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.salir(7L, 42L)).isFalse();
+    }
 }

@@ -652,6 +652,47 @@
           "response": []
         },
         {
+          "name": "Salir de la fila (204)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 204\", () => pm.response.to.have.status(204));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteFila}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/fila",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "fila"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
           "name": "403 rol ORGANIZADOR",
           "event": [
             {

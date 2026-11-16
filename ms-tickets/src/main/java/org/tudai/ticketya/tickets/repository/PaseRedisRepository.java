@@ -30,6 +30,7 @@ public class PaseRedisRepository {
 
     private static final RedisScript<List> HABILITAR = new DefaultRedisScript<>("""
             local cola = KEYS[1]
+            local activos = KEYS[2]
             local prefijoPase = ARGV[1]
             local cantidad = tonumber(ARGV[2])
             local ttlMs = tonumber(ARGV[3])
@@ -56,6 +57,62 @@ public class PaseRedisRepository {
                     'emitidoEl', ahoraMs,
                     'expiraEl', expiraEl)
                 redis.call('PEXPIREAT', clavePase, expiraEl)
+                redis.call('ZADD', activos, expiraEl, cliente)
+
+                table.insert(pases, cliente)
+                table.insert(pases, token)
+                table.insert(pases, score)
+                table.insert(pases, ahoraMs)
+                table.insert(pases, expiraEl)
+            end
+
+            return pases
+            """, List.class);
+
+    /**
+     * Descarta los pases vencidos y habilita a la misma cantidad de clientes
+     * que sigue en la cola. El ZRANGEBYSCORE, el ZREM y el ZPOPMIN son atomicos,
+     * por lo que varias instancias no reponen el mismo lugar dos veces.
+     */
+    private static final RedisScript<List> REPONER = new DefaultRedisScript<>("""
+            local activos = KEYS[1]
+            local cola = KEYS[2]
+            local prefijoPase = ARGV[1]
+            local ttlMs = tonumber(ARGV[2])
+            local tanda = ARGV[3]
+
+            local ahora = redis.call('TIME')
+            local ahoraMs = tonumber(ahora[1]) * 1000 + math.floor(tonumber(ahora[2]) / 1000)
+
+            local vencidos = redis.call('ZRANGEBYSCORE', activos, '-inf', ahoraMs)
+            if #vencidos == 0 then
+                return {}
+            end
+
+            for i = 1, #vencidos do
+                redis.call('ZREM', activos, vencidos[i])
+                redis.call('DEL', prefijoPase .. vencidos[i])
+            end
+
+            local expiraEl = ahoraMs + ttlMs
+            local elementos = redis.call('ZPOPMIN', cola, #vencidos)
+            local pases = {}
+
+            for i = 1, #elementos, 2 do
+                local cliente = elementos[i]
+                local score = elementos[i + 1]
+                local clavePase = prefijoPase .. cliente
+                local token = tanda .. ':' .. cliente
+
+                redis.call('HSET', clavePase,
+                    'clienteId', cliente,
+                    'token', token,
+                    'tanda', tanda,
+                    'score', score,
+                    'emitidoEl', ahoraMs,
+                    'expiraEl', expiraEl)
+                redis.call('PEXPIREAT', clavePase, expiraEl)
+                redis.call('ZADD', activos, expiraEl, cliente)
 
                 table.insert(pases, cliente)
                 table.insert(pases, token)
@@ -88,18 +145,47 @@ public class PaseRedisRepository {
 
         List<?> resultado = redisTemplate.execute(
                 HABILITAR,
-                List.of(FilaRedisRepository.clave(eventoId)),
+                List.of(FilaRedisRepository.clave(eventoId), claveActivos(eventoId)),
                 prefijo(eventoId),
                 String.valueOf(cantidad),
                 String.valueOf(ttl.toMillis()),
                 tandaId);
 
+        return interpretar(resultado, eventoId, tandaId);
+    }
+
+    /**
+     * Descarta los pases vencidos del evento y habilita a la misma cantidad de
+     * clientes que siguen en la fila.
+     *
+     * @return los pases de reposicion; vacio si no habia vencidos o no quedaba
+     *         nadie en la cola
+     */
+    public List<Pase> reponerVencidos(Long eventoId, Duration ttl, String tandaId) {
+        if (ttl == null || ttl.isZero() || ttl.isNegative()) {
+            throw new IllegalArgumentException("El TTL del pase debe ser mayor a 0");
+        }
+        if (tandaId == null || tandaId.isBlank()) {
+            throw new IllegalArgumentException("El id de la tanda es obligatorio");
+        }
+
+        List<?> resultado = redisTemplate.execute(
+                REPONER,
+                List.of(claveActivos(eventoId), FilaRedisRepository.clave(eventoId)),
+                prefijo(eventoId),
+                String.valueOf(ttl.toMillis()),
+                tandaId);
+
+        return interpretar(resultado, eventoId, tandaId);
+    }
+
+    private List<Pase> interpretar(List<?> resultado, Long eventoId, String tandaId) {
         if (resultado == null || resultado.isEmpty()) {
             return List.of();
         }
         if (resultado.size() % 5 != 0) {
             throw new IllegalStateException(
-                    "Redis devolvio un resultado invalido al habilitar la tanda del evento "
+                    "Redis devolvio un resultado invalido al emitir pases del evento "
                             + eventoId);
         }
 
@@ -162,6 +248,15 @@ public class PaseRedisRepository {
 
     public static String prefijo(Long eventoId) {
         return PREFIJO_PASE + eventoId + ":cliente:";
+    }
+
+    /**
+     * Clave del sorted set que lleva los pases vigentes ordenados por su
+     * instante de vencimiento. Permite detectar los pases sin usar que ya
+     * vencieron y reponer ese lugar con el siguiente cliente de la cola.
+     */
+    public static String claveActivos(Long eventoId) {
+        return "tickets:pases-activos:evento:" + eventoId;
     }
 
     private static String texto(Object valor) {

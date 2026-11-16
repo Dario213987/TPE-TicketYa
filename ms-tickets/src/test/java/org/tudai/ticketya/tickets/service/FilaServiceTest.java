@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
@@ -202,6 +203,23 @@ class FilaServiceTest {
         assertThat(respuesta.getEstado()).isEqualTo(EstadoFila.EN_ESPERA);
         assertThat(respuesta.getPosicion()).isEqualTo(3L);
         assertThat(respuesta.getPase()).isNull();
+    }
+
+    @Test
+    void salir_eliminaAlClienteDeLaFilaSinConsultarLaBase() {
+        service.salir(7L, 42L);
+
+        verify(filaRepository).salir(7L, 42L);
+        verifyNoInteractions(eventoRepository, paseRepository);
+    }
+
+    @Test
+    void salir_conEventoNulo_lanzaBadRequest() {
+        assertThatThrownBy(() -> service.salir(null, 42L))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("evento");
+
+        verifyNoInteractions(filaRepository);
     }
 
     private PaseRedisRepository.Pase pase() {

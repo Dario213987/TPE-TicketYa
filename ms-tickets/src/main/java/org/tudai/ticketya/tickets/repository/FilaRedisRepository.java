@@ -61,6 +61,13 @@ public class FilaRedisRepository {
             return {rank, redis.call('ZCARD', KEYS[1])}
             """, List.class);
 
+    private static final RedisScript<Long> SALIR = new DefaultRedisScript<>("""
+            local enFila = redis.call('ZREM', KEYS[1], ARGV[1])
+            local pase = redis.call('DEL', KEYS[2])
+            redis.call('ZREM', KEYS[3], ARGV[1])
+            return enFila + pase
+            """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
 
     public Registro registrar(Long eventoId, Long clienteId) {
@@ -111,6 +118,25 @@ public class FilaRedisRepository {
     public long totalEnFila(Long eventoId) {
         Long total = redisTemplate.opsForZSet().size(clave(eventoId));
         return total == null ? 0 : total;
+    }
+
+    /**
+     * Saca al cliente de la cola y descarta el pase que tuviera. Las dos
+     * operaciones se hacen en un unico script: si el cliente estaba esperando,
+     * se elimina del sorted set y los demas conservan su orden; si ya habia
+     * sido habilitado, se borra su pase para que la proxima tanda avance.
+     *
+     * @return true si el cliente estaba en la fila o tenia un pase
+     */
+    public boolean salir(Long eventoId, Long clienteId) {
+        Long eliminados = redisTemplate.execute(
+                SALIR,
+                List.of(clave(eventoId),
+                        PaseRedisRepository.clave(eventoId, clienteId),
+                        PaseRedisRepository.claveActivos(eventoId)),
+                String.valueOf(clienteId));
+
+        return eliminados != null && eliminados > 0;
     }
 
     public static String clave(Long eventoId) {

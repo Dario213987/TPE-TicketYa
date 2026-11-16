@@ -29,6 +29,21 @@ public interface HabilitacionEventoRepository extends JpaRepository<Habilitacion
     List<Long> buscarVencidos(@Param("ahora") Instant ahora);
 
     /**
+     * Eventos cuya habilitacion esta activa, sin importar si les toca tanda.
+     * Se usan para reponer los pases vencidos en cada tick del job.
+     */
+    @Query(value = """
+            SELECT h.evento_id
+              FROM habilitacion_eventos h
+              JOIN disponibilidad_eventos e ON e.evento_id = h.evento_id
+             WHERE h.habilitada = TRUE
+               AND e.alta_demanda = TRUE
+               AND e.estado_venta = 'ABIERTA'
+             ORDER BY h.evento_id
+            """, nativeQuery = true)
+    List<Long> buscarActivos();
+
+    /**
      * Reclama la tanda del evento. Solo la instancia que actualiza la fila
      * obtiene 1; las demas obtienen 0 y no deben emitir pases.
      */

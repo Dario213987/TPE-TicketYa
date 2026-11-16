@@ -57,6 +57,8 @@ public class HabilitacionTandaService {
             log.warn("No se pudo completar la configuracion de habilitacion faltante", e);
         }
 
+        reponerPasesVencidos();
+
         for (Long eventoId : habilitacionRepository.buscarVencidos(ahora)) {
             HabilitacionEvento config = habilitacionRepository.findById(eventoId).orElse(null);
             if (config == null || !config.isHabilitada()) {
@@ -80,12 +82,7 @@ public class HabilitacionTandaService {
                         eventoId, tamano, Duration.ofSeconds(ttl), UUID.randomUUID().toString());
 
                 if (!pases.isEmpty()) {
-                    try {
-                        habilitacionRepository.incrementarHabilitados(eventoId, pases.size());
-                    } catch (RuntimeException e) {
-                        log.warn("No se pudo actualizar el total habilitado del evento {}",
-                                eventoId, e);
-                    }
+                    incrementarHabilitados(eventoId, pases.size());
                     log.info("Evento {}: {} clientes habilitados en la tanda",
                             eventoId, pases.size());
                 }
@@ -93,6 +90,50 @@ public class HabilitacionTandaService {
                 habilitacionRepository.reprogramar(eventoId, ahora);
                 log.error("No se pudo emitir la tanda del evento {}", eventoId, e);
             }
+        }
+    }
+
+    /**
+     * Recorre los eventos habilitados y repone los pases que vencieron sin uso.
+     * Por cada pase vencido se habilita al siguiente cliente de la cola en el
+     * mismo script Lua atomico, sin esperar a que venza el intervalo de la tanda.
+     */
+    private void reponerPasesVencidos() {
+        List<Long> activos = habilitacionRepository.buscarActivos();
+        if (activos == null || activos.isEmpty()) {
+            return;
+        }
+
+        for (Long eventoId : activos) {
+            HabilitacionEvento config = habilitacionRepository.findById(eventoId).orElse(null);
+            if (config == null || !config.isHabilitada()) {
+                continue;
+            }
+
+            int ttl = config.getTtlPaseSegundos() > 0
+                    ? config.getTtlPaseSegundos() : ttlPorDefecto();
+            try {
+                List<PaseRedisRepository.Pase> repuestos = paseRepository.reponerVencidos(
+                        eventoId, Duration.ofSeconds(ttl), UUID.randomUUID().toString());
+
+                if (!repuestos.isEmpty()) {
+                    incrementarHabilitados(eventoId, repuestos.size());
+                    log.info("Evento {}: {} pases vencidos repuestos",
+                            eventoId, repuestos.size());
+                }
+            } catch (RuntimeException e) {
+                log.warn("No se pudieron reponer los pases vencidos del evento {}",
+                        eventoId, e);
+            }
+        }
+    }
+
+    private void incrementarHabilitados(Long eventoId, int cantidad) {
+        try {
+            habilitacionRepository.incrementarHabilitados(eventoId, cantidad);
+        } catch (RuntimeException e) {
+            log.warn("No se pudo actualizar el total habilitado del evento {}",
+                    eventoId, e);
         }
     }
 
