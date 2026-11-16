@@ -27,7 +27,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 @Testcontainers(disabledWithoutDocker = true)
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
-        "spring.cloud.discovery.enabled=false"
+        "spring.cloud.discovery.enabled=false",
+        "preferencias.historial.consumer-enabled=false"
 })
 class PreferenciaMongoIntegrationTest {
 

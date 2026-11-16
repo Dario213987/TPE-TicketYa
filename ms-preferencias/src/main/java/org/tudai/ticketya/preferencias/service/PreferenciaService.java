@@ -40,9 +40,11 @@ public class PreferenciaService {
     /**
      * Reemplaza las preferencias del cliente.
      * <p>
-     * Es un PUT de reemplazo total: el documento anterior se sobrescribe con lo
-     * que venga en el request. Las listas se deduplican conservando el orden de
-     * llegada y la ciudad se guarda sin espacios sobrantes.
+     * Es un PUT de reemplazo total de los gustos declarados: el documento anterior
+     * se sobrescribe con lo que venga en el request. Las listas se deduplican
+     * conservando el orden de llegada y la ciudad se guarda sin espacios sobrantes.
+     * El historial de compras y asistencias no se toca: lo mantiene el consumidor
+     * de eventos.
      *
      * @param clienteId id del cliente autenticado
      * @param request   preferencias nuevas
@@ -50,11 +52,14 @@ public class PreferenciaService {
      * @return preferencias guardadas
      */
     public PreferenciaResponseDTO guardar(Long clienteId, PreferenciaRequestDTO request) {
-        Preferencia preferencia = modelMapper.map(request, Preferencia.class);
+        Preferencia preferencia = preferenciaRepository.findById(clienteId)
+                .orElseGet(() -> Preferencia.builder().clienteId(clienteId).build());
+        Preferencia datos = modelMapper.map(request, Preferencia.class);
+
         preferencia.setClienteId(clienteId);
-        preferencia.setTiposFavoritos(sinRepetidos(preferencia.getTiposFavoritos()));
-        preferencia.setArtistasFavoritos(sinRepetidos(preferencia.getArtistasFavoritos()));
-        preferencia.setCiudad(preferencia.getCiudad() == null ? null : preferencia.getCiudad().trim());
+        preferencia.setTiposFavoritos(sinRepetidos(datos.getTiposFavoritos()));
+        preferencia.setArtistasFavoritos(sinRepetidos(datos.getArtistasFavoritos()));
+        preferencia.setCiudad(datos.getCiudad() == null ? null : datos.getCiudad().trim());
 
         return toResponse(preferenciaRepository.save(preferencia));
     }
