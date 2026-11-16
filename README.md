@@ -39,7 +39,7 @@ Verificá con `mvn -v` que Maven use Java 25.
     cp infra/.env.example infra/.env   # completar contraseñas
     docker compose -f infra/docker-compose.yml up -d
 
-Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto):
+Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto, MongoDB en `ms-preferencias`):
 
 | Servicio | Puerto en el host |
 |---|---|
@@ -47,11 +47,13 @@ Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto
 | ms-tickets | 5434 |
 | ms-transacciones | 5435 |
 | ms-devoluciones | 5436 |
+| ms-preferencias (MongoDB) | 5437 |
 
 Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los pasos de la plantilla comentada en `infra/docker-compose.yml` (bloque del compose, driver en el pom y `DB_URL`).
 
+`ms-preferencias` guarda documentos en MongoDB (`db-preferencias`, puerto 5437) y se configura con la variable `MONGODB_URI`.
+
 Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Un job periódico habilita a los clientes por tandas y emite pases con TTL; la coordinación entre instancias se apoya en `habilitacion_eventos` y en scripts Lua atómicos. Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
-Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
 
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 

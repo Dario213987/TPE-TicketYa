@@ -1,0 +1,172 @@
+openapi: 3.0.3
+info:
+  title: ms-preferencias
+  version: 1.0.0
+  description: |
+    Preferencias declaradas por el cliente: tipos de evento favoritos, artistas favoritos
+    y ciudad. Requiere los headers X-User-Id (numerico) y X-User-Role: CLIENTE. El gateway
+    expone estas rutas bajo /api/preferencias.
+
+    El cliente sale siempre de X-User-Id, nunca del path ni del cuerpo, asi que un cliente
+    solo puede leer y reemplazar sus propias preferencias.
+
+    Persistencia: un documento por cliente en la coleccion "preferencias" de MongoDB, usando
+    el id del cliente como _id. El PUT es un reemplazo total del documento.
+tags:
+  - name: preferencias
+paths:
+  /api/preferencias/mias:
+    get:
+      tags: [preferencias]
+      operationId: obtenerMisPreferencias
+      summary: Consulta las preferencias del cliente autenticado
+      description: |
+        Si el cliente todavia no cargo preferencias devuelve 200 con las listas vacias en
+        lugar de 404, para que la interfaz no tenga que tratar la ausencia de documento como
+        un error. No crea el documento.
+
+        Cuando no hay documento, la ciudad deberia salir del perfil del cliente (ms-usuarios,
+        US-01.01); mientras ese servicio no este integrado se informa null.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/UserRole'
+      responses:
+        '200':
+          description: Preferencias actuales, o vacias si el cliente no cargo ninguna
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenciaResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+    put:
+      tags: [preferencias]
+      operationId: guardarMisPreferencias
+      summary: Reemplaza las preferencias del cliente autenticado
+      description: |
+        Reemplazo total: el documento anterior se sobrescribe con lo que venga en el cuerpo.
+        La ciudad es obligatoria y no puede ser solo espacios. Las listas pueden enviarse
+        vacias para borrar los favoritos guardados; si se omiten, se interpretan como vacias.
+
+        Las listas se deduplican conservando el orden de llegada y la ciudad se guarda sin
+        espacios sobrantes.
+
+        Los artistas se guardan como ids de participante. Validar que existan en ms-eventos
+        (US-09.01, escenario "artista inexistente") queda pendiente de un endpoint de
+        participantes en ese servicio.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/UserRole'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/PreferenciaRequestDTO'
+      responses:
+        '200':
+          description: Preferencias guardadas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PreferenciaResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+components:
+  parameters:
+    UserId:
+      name: X-User-Id
+      in: header
+      required: true
+      description: Id numerico del cliente autenticado.
+      schema:
+        type: integer
+        format: int64
+        minimum: 1
+    UserRole:
+      name: X-User-Role
+      in: header
+      required: true
+      description: Rol del usuario autenticado. Debe ser CLIENTE.
+      schema:
+        type: string
+        enum: [CLIENTE]
+  responses:
+    Error:
+      description: Error (400 invalido, 401 sin usuario, 403 sin permiso)
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problema'
+  schemas:
+    TipoEvento:
+      type: string
+      description: Mismo enum que el contrato de ms-eventos.
+      enum: [RECITAL, FESTIVAL, TEATRO, DEPORTE, CONFERENCIA, OTRO]
+    PreferenciaRequestDTO:
+      type: object
+      required: [ciudad]
+      properties:
+        tiposFavoritos:
+          type: array
+          maxItems: 20
+          description: |
+            Tipos de evento favoritos. Enviar [] borra los anteriores. Si el campo se
+            omite, se interpreta como lista vacia: el PUT siempre reemplaza el documento.
+          items:
+            $ref: '#/components/schemas/TipoEvento'
+        artistasFavoritos:
+          type: array
+          maxItems: 100
+          description: |
+            Ids de participante (ms-eventos). Enviar [] borra los anteriores. Si el campo
+            se omite, se interpreta como lista vacia.
+          items:
+            type: integer
+            format: int64
+            minimum: 1
+        ciudad:
+          type: string
+          minLength: 1
+          maxLength: 100
+          pattern: '.*\S.*'
+          description: |
+            Ciudad del cliente, sin espacios sobrantes. El pattern exige al menos un
+            caracter no blanco, para que no se pueda enviar solo espacios.
+    PreferenciaResponseDTO:
+      type: object
+      required: [clienteId, tiposFavoritos, artistasFavoritos]
+      properties:
+        clienteId:
+          type: integer
+          format: int64
+        tiposFavoritos:
+          type: array
+          items:
+            $ref: '#/components/schemas/TipoEvento'
+        artistasFavoritos:
+          type: array
+          items:
+            type: integer
+            format: int64
+        ciudad:
+          type: string
+          nullable: true
+          description: |
+            Ciudad declarada por el cliente. Puede ser null cuando todavia no cargo
+            preferencias y no hay perfil del que tomarla.
+    Problema:
+      type: object
+      properties:
+        title: { type: string }
+        status: { type: integer }
+        detail: { type: string }
+        correlationId: { type: string }
+        errors:
+          type: array
+          items:
+            type: object
+            properties:
+              field: { type: string }
+              message: { type: string }
