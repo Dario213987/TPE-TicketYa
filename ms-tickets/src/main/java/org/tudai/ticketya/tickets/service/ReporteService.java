@@ -178,6 +178,6 @@ public class ReporteService {
         if (capacidad <= 0) {
             return 0.0;
         }
-        return Math.round((float) vendidas / capacidad ) * 100.0;
+        return Math.round(((double) vendidas / capacidad) * 10000.0) / 100.0;
     }
 }
