@@ -58,13 +58,16 @@ class DisponibilidadServiceTest {
     @Mock
     private ReservaVencidaService reservaVencidaService;
 
+    @Mock
+    private HabilitacionTandaService habilitacionTandaService;
+
     private DisponibilidadService service;
 
     @BeforeEach
     void setUp() {
         service = new DisponibilidadService(
                 eventoRepository, sectorRepository, asientoRepository, asientoBatchRepository,
-                new ReservaProperties(), reservaVencidaService);
+                new ReservaProperties(), reservaVencidaService, habilitacionTandaService);
     }
 
     @Test

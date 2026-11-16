@@ -1,6 +1,7 @@
 package org.tudai.ticketya.tickets.dto;
 
 import lombok.*;
+import org.tudai.ticketya.tickets.domain.EstadoFila;
 
 import java.time.Instant;
 
@@ -13,8 +14,10 @@ public class TurnoFilaResponseDTO {
 
     private Long eventoId;
     private Long clienteId;
-    private long posicion;
-    private long totalEnFila;
+    private Long posicion;
+    private Long totalEnFila;
     private boolean yaEstabaEnFila;
     private Instant ingresadoEl;
+    private EstadoFila estado;
+    private PaseDTO pase;
 }
