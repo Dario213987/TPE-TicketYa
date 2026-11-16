@@ -4,7 +4,7 @@ import org.springframework.amqp.rabbit.annotation.RabbitHandler;
 import org.springframework.amqp.rabbit.annotation.RabbitListener;
 import org.springframework.stereotype.Component;
 import org.tudai.ticketya.notificaciones.config.RabbitConfig;
-import org.tudai.ticketya.notificaciones.dto.NotificacionEntranteDTO;
+import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.service.NotificacionService;
 
 @Component

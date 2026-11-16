@@ -4,7 +4,7 @@ import lombok.AllArgsConstructor;
 import lombok.Getter;
 import lombok.Setter;
 import org.tudai.ticketya.notificaciones.domain.EstadoNotificacion;
-import org.tudai.ticketya.notificaciones.domain.MotivoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 
 import java.time.LocalDateTime;
 

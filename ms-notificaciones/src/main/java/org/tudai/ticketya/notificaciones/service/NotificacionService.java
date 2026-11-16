@@ -10,7 +10,7 @@ import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.domain.EstadoNotificacion;
 import org.tudai.ticketya.notificaciones.domain.Notificacion;
-import org.tudai.ticketya.notificaciones.dto.NotificacionEntranteDTO;
+import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.repository.NotificacionRepository;
 
 import java.time.LocalDateTime;
@@ -66,6 +66,7 @@ public class NotificacionService {
             notificacion.setFechaCreacion(LocalDateTime.now());
             notificacion.setFechaEnvio(null);
             return notificacionRepository.saveAndFlush(notificacion);
+
         } catch (DataIntegrityViolationException e) {
             return notificacionRepository.findByMensajeId(entrante.getMensajeId())
                     .orElseThrow(() -> e);

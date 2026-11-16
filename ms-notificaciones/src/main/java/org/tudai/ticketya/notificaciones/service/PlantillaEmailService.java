@@ -5,7 +5,7 @@ import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
-import org.tudai.ticketya.notificaciones.domain.MotivoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 
 @Service
 public class PlantillaEmailService {

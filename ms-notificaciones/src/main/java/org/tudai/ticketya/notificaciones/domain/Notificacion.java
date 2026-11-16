@@ -6,6 +6,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
+
 import java.time.LocalDateTime;
 
 @Getter

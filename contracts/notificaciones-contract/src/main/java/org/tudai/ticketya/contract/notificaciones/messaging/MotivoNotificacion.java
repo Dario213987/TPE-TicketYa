@@ -1,4 +1,4 @@
-package org.tudai.ticketya.notificaciones.domain;
+package org.tudai.ticketya.contract.notificaciones.messaging;
 
 public enum MotivoNotificacion {
     CANCELACION,
