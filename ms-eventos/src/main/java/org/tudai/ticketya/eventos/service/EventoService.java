@@ -2,14 +2,20 @@ package org.tudai.ticketya.eventos.service;
 
 import feign.FeignException;
 import feign.RetryableException;
+import jakarta.persistence.criteria.Join;
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
+import org.springframework.util.StringUtils;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
@@ -18,11 +24,14 @@ import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.contract.eventos.model.TipoEvento;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
 import org.tudai.ticketya.eventos.client.dto.AsientoRequest;
 import org.tudai.ticketya.eventos.client.dto.DisponibilidadEventoResponse;
@@ -42,11 +51,18 @@ import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
+import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
 
+import java.text.Normalizer;
+import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.time.LocalTime;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Comparator;
 import java.util.EnumSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.stream.Collectors;
 import java.util.Objects;
@@ -67,7 +83,9 @@ public class EventoService {
 
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
+    private final DevolucionesClient devolucionesClient;
     private final LugarRepository lugarRepository;
+    private final ParticipanteRepository participanteRepository;
     private final ModelMapper modelMapper;
     private final LugarService lugarService;
     private final ParticipanteService participanteService;
@@ -84,11 +102,335 @@ public class EventoService {
     }
 
     /**
+     * Lista los eventos visibles aplicando los filtros opcionales recibidos. Los filtros
+     * presentes se combinan con AND y el resultado se devuelve paginado. Sin filtros,
+     * devuelve todos los eventos visibles.
+     * <p>
+     * El orden se elige con {@code filtro.orden}:
+     * <ul>
+     *   <li>{@code precio}: ordena por el precio mínimo de los sectores del evento, directamente en la base.</li>
+     *   <li>{@code relevancia}: ordena los eventos PUBLICADO antes que los AGOTADO (dentro de estados visibles);
+     *   dentro de cada estado, por fecha ascendente y luego por id. {@code CANCELADO} no se lista.</li>
+     *   <li>{@code fecha}: ordena por fecha ascendente (desempata por id).</li>
+     *   <li>sin valor: si el {@code Pageable} trae un {@code sort} explícito, se respeta como
+     *   parámetro legado; si no, ordena por fecha ascendente y desempata por id.</li>
+     * </ul>
+     * Si se envían {@code orden} y {@code sort}, {@code orden} tiene prioridad.
+     *
+     * @param filtro   filtros opcionales: tipo, organizador, participante, participanteId,
+     *                 ciudad, rango de fechas y orden
+     * @param pageable paginación y orden legado del resultado
+     *
+     * @return una página con los eventos visibles que cumplen todos los filtros
+     *
+     * @throws BadRequestException si el rango de fechas es inválido o el orden no está permitido
+     */
+    @Transactional(readOnly = true)
+    public Page<Evento> listarPublicados(EventoFiltroRequest filtro, Pageable pageable) {
+        TipoEvento tipo = validarFiltros(filtro);
+        Set<Long> participantes = buscarIdsParticipantes(filtro.getParticipante());
+        Set<Long> lugares = buscarIdsLugares(filtro.getCiudad());
+        Specification<Evento> specification = construirSpecification(filtro, tipo, participantes, lugares);
+        OrdenEvento orden = resolverOrden(filtro.getOrden());
+
+        if (orden == OrdenEvento.PRECIO) {
+            return eventoRepository.buscarPorPrecio(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.RELEVANCIA) {
+            return eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable));
+        }
+
+        if (orden == OrdenEvento.FECHA || !pageable.getSort().isSorted()) {
+            return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
+        }
+
+        // Compatibilidad con el parámetro legado `sort`: si no se pidió `orden`,
+        // se respeta el orden explícito que haya llegado en el Pageable.
+        return eventoRepository.findAll(specification, pageable);
+    }
+
+    /**
+     * Valida el rango de fechas y el tipo de evento recibidos.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return el tipo de evento validado, o {@code null} si no se recibió
+     *
+     * @throws BadRequestException si la fecha desde es posterior a la fecha hasta o si el tipo no existe
+     */
+    private TipoEvento validarFiltros(EventoFiltroRequest filtro) {
+        validarRangoDeFechas(filtro);
+        return StringUtils.hasText(filtro.getTipo()) ? resolverTipo(filtro.getTipo()) : null;
+    }
+
+    /**
+     * Convierte el texto del parámetro {@code orden} en un OrdenEvento.
+     * No distingue mayúsculas ni espacios al inicio o al final.
+     *
+     * @param orden texto recibido (puede ser nulo o vacío)
+     *
+     * @return el orden correspondiente, o {@code null} si no se indicó ninguno
+     *
+     * @throws BadRequestException si el orden no es uno de los valores permitidos
+     *                             (fecha, precio, relevancia)
+     */
+    private OrdenEvento resolverOrden(String orden) {
+        if (!StringUtils.hasText(orden)) {
+            return null;
+        }
+
+        return switch (orden.trim().toLowerCase(Locale.ROOT)) {
+            case "fecha" -> OrdenEvento.FECHA;
+            case "precio" -> OrdenEvento.PRECIO;
+            case "relevancia" -> OrdenEvento.RELEVANCIA;
+            default -> throw new BadRequestException(
+                    "Orden inválido: '" + orden + "'. Valores permitidos: fecha, precio, relevancia");
+        };
+    }
+
+    /**
+     * Arma el {@code Pageable} para ordenar por fecha ascendente, con el id como desempate
+     * para que la paginación sea estable. Ignora el orden que traiga el {@code Pageable}.
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} con orden por fecha e id
+     */
+    private Pageable aplicarOrdenFecha(Pageable pageable) {
+        Sort sort = Sort.by(Sort.Direction.ASC, "fecha")
+                .and(Sort.by(Sort.Direction.ASC, "id"));
+
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged(sort);
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize(), sort);
+    }
+
+    /**
+     * Devuelve el {@code Pageable} sin criterio de orden, conservando página y tamaño.
+     * Se usa cuando el orden lo define la propia consulta (por precio o relevancia).
+     *
+     * @param pageable paginación recibida
+     *
+     * @return {@code Pageable} sin orden
+     */
+    private Pageable sinOrden(Pageable pageable) {
+        if (pageable.isUnpaged()) {
+            return Pageable.unpaged();
+        }
+
+        return PageRequest.of(pageable.getPageNumber(), pageable.getPageSize());
+    }
+
+    /** Criterios de orden admitidos para el listado de eventos. */
+    private enum OrdenEvento {
+        FECHA,
+        PRECIO,
+        RELEVANCIA
+    }
+
+    /**
+     * Verifica que el rango de fechas sea apto.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @throws BadRequestException si la fecha desde es posterior a la fecha hasta
+     * */
+    private void validarRangoDeFechas(EventoFiltroRequest filtro) {
+        LocalDate desde = resolverFechaDesde(filtro);
+        LocalDate hasta = resolverFechaHasta(filtro);
+
+        if (desde != null && hasta != null && desde.isAfter(hasta)) {
+            throw new BadRequestException("La fecha 'desde' no puede ser posterior a la fecha 'hasta'");
+        }
+    }
+
+    /**
+     * Devuelve la fecha mínima efectiva. El parámetro {@code desde} tiene prioridad sobre
+     * el alias legado {@code fechaDesde}.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return fecha mínima, o {@code null} si no se indicó
+     */
+    private static LocalDate resolverFechaDesde(EventoFiltroRequest filtro) {
+        return filtro.getDesde() != null ? filtro.getDesde() : filtro.getFechaDesde();
+    }
+
+    /**
+     * Devuelve la fecha máxima efectiva. El parámetro {@code hasta} tiene prioridad sobre
+     * el alias legado {@code fechaHasta}.
+     *
+     * @param filtro filtro aplicado
+     *
+     * @return fecha máxima, o {@code null} si no se indicó
+     */
+    private static LocalDate resolverFechaHasta(EventoFiltroRequest filtro) {
+        return filtro.getHasta() != null ? filtro.getHasta() : filtro.getFechaHasta();
+    }
+
+    /**
+     * Convierte el texto recibido al enum {@link TipoEvento}, sin distinguir mayúsculas/minúsculas.
+     *
+     * @param valor tipo recibido
+     *
+     * @return el tipo de evento correspondiente
+     *
+     * @throws BadRequestException si el valor no pertenece al enum
+     */
+    private TipoEvento resolverTipo(String valor) {
+        try {
+            return TipoEvento.valueOf(valor.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            String validos = Arrays.stream(TipoEvento.values())
+                    .map(Enum::name)
+                    .collect(Collectors.joining(", "));
+            throw new BadRequestException("Tipo de evento inválido: '" + valor.trim()
+                    + "'. Valores válidos: " + validos);
+        }
+    }
+
+    /**
+     * Busca en Java los ids de participantes cuyo nombre normalizado contiene el texto
+     * recibido. Así el filtro funciona igual en PostgreSQL, H2 y MySQL, sin depender de
+     * funciones propias de un motor.
+     * <p>
+     * Para el alcance del TP se recorre la tabla completa de participantes en memoria.
+     *
+     * @param participante nombre o parte del nombre buscado
+     *
+     * @return ids coincidentes, o {@code null} si no se recibió el filtro
+     */
+    private Set<Long> buscarIdsParticipantes(String participante) {
+        if (!StringUtils.hasText(participante)) {
+            return null;
+        }
+        String buscado = normalizar(participante);
+        return participanteRepository.findAll().stream()
+                .filter(p -> p.getNombre() != null)
+                .filter(p -> normalizar(p.getNombre()).contains(buscado))
+                .map(Participante::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Busca en Java los ids de lugares cuya ciudad normalizada coincide con el texto
+     * recibido. Así la comparación ignora mayúsculas y tildes sin depender de funciones
+     * propias de un motor.
+     * <p>
+     * Para el alcance del TP se recorre la tabla completa de lugares en memoria.
+     *
+     * @param ciudad ciudad buscada
+     *
+     * @return ids coincidentes, o {@code null} si no se recibió el filtro
+     */
+    private Set<Long> buscarIdsLugares(String ciudad) {
+        if (!StringUtils.hasText(ciudad)) {
+            return null;
+        }
+        String buscada = normalizar(ciudad);
+        return lugarRepository.findAll().stream()
+                .filter(l -> l.getCiudad() != null)
+                .filter(l -> normalizar(l.getCiudad()).equals(buscada))
+                .map(Lugar::getId)
+                .collect(Collectors.toSet());
+    }
+
+    /**
+     * Construye la Specification que combina con AND los filtros presentes y siempre
+     * restringe el resultado a los eventos en estado visible ({@code ESTADOS_VISIBLES}).
+     *
+     * Los filtros que vienen nulos o vacíos se ignoran:
+     * tipo: coincidencia exacta con el enum.
+     * organizador: coincidencia por id.
+     * ciudad: coincidencia exacta con la ciudad del lugar, sin distinguir mayúsculas ni
+     * tildes (los ids de lugares se resuelven en Java).
+     * fecha desde / hasta: rango inclusivo sobre la fecha del evento.
+     * participante: coincidencia parcial con el nombre de algún artista, sin distinguir
+     * mayúsculas ni tildes (los ids se resuelven en Java).
+     * participanteId: coincidencia exacta por id de participante.
+     * Si se filtra por participante y/o participanteId, hace un único join con los artistas
+     * y usa {@code distinct} para no repetir eventos.
+     *
+     * @param filtro filtros opcionales: tipo, organizador, participante, participanteId,
+     *               ciudad y rango de fechas
+     * @param tipo tipo de evento ya validado, o {@code null}
+     * @param participantes ids de participantes que coinciden, o {@code null} si no se filtró
+     * @param lugares ids de lugares que coinciden con la ciudad, o {@code null} si no se filtró
+     *
+     * @return Specification lista para usar en el repository
+     */
+    private Specification<Evento> construirSpecification(EventoFiltroRequest filtro,
+                                                         TipoEvento tipo,
+                                                         Set<Long> participantes,
+                                                         Set<Long> lugares) {
+        return (root, query, cb) -> {
+            List<Predicate> predicates = new ArrayList<>();
+            predicates.add(root.get("estado").in(ESTADOS_VISIBLES));
+
+            if (tipo != null) {
+                predicates.add(cb.equal(root.get("tipo"), tipo));
+            }
+
+            if (filtro.getOrganizadorId() != null) {
+                predicates.add(cb.equal(root.get("organizadorId"), filtro.getOrganizadorId()));
+            }
+
+            if (lugares != null) {
+                if (lugares.isEmpty()) {
+                    predicates.add(cb.disjunction());
+                } else {
+                    predicates.add(root.get("lugar").get("id").in(lugares));
+                }
+            }
+
+            LocalDate fechaDesde = resolverFechaDesde(filtro);
+            LocalDate fechaHasta = resolverFechaHasta(filtro);
+            if (fechaDesde != null) {
+                predicates.add(cb.greaterThanOrEqualTo(root.get("fecha"),
+                        fechaDesde.atStartOfDay()));
+            }
+            if (fechaHasta != null) {
+                predicates.add(cb.lessThanOrEqualTo(root.get("fecha"),
+                        fechaHasta.atTime(LocalTime.MAX)));
+            }
+
+            Long participanteId = filtro.getParticipanteId();
+            if (participantes != null || participanteId != null) {
+                Join<Evento, Participante> participante = root.join("participantes");
+
+                if (participantes != null) {
+                    if (participantes.isEmpty()) {
+                        predicates.add(cb.disjunction());
+                    } else {
+                        predicates.add(participante.get("id").in(participantes));
+                    }
+                }
+                if (participanteId != null) {
+                    predicates.add(cb.equal(participante.get("id"), participanteId));
+                }
+                query.distinct(true);
+            }
+
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+    }
+
+    private static String normalizar(String valor) {
+        return Normalizer.normalize(valor.trim(), Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(Locale.ROOT);
+    }
+
+
+    /**
      * Devuelve el detalle de un evento.
      * <p>
-     * Los eventos en BORRADOR solo pueden ser consultados por su organizador o un administrador;
-     * para el resto se responde 404 para no revelar su existencia. No incluye la disponibilidad
-     * por sector: esa se consulta en ms-tickets.
+     * Es público para cualquier evento que no esté en BORRADOR. Un BORRADOR solo lo puede ver
+     * su organizador o un administrador; para el resto se responde 404 para no revelar su
+     * existencia. No incluye la disponibilidad por sector: esa se consulta en ms-tickets.
      *
      * @param eventoId id del evento
      * @param userId   id del usuario que consulta, o {@code null} si es anónimo
@@ -145,6 +487,8 @@ public class EventoService {
             return pendiente.yaPublicado();
         }
 
+        boolean altaDemanda = Boolean.TRUE.equals(pendiente.request().getAltaDemanda());
+        ejecutarTickets(() -> ticketsClient.actualizarAltaDemanda(idEvento, altaDemanda));
         ejecutarTickets(() -> ticketsClient.crearDisponibilidad(idEvento, pendiente.request()));
 
         return transactionTemplate.execute(status -> confirmarPublicacion(idEvento));
@@ -154,11 +498,12 @@ public class EventoService {
      * Cancela un evento publicado. La autorización de administrador se valida en el controller.
      * <p>
      * Valida que el evento exista y que esté en estado PUBLICADO, SUSPENDIDO o AGOTADO. Si las
-     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, y recién
-     * después cambia el estado a CANCELADO.
+     * validaciones pasan, avisa a ms-tickets para que bloquee nuevas reservas y compras, dispara
+     * el reintegro masivo delegando en ms-devoluciones, y recién después cambia el estado a
+     * CANCELADO.
      * <p>
      * Es idempotente: si el evento ya estaba cancelado, devuelve su información
-     * sin volver a modificarlo ni a llamar a ms-tickets.
+     * sin volver a modificarlo ni a llamar a ms-tickets ni a ms-devoluciones.
      *
      * @param id id del evento a cancelar
      *
@@ -166,7 +511,7 @@ public class EventoService {
      *
      * @throws NotFoundException      si el evento no existe
      * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
-     * @throws RemoteServiceException si ms-tickets no está disponible o responde con error
+     * @throws RemoteServiceException si ms-tickets o ms-devoluciones no están disponibles o responden con error
      */
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
@@ -177,6 +522,8 @@ public class EventoService {
         }
 
         ejecutarTickets(() -> ticketsClient.cancelarEvento(id));
+
+        ejecutarDevoluciones(() -> devolucionesClient.reintegrarEvento(id));
 
         return transactionTemplate.execute(status -> confirmarCancelacion(id));
     }
@@ -315,8 +662,6 @@ public class EventoService {
 
         evento.setEstado(EstadoEvento.CANCELADO);
 
-        //TO DO : REINTEGRO MASIVO
-
         return toEstadoDTO(eventoRepository.save(evento));
     }
 
@@ -429,20 +774,18 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
      */
-    @Transactional
     public EventoEstadoResponse marcarAgotado(Long id) {
-        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+        String mensaje = "Evento no encontrado con id: " + id;
+        EventoEstadoResponse yaAgotado = transactionTemplate.execute(
+                status -> validarMarcarAgotado(id, mensaje));
 
-        if (evento.getEstado() == EstadoEvento.AGOTADO) {
-            return toEstadoDTO(evento);
+        if (yaAgotado != null) {
+            return yaAgotado;
         }
 
-        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
-            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
-        }
+        ejecutarTickets(() -> ticketsClient.agotarEvento(id));
 
-        evento.setEstado(EstadoEvento.AGOTADO);
-        return toEstadoDTO(eventoRepository.save(evento));
+        return transactionTemplate.execute(status -> confirmarMarcarAgotado(id, mensaje));
     }
 
     /**
@@ -461,9 +804,65 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
      */
-    @Transactional
     public EventoEstadoResponse marcarPublicado(Long id) {
-        Evento evento = buscarEventoParaCambioEstado(id, "Evento no encontrado con id: " + id);
+        String mensaje = "Evento no encontrado con id: " + id;
+        EventoEstadoResponse yaPublicado = transactionTemplate.execute(
+                status -> validarMarcarPublicado(id, mensaje));
+
+        if (yaPublicado != null) {
+            return yaPublicado;
+        }
+
+        ejecutarTickets(() -> ticketsClient.reactivarEvento(id));
+
+        return transactionTemplate.execute(status -> confirmarMarcarPublicado(id, mensaje));
+    }
+
+    private EventoEstadoResponse validarMarcarAgotado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaValidacion(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.AGOTADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarMarcarAgotado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaCambioEstado(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.AGOTADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.PUBLICADO) {
+            throw new ConflictException("Solo un evento publicado puede pasar a agotado");
+        }
+
+        evento.setEstado(EstadoEvento.AGOTADO);
+        return toEstadoDTO(eventoRepository.save(evento));
+    }
+
+    private EventoEstadoResponse validarMarcarPublicado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaValidacion(id, mensaje);
+
+        if (evento.getEstado() == EstadoEvento.PUBLICADO) {
+            return toEstadoDTO(evento);
+        }
+
+        if (evento.getEstado() != EstadoEvento.AGOTADO) {
+            throw new ConflictException("Solo un evento agotado puede pasar a publicado");
+        }
+
+        return null;
+    }
+
+    private EventoEstadoResponse confirmarMarcarPublicado(Long id, String mensaje) {
+        Evento evento = buscarEventoParaCambioEstado(id, mensaje);
 
         if (evento.getEstado() == EstadoEvento.PUBLICADO) {
             return toEstadoDTO(evento);
@@ -478,8 +877,12 @@ public class EventoService {
     }
 
     private Evento buscarEventoParaValidacion(Long id) {
+        return buscarEventoParaValidacion(id, "No se encontró el evento solicitado");
+    }
+
+    private Evento buscarEventoParaValidacion(Long id, String mensaje) {
         return eventoRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("No se encontró el evento solicitado"));
+                .orElseThrow(() -> new NotFoundException(mensaje));
     }
 
     private Evento buscarEventoParaCambioEstado(Long id) {
@@ -508,6 +911,16 @@ public class EventoService {
             throw new RemoteServiceException(502, "ms-tickets no disponible");
         } catch (FeignException e) {
             throw new RemoteServiceException(502, "ms-tickets respondió con error");
+        }
+    }
+
+    private void ejecutarDevoluciones(Runnable llamada) {
+        try {
+            llamada.run();
+        } catch (RetryableException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones no disponible");
+        } catch (FeignException e) {
+            throw new RemoteServiceException(502, "ms-devoluciones respondió con error");
         }
     }
 
@@ -567,6 +980,13 @@ public class EventoService {
             }
         }
 
+        if (dto.getAltaDemanda() != null
+                && !Objects.equals(dto.getAltaDemanda(), evento.isAltaDemanda())
+                && !esBorrador) {
+            throw new ConflictException(
+                    "No se puede modificar la condición de alta demanda de un evento ya publicado.");
+        }
+
         if (dto.getSectores() != null
                 && !Objects.equals(Set.copyOf(dto.getSectores()), sectoresDelEvento(evento))) {
             if (!esBorrador) {
@@ -595,6 +1015,10 @@ public class EventoService {
 
         if (dto.getTipo() != null) {
             evento.setTipo(dto.getTipo());
+        }
+
+        if (dto.getAltaDemanda() != null) {
+            evento.setAltaDemanda(dto.getAltaDemanda());
         }
 
         if (dto.getFecha() != null) {
@@ -676,6 +1100,7 @@ public class EventoService {
         return PublicarEventoRequest.builder()
                 .eventoId(evento.getId())
                 .organizadorId(evento.getOrganizadorId())
+                .altaDemanda(evento.isAltaDemanda())
                 .sectores(items)
                 .build();
     }
@@ -763,6 +1188,7 @@ public class EventoService {
                 .lugar(lugar)
                 .fecha(fecha)
                 .estado(EstadoEvento.BORRADOR)
+                .altaDemanda(Boolean.TRUE.equals(request.getAltaDemanda()))
                 .build();
 
         if (request.getParticipantes() != null && !request.getParticipantes().isEmpty()) {

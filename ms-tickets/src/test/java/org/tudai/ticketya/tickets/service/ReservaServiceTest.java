@@ -53,6 +53,9 @@ class ReservaServiceTest {
     @Mock
     private ReservaRepository reservaRepository;
 
+    @Mock
+    private HabilitacionTandaService habilitacionTandaService;
+
     private ReservaProperties properties;
 
     private ReservaService service;
@@ -64,13 +67,67 @@ class ReservaServiceTest {
         properties.setExpiracion(Duration.ofMinutes(10));
         service = new ReservaService(
                 eventoRepository, sectorRepository, asientoRepository, ticketRepository,
-                reservaVencidaService, properties, reservaRepository);
+                reservaVencidaService, properties, reservaRepository, habilitacionTandaService);
 
         lenient().when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocacion -> {
             Reserva reserva = invocacion.getArgument(0);
             reserva.setId(99L);
             return reserva;
         });
+    }
+
+    @Test
+    void reservar_cuandoLaVentaNoEstaAbierta_lanzaConflictYNoReserva() {
+        DisponibilidadEvento evento = evento(7L, 4);
+        evento.setEstadoVenta(EstadoVenta.SUSPENDIDA);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> service.reservar(7L, 42L, reserva(3L, 1)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no está abierta")
+                .hasMessageContaining("SUSPENDIDA");
+
+        verifyNoInteractions(sectorRepository);
+        verify(ticketRepository, never()).saveAll(any());
+    }
+
+    @Test
+    void reservar_eventoConHabilitacionSinPase_lanzaConflictYNoReserva() {
+        DisponibilidadEvento evento = evento(7L, 4);
+        evento.setAltaDemanda(true);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+        when(habilitacionTandaService.requierePase(7L, evento)).thenReturn(true);
+        doThrow(new ConflictException("El cliente no está habilitado"))
+                .when(habilitacionTandaService).validarPase(7L, 42L, null);
+
+        assertThatThrownBy(() -> service.reservar(7L, 42L, reserva(3L, 1)))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("no está habilitado");
+
+        verifyNoInteractions(sectorRepository, asientoRepository, ticketRepository,
+                reservaRepository);
+    }
+
+    @Test
+    void reservar_eventoConHabilitacionValidaElPaseDelCliente() {
+        DisponibilidadEvento evento = evento(7L, 5);
+        evento.setAltaDemanda(true);
+        DisponibilidadSector sector = sector(10L, 3L, TipoSector.NO_NUMERADO, 10, 10);
+        when(eventoRepository.findByIdForUpdate(7L)).thenReturn(Optional.of(evento));
+        when(habilitacionTandaService.requierePase(7L, evento)).thenReturn(true);
+        when(sectorRepository.findByEvento_EventoIdAndSectorIdExterno(7L, 3L))
+                .thenReturn(Optional.of(sector));
+        when(ticketRepository.countByEvento_EventoIdAndClienteIdAndEstadoTicketIn(
+                eq(7L), eq(42L), any())).thenReturn(0L);
+        when(ticketRepository.contarReservasVigentes(eq(7L), eq(42L), eq(EstadoTicket.RESERVADO), any()))
+                .thenReturn(0L);
+
+        ReservaRequestDTO request = reserva(3L, 1);
+        request.setPaseToken("tanda-1:42");
+
+        service.reservar(7L, 42L, request);
+
+        verify(habilitacionTandaService).validarPase(7L, 42L, "tanda-1:42");
     }
 
     @Test
