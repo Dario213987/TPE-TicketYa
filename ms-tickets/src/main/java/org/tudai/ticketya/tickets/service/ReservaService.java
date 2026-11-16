@@ -42,6 +42,7 @@ public class ReservaService {
     private final ReservaVencidaService reservaVencidaService;
     private final ReservaProperties properties;
     private final ReservaRepository reservaRepository;
+    private final QrFirmaService qrFirmaService;
 
     @Transactional
     public ReservaResponseDTO reservar(Long eventoId, Long clienteId, ReservaRequestDTO request) {
@@ -113,7 +114,7 @@ public class ReservaService {
         for (int i = 0; i < cantidad; i++) {
             DisponibilidadAsiento asiento = asientos == null ? null : asientos.get(i);
             tickets.add(Ticket.builder()
-                    .codigo_qr(UUID.randomUUID().toString())
+                    .codigo_qr(qrFirmaService.firmar(UUID.randomUUID().toString()))
                     .estadoTicket(EstadoTicket.RESERVADO)
                     .clienteId(clienteId)
                     .expiraEl(expiraEl)

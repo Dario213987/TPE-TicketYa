@@ -70,6 +70,10 @@ Primero Eureka y después lo demás:
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
 
+`ms-tickets` además necesita `TICKETS_QR_SECRET` para firmar los códigos QR con HMAC. Sin esa variable las reservas fallan, para no emitir entradas sin firma:
+
+    env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
+
 ### 4. Levantar dos instancias del mismo servicio
 
 Los `ms-*` usan puerto aleatorio (`server.port=0`) y un id de instancia único, así que alcanza con ejecutar el mismo comando en dos terminales:

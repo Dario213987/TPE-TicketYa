@@ -11,6 +11,7 @@ import org.tudai.ticketya.tickets.domain.Ticket;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
@@ -34,6 +35,9 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Long eventoId, EstadoTicket estado, Instant ahora);
 
     List<Ticket> findByReserva_Id(Long reservaId);
+
+    @Query("select t from Ticket t where t.codigo_qr = :codigoQr")
+    Optional<Ticket> findByCodigoQr(@Param("codigoQr") String codigoQr);
 
     @Query("""
             select distinct t.evento.eventoId from Ticket t

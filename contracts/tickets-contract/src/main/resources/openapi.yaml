@@ -19,6 +19,7 @@ tags:
   - name: reservas
   - name: disponibilidad
   - name: fila
+  - name: qr
   - name: interno
 paths:
   /api/tickets/eventos/{eventoId}/reservas:
@@ -63,6 +64,32 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+  /api/tickets/qr/validar:
+    post:
+      tags: [qr]
+      operationId: validarQr
+      summary: Valida la firma HMAC de un código QR
+      description: |
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden validar entradas. La firma
+        HMAC se verifica antes de consultar la base de datos: un QR sin firma o con
+        firma inválida responde 400 sin acceder a la base.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidacionQrRequestDTO'
+      responses:
+        '200':
+          description: El QR tiene una firma válida y la entrada existe
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ValidacionQrResponseDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/fila:
     post:
       tags: [fila]
@@ -378,6 +405,25 @@ components:
           description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
           items:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    EstadoTicket:
+      type: string
+      enum: [RESERVADO, EMITIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
+    ValidacionQrRequestDTO:
+      type: object
+      required: [codigoQr]
+      properties:
+        codigoQr: { type: string }
+    ValidacionQrResponseDTO:
+      type: object
+      required: [valido, ticketId, eventoId, sectorId, clienteId, estado]
+      properties:
+        valido: { type: boolean }
+        ticketId: { type: integer, format: int64 }
+        eventoId: { type: integer, format: int64 }
+        sectorId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        estado:
+          $ref: '#/components/schemas/EstadoTicket'
     TurnoFilaResponseDTO:
       type: object
       required: [eventoId, clienteId, posicion, totalEnFila, yaEstabaEnFila, ingresadoEl]
