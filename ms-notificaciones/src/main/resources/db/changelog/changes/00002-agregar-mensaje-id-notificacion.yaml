@@ -1,0 +1,17 @@
+﻿databaseChangeLog:
+  - changeSet:
+      id: 00002-agregar-mensaje-id-notificacion
+      author: ticketya
+      changes:
+        - addColumn:
+            tableName: notificacion
+            columns:
+              - column:
+                  name: mensaje_id
+                  type: VARCHAR(100)
+                  constraints:
+                    nullable: false
+        - addUniqueConstraint:
+            tableName: notificacion
+            columnNames: mensaje_id
+            constraintName: uk_notificacion_mensaje_id

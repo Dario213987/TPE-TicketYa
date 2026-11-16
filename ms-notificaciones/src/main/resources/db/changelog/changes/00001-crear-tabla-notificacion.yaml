@@ -1,0 +1,45 @@
+databaseChangeLog:
+  - changeSet:
+      id: 00001-crear-tabla-notificacion
+      author: ticketya
+      changes:
+        - createTable:
+            tableName: notificacion
+            columns:
+              - column:
+                  name: id
+                  type: BIGINT
+                  autoIncrement: true
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: motivo
+                  type: VARCHAR(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: evento_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: destinatario_id
+                  type: BIGINT
+                  constraints:
+                    nullable: false
+              - column:
+                  name: estado
+                  type: VARCHAR(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fecha_creacion
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: false
+              - column:
+                  name: fecha_envio
+                  type: TIMESTAMP
+                  constraints:
+                    nullable: true
