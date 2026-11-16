@@ -15,6 +15,14 @@ info:
     la disponibilidad. Ademas, un job periodico libera todas las reservas cuyo tiempo expiro.
     El job usa un bloqueo distribuido para que, si hay varias instancias, solo una libere cada
     reserva.
+
+    Para eventos de alta demanda con habilitacion por tandas, un job periodico habilita a los
+    primeros N clientes de la fila y les emite un pase con TTL. Mientras la habilitacion este
+    activa, reservar requiere un pase vigente. La coordinacion entre instancias se hace en la
+    base (claim atomico de la proxima tanda) y en Redis (ZPOPMIN y emision del pase en un unico
+    script Lua), por lo que varias instancias nunca duplican ni saltean clientes. El cliente
+    puede abandonar la fila; si tenia un pase, se descarta. Los pases que vencen sin uso se
+    descartan y el job habilita al siguiente cliente de la cola.
 tags:
   - name: reservas
   - name: disponibilidad
@@ -40,6 +48,10 @@ paths:
 
         El evento debe tener la disponibilidad publicada; si no, responde 409. Las reservas
         quedan vigentes durante 10 minutos (hasta expiraEl) y devuelven el idReserva.
+
+        Si el evento es de alta demanda y tiene la habilitacion por tandas activa, el cliente
+        debe estar habilitado: se valida el pase emitido para su X-User-Id (y opcionalmente el
+        paseToken enviado en el cuerpo). Si no tiene pase o vencio, responde 409.
       parameters:
         - name: eventoId
           in: path
@@ -64,6 +76,34 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/fila:
+    get:
+      tags: [fila]
+      operationId: consultarPosicionFila
+      summary: Consulta la posición del cliente en la fila virtual
+      description: |
+        Solo el rol CLIENTE puede consultar su posición. El cliente se toma de
+        X-User-Id, nunca del cuerpo.
+
+        Pensado para polling frecuente: solo lee Redis y no consulta la base de
+        datos. Si el cliente no está en la fila responde 404.
+
+        Si el cliente ya fue habilitado por una tanda, responde estado HABILITADO
+        con el pase vigente (token, tanda y expiraEl) en lugar de la posicion.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: El cliente está en la fila o ya tiene un pase vigente
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PosicionFilaResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
     post:
       tags: [fila]
       operationId: entrarEnFila
@@ -81,6 +121,10 @@ paths:
         llegada. La operación es idempotente: si el cliente ya está en la fila,
         no se duplica ni se modifica su posición y responde 200. Si es la primera
         vez, responde 201.
+
+        Si el cliente ya tiene un pase vigente, no se reinserta en la fila y
+        responde 200 con estado HABILITADO y el pase. La comprobación del pase y
+        la inserción en la cola son atómicas respecto de la emisión de tandas.
       parameters:
         - name: eventoId
           in: path
@@ -103,6 +147,28 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
+    delete:
+      tags: [fila]
+      operationId: salirDeLaFila
+      summary: Saca al cliente de la fila virtual
+      description: |
+        Solo el rol CLIENTE puede abandonar la fila. El cliente se toma de
+        X-User-Id, nunca del cuerpo.
+
+        Elimina al cliente de la cola sin modificar el orden de los demas. Si
+        ya tenia un pase vigente, tambien lo descarta para liberar el lugar.
+        Es idempotente: responde 204 aunque el cliente ya no estuviera en la
+        fila.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '204':
+          description: El cliente salió de la fila o ya no estaba
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/disponibilidad:
     post:
       tags: [disponibilidad]
@@ -231,6 +297,33 @@ paths:
       responses:
         '204': { description: Estado actualizado }
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/habilitacion:
+    put:
+      tags: [interno]
+      operationId: configurarHabilitacion
+      summary: Ajusta la habilitación por tandas de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Permite activar o desactivar la habilitación y ajustar el tamaño de tanda, el
+        intervalo entre tandas y el TTL del pase. Solo existe configuración para eventos
+        de alta demanda con la disponibilidad publicada; si no, responde 404.
+
+        Los cambios de tamaño, intervalo y TTL aplican a las próximas tandas.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/HabilitacionRequestDTO'
+      responses:
+        '204': { description: Configuración actualizada }
+        '400': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
@@ -246,6 +339,47 @@ components:
     EstadoDisponibilidad:
       type: string
       enum: [LIBRE, RESERVADO, VENDIDO]
+    EstadoFila:
+      type: string
+      enum: [EN_ESPERA, HABILITADO]
+      description: |
+        EN_ESPERA: el cliente está en la cola. HABILITADO: el cliente recibió un pase
+        temporal y puede reservar mientras no venza.
+    PaseDTO:
+      type: object
+      nullable: true
+      required: [token, tanda, expiraEl]
+      properties:
+        token:
+          type: string
+          description: Token del pase; se puede enviar como paseToken al reservar.
+        tanda:
+          type: string
+          description: Identificador de la tanda que emitió el pase.
+        expiraEl:
+          type: string
+          format: date-time
+          description: Momento en que el pase deja de ser válido. La ventana es el TTL configurado.
+    HabilitacionRequestDTO:
+      type: object
+      description: |
+        Todos los campos son opcionales; solo se actualizan los informados.
+      properties:
+        habilitada:
+          type: boolean
+          description: Activa o desactiva la exigencia de pase para el evento.
+        tamanoTanda:
+          type: integer
+          minimum: 1
+          description: Cantidad de clientes habilitados en cada tanda.
+        intervaloSegundos:
+          type: integer
+          minimum: 1
+          description: Segundos entre el inicio de una tanda y la siguiente.
+        ttlPaseSegundos:
+          type: integer
+          minimum: 1
+          description: Segundos que un pase permanece válido desde su emisión.
     AsientoDTO:
       type: object
       required: [fila, numero]
@@ -357,6 +491,11 @@ components:
           minItems: 1
           items:
             $ref: '#/components/schemas/AsientoDTO'
+        paseToken:
+          type: string
+          description: |
+            Opcional. Token del pase obtenido en la fila. Si el evento usa habilitación
+            por tandas, se valida contra el pase emitido para el X-User-Id.
     ReservaResponseDTO:
       type: object
       required: [idReserva, eventoId, clienteId, sectorId, cantidad, limiteEntradasPorCliente, entradasVigentes, expiraEl, codigosQr]
@@ -380,25 +519,54 @@ components:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
     TurnoFilaResponseDTO:
       type: object
-      required: [eventoId, clienteId, posicion, totalEnFila, yaEstabaEnFila, ingresadoEl]
+      required: [eventoId, clienteId, totalEnFila, yaEstabaEnFila, estado]
       properties:
         eventoId: { type: integer, format: int64 }
         clienteId: { type: integer, format: int64 }
         posicion:
           type: integer
           format: int64
-          description: Posición actual en la fila, empezando en 1.
+          nullable: true
+          description: Posición actual en la fila, empezando en 1. Es null cuando el cliente ya está HABILITADO.
         totalEnFila:
           type: integer
           format: int64
           description: Cantidad de clientes en la fila al momento de la consulta.
         yaEstabaEnFila:
           type: boolean
-          description: true si el cliente ya tenía un turno y se conservó su posición.
+          description: true si el cliente ya tenía un turno o un pase y se conservó su lugar.
         ingresadoEl:
           type: string
           format: date-time
-          description: Momento en que el cliente ingresó a la fila.
+          description: Momento en que el cliente ingresó a la fila, o en que se emitió el pase si está HABILITADO.
+        estado:
+          $ref: '#/components/schemas/EstadoFila'
+        pase:
+          $ref: '#/components/schemas/PaseDTO'
+    PosicionFilaResponseDTO:
+      type: object
+      required: [eventoId, clienteId, totalEnFila, estado]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        posicion:
+          type: integer
+          format: int64
+          nullable: true
+          description: Posición actual en la fila, empezando en 1. Es null cuando el cliente ya está HABILITADO.
+        personasDelante:
+          type: integer
+          format: int64
+          nullable: true
+          description: Cantidad de personas delante del cliente (posicion - 1). Es null cuando el cliente ya está HABILITADO.
+        totalEnFila:
+          type: integer
+          format: int64
+          description: Cantidad de clientes en la fila al momento de la consulta.
+        estado:
+          $ref: '#/components/schemas/EstadoFila'
+        pase:
+          $ref: '#/components/schemas/PaseDTO'
     Problema:
       type: object
       properties:

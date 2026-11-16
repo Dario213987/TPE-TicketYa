@@ -44,7 +44,21 @@ class FilaRedisRepositoryTest {
         assertThat(registro.ingresadoEl()).isEqualTo(Instant.ofEpochSecond(1));
 
         verify(redisTemplate).execute(any(RedisScript.class),
-                eq(List.of(FilaRedisRepository.clave(7L))), eq("42"));
+                eq(List.of(FilaRedisRepository.clave(7L),
+                        PaseRedisRepository.clave(7L, 42L))),
+                eq("42"));
+    }
+
+    @Test
+    void registrar_clienteConPaseYaEmitido_noReinsertaEnLaFila() {
+        doReturn(List.of(2L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        FilaRedisRepository.Registro registro = repository.registrar(7L, 42L);
+
+        assertThat(registro.yaHabilitado()).isTrue();
+        assertThat(registro.agregado()).isFalse();
+        assertThat(registro.posicion()).isZero();
     }
 
     @Test
@@ -72,7 +86,61 @@ class FilaRedisRepositoryTest {
     }
 
     @Test
+    void consultar_siElClienteEsta_devuelvePosicionPersonasDelanteYTotal() {
+        doReturn(List.of(2L, 5L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        FilaRedisRepository.Posicion posicion = repository.consultar(7L, 42L).orElseThrow();
+
+        assertThat(posicion.posicion()).isEqualTo(3);
+        assertThat(posicion.personasDelante()).isEqualTo(2);
+        assertThat(posicion.totalEnFila()).isEqualTo(5);
+
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(List.of(FilaRedisRepository.clave(7L))), eq("42"));
+    }
+
+    @Test
+    void consultar_siElClienteNoEsta_devuelveVacio() {
+        doReturn(List.of())
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.consultar(7L, 42L)).isEmpty();
+    }
+
+    @Test
+    void consultar_siRedisNoDevuelveElResultadoEsperado_lanzaIllegalState() {
+        doReturn(List.of(0L))
+                .when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThatThrownBy(() -> repository.consultar(7L, 42L))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("cliente 42")
+                .hasMessageContaining("evento 7");
+    }
+
+    @Test
     void clave_usaElPrefijoYElEvento() {
         assertThat(FilaRedisRepository.clave(5L)).isEqualTo("tickets:fila:evento:5");
+    }
+
+    @Test
+    void salir_eliminaDeLaColaElPaseYElPaseActivoDelCliente() {
+        doReturn(1L).when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.salir(7L, 42L)).isTrue();
+
+        verify(redisTemplate).execute(any(RedisScript.class),
+                eq(List.of(FilaRedisRepository.clave(7L),
+                        PaseRedisRepository.clave(7L, 42L),
+                        PaseRedisRepository.claveActivos(7L))),
+                eq("42"));
+    }
+
+    @Test
+    void salir_siElClienteNoEstaba_devuelveFalse() {
+        doReturn(0L).when(redisTemplate).execute(any(RedisScript.class), any(), any());
+
+        assertThat(repository.salir(7L, 42L)).isFalse();
     }
 }

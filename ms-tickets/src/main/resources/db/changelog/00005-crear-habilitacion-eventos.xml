@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00005-crear-habilitacion-eventos" author="ticketya">
+        <createTable tableName="habilitacion_eventos">
+            <column name="evento_id" type="BIGINT">
+                <constraints primaryKey="true"
+                             primaryKeyName="pk_habilitacion_eventos"
+                             nullable="false"/>
+            </column>
+            <column name="habilitada" type="BOOLEAN" defaultValueBoolean="true">
+                <constraints nullable="false"/>
+            </column>
+            <column name="tamano_tanda" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="intervalo_segundos" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ttl_pase_segundos" type="INTEGER">
+                <constraints nullable="false"/>
+            </column>
+            <column name="proxima_tanda_el" type="TIMESTAMP WITH TIME ZONE">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ultima_tanda_el" type="TIMESTAMP WITH TIME ZONE"/>
+            <column name="total_habilitados" type="BIGINT" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addForeignKeyConstraint baseTableName="habilitacion_eventos"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_habilitacion_eventos_evento"
+                                 referencedTableName="disponibilidad_eventos"
+                                 referencedColumnNames="evento_id"/>
+
+        <createIndex tableName="habilitacion_eventos"
+                     indexName="idx_habilitacion_proxima_tanda">
+            <column name="proxima_tanda_el"/>
+        </createIndex>
+    </changeSet>
+</databaseChangeLog>
