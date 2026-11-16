@@ -55,6 +55,8 @@ Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los 
 
 Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
 
+Redis Streams se usan en `ms-preferencias` para el historial de compras y asistencias (`redis-preferencias`, puerto 6381 en el host). Ver [`docs/api/ms-preferencias.md`](docs/api/ms-preferencias.md).
+
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 
 ### 2. Instalar las libs (una vez, y cada vez que cambien)
