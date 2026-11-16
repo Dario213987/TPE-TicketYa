@@ -1,0 +1,516 @@
+{
+  "info": {
+    "_postman_id": "a7c4e2d1-58b3-4f6a-9c02-7d1e5b8f2a63",
+    "name": "ms-preferencias",
+    "description": "Preferencias del cliente (US-09.01). Requiere X-User-Id (numerico) y X-User-Role: CLIENTE. Las rutas se exponen a traves del gateway bajo /api/preferencias. El cliente sale del header, no del cuerpo.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "1. Preferencias",
+      "item": [
+        {
+          "name": "Consultar sin haber cargado nada (200 vacio)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve el cliente del header\", () => pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteId\"))));",
+                  "pm.test(\"listas vacias, no 404\", () => { pm.expect(j.tiposFavoritos).to.eql([]); pm.expect(j.artistasFavoritos).to.eql([]); });",
+                  "pm.test(\"ciudad null mientras no haya perfil\", () => pm.expect(j.ciudad).to.eql(null));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guardar preferencias",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"guarda los tipos favoritos\", () => pm.expect(j.tiposFavoritos).to.eql([\"RECITAL\"]));",
+                  "pm.test(\"guarda los artistas favoritos\", () => pm.expect(j.artistasFavoritos).to.eql([15]));",
+                  "pm.test(\"normaliza la ciudad\", () => pm.expect(j.ciudad).to.eql(\"Tandil\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [\"RECITAL\"],\n  \"artistasFavoritos\": [15],\n  \"ciudad\": \"  Tandil  \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Consultar preferencias guardadas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve lo guardado\", () => { pm.expect(j.tiposFavoritos).to.eql([\"RECITAL\"]); pm.expect(j.artistasFavoritos).to.eql([15]); });",
+                  "pm.test(\"la ciudad quedo sin espacios\", () => pm.expect(j.ciudad).to.eql(\"Tandil\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guardar de nuevo reemplaza y deduplica",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"reemplaza los valores anteriores\", () => pm.expect(j.tiposFavoritos).to.eql([\"TEATRO\", \"FESTIVAL\"]));",
+                  "pm.test(\"deduplica sin perder el orden\", () => pm.expect(j.tiposFavoritos).to.have.lengthOf(2));",
+                  "pm.test(\"reemplaza la ciudad\", () => pm.expect(j.ciudad).to.eql(\"Rauch\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [\"TEATRO\", \"FESTIVAL\", \"TEATRO\"],\n  \"artistasFavoritos\": [20, 20],\n  \"ciudad\": \"Rauch\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Guardar listas vacias (borra favoritos)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"borra los favoritos pero conserva la ciudad\", () => { pm.expect(j.tiposFavoritos).to.eql([]); pm.expect(j.artistasFavoritos).to.eql([]); pm.expect(j.ciudad).to.eql(\"Rauch\"); });"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [],\n  \"artistasFavoritos\": [],\n  \"ciudad\": \"Rauch\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "2. Errores",
+      "item": [
+        {
+          "name": "400 tipo de evento inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [\"NO_EXISTE\"],\n  \"artistasFavoritos\": [15],\n  \"ciudad\": \"Tandil\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "400 ciudad en blanco",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));",
+                  "pm.test(\"senala el campo ciudad\", () => pm.expect(pm.response.json().errors[0].field).to.eql(\"ciudad\"));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [\"RECITAL\"],\n  \"artistasFavoritos\": [15],\n  \"ciudad\": \"   \"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "400 artista con id invalido",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 400\", () => pm.response.to.have.status(400));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "PUT",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"tiposFavoritos\": [\"RECITAL\"],\n  \"artistasFavoritos\": [0],\n  \"ciudad\": \"Tandil\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "401 sin X-User-Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol ORGANIZADOR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{organizadorId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/preferencias/mias",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "preferencias",
+                "mias"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8080"
+    },
+    {
+      "key": "clienteId",
+      "value": "7"
+    },
+    {
+      "key": "organizadorId",
+      "value": "1"
+    }
+  ]
+}
