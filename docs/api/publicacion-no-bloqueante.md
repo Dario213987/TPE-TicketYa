@@ -2,6 +2,8 @@
 
 `ms-tickets` y `ms-eventos` publican avisos para `ms-notificaciones` sin hacer esperar al hilo HTTP por RabbitMQ. La operación de negocio (compra, cancelación, cambio de fecha, publicación de artista) confirma primero y luego encola el aviso en un executor acotado.
 
+La decisión arquitectónica y la matriz de fallos están en [Justificación del diseño asíncrono](justificacion-diseno-asincrono.md); los procedimientos de prueba están en el [Runbook de resiliencia](runbook-resiliencia-notificaciones.md).
+
 ## Diseño
 
 1. La transacción publica un evento de aplicación: `CompraConfirmadaNotificacionEvent` en `ms-tickets` o `AvisoEventoEvent` en `ms-eventos`.

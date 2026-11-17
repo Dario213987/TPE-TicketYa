@@ -120,6 +120,13 @@ curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" \
   -d '{"properties":{"delivery_mode":2,"content_type":"application/json","headers":{"__TypeId__":"org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO"}},"routing_key":"enviar","payload":"{\"mensajeId\":\"MST-1-u\",\"motivo\":\"CANCELACION\",\"eventoId\":10,\"destinatarioId\":20}","payload_encoding":"string"}'
 ```
 
+## Decisiones y resiliencia
+
+- [Justificación del diseño asíncrono](justificacion-diseno-asincrono.md)
+- [Runbook de resiliencia](runbook-resiliencia-notificaciones.md)
+- [Evidencia de pruebas](../evidencia/resiliencia-notificaciones.md)
+- [Publicación no bloqueante](publicacion-no-bloqueante.md)
+
 ## Tecnologías y por qué
 
 | Tecnología | Uso / motivo |
