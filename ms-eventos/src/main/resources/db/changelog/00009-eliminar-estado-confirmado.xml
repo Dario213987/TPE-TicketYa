@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00009-eliminar-estado-confirmado-postgresql" author="ticketya" dbms="postgresql">
+        <sql>UPDATE eventos SET estado = 'PUBLICADO' WHERE estado = 'CONFIRMADO'</sql>
+        <sql>ALTER TABLE eventos DROP CONSTRAINT IF EXISTS chk_eventos_estado</sql>
+        <sql>ALTER TABLE eventos ADD CONSTRAINT chk_eventos_estado
+             CHECK (estado IN ('BORRADOR', 'CANCELADO', 'FINALIZADO', 'PUBLICADO', 'SUSPENDIDO', 'AGOTADO'))</sql>
+    </changeSet>
+
+    <changeSet id="00009-eliminar-estado-confirmado-mysql" author="ticketya" dbms="mysql">
+        <sql>UPDATE eventos SET estado = 'PUBLICADO' WHERE estado = 'CONFIRMADO'</sql>
+        <sql>ALTER TABLE eventos DROP CHECK chk_eventos_estado</sql>
+        <sql>ALTER TABLE eventos ADD CONSTRAINT chk_eventos_estado
+             CHECK (estado IN ('BORRADOR', 'CANCELADO', 'FINALIZADO', 'PUBLICADO', 'SUSPENDIDO', 'AGOTADO'))</sql>
+    </changeSet>
+</databaseChangeLog>

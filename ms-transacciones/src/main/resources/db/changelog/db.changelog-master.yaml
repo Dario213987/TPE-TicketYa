@@ -1,1 +1,4 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - includeAll:
+      path: changes/
+      relativeToChangelogFile: true

@@ -27,7 +27,7 @@ class HeaderUserContextTest {
         request.addHeader(HeaderNames.USER_ROLE, "organizador");
 
         assertThat(ctx.isPresent()).isTrue();
-        assertThat(ctx.userId()).isEqualTo("42");
+        assertThat(ctx.userId()).isEqualTo(42L);
         assertThat(ctx.role()).isEqualTo(Role.ORGANIZADOR);
     }
 

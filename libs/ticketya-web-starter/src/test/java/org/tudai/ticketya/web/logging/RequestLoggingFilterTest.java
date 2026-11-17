@@ -16,6 +16,8 @@ import org.springframework.mock.web.MockHttpServletResponse;
 import org.tudai.ticketya.core.RequestLogger;
 import org.tudai.ticketya.core.UserContext;
 
+import java.util.Optional;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.mock;
@@ -46,8 +48,7 @@ class RequestLoggingFilterTest {
 
     @Test
     void registraUnaLineaConMetodoRutaUsuarioStatusYDuracion() throws Exception {
-        when(userContext.isPresent()).thenReturn(true);
-        when(userContext.userId()).thenReturn("42");
+        when(userContext.findUserId()).thenReturn(Optional.of(42L));
 
         filter.doFilter(request, response, (rq, rs) -> ((HttpServletResponse) rs).setStatus(200));
 
@@ -67,7 +68,7 @@ class RequestLoggingFilterTest {
 
     @Test
     void siElUserContextFalla_seRegistraComoAnonymous() throws Exception {
-        when(userContext.isPresent()).thenThrow(new IllegalStateException("sin request"));
+        when(userContext.findUserId()).thenThrow(new IllegalStateException("sin request"));
 
         filter.doFilter(request, response, (rq, rs) -> { });
 

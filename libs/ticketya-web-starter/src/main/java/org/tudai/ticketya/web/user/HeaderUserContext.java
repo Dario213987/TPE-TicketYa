@@ -24,8 +24,8 @@ public class HeaderUserContext implements UserContext {
     }
 
     @Override
-    public String userId() {
-        return required(HeaderNames.USER_ID);
+    public Long userId() {
+        return requiredLong(HeaderNames.USER_ID);
     }
 
     @Override
@@ -45,6 +45,15 @@ public class HeaderUserContext implements UserContext {
             throw new InvalidUserContextException("Falta el header obligatorio " + header);
         }
         return value.trim();
+    }
+
+    private Long requiredLong(String header) {
+        String value = required(header);
+        try {
+            return Long.valueOf(value);
+        } catch (NumberFormatException e) {
+            throw new InvalidUserContextException("El header " + header + " debe ser numérico: " + value);
+        }
     }
 
     private static boolean hasText(String value) {

@@ -38,7 +38,7 @@ class AuthorizeInterceptorTest {
         }
 
         @Override
-        public String userId() {
+        public Long userId() {
             return delegate().userId();
         }
 
@@ -110,23 +110,23 @@ class AuthorizeInterceptorTest {
     }
 
     @Test
-    void conAuthorizeYSinHeaders_responde400() throws Exception {
+    void conAuthorizeYSinHeaders_responde403() throws Exception {
         mvc.perform(get("/test/admin"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Falta el header obligatorio X-User-Id"));
     }
 
     @Test
-    void conAuthorizeYSinRol_responde400() throws Exception {
+    void conAuthorizeYSinRol_responde403() throws Exception {
         mvc.perform(get("/test/admin").header("X-User-Id", "42"))
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value("Falta el header obligatorio X-User-Role"));
     }
 
     @Test
-    void rolDesconocidoEnElHeader_responde400() throws Exception {
+    void rolDesconocidoEnElHeader_responde403() throws Exception {
         call("/test/admin", "SUPERMAN")
-                .andExpect(status().isBadRequest())
+                .andExpect(status().isUnauthorized())
                 .andExpect(jsonPath("$.detail").value(containsString("Valores permitidos")));
     }
 

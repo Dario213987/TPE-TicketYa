@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00002-insert-lugares-dev" author="juanpedroz" context="dev">
+
+        <!-- ============================================== -->
+        <!-- 1. LUGAR: ESTADIO (Campo + Plateas Numeradas)  -->
+        <!-- ============================================== -->
+        <insert tableName="lugares">
+            <column name="id" valueNumeric="1"/>
+            <column name="nombre" value="Estadio Monumental"/>
+            <column name="tipo" value="Estadio"/>
+            <column name="capacidad" valueNumeric="60000"/>
+            <column name="direccion" value="Av. Figueroa Alcorta 7597"/>
+            <column name="ciudad" value="CABA"/>
+            <column name="latitud" valueNumeric="-34.5453"/>
+            <column name="longitud" valueNumeric="-58.4498"/>
+        </insert>
+
+        <!-- Sector 1: Campo (No Numerado) -->
+        <insert tableName="sectores">
+            <column name="id" valueNumeric="1"/>
+            <column name="lugar_id" valueNumeric="1"/>
+            <column name="nombre" value="Campo"/>
+            <column name="precio" valueNumeric="0.0"/>
+            <column name="tipo_sector" value="NO_NUMERADO"/>
+            <column name="capacidad_maxima" valueNumeric="50000"/>
+        </insert>
+
+        <!-- Sector 2: Platea (Numerada) -->
+        <insert tableName="sectores">
+            <column name="id" valueNumeric="2"/>
+            <column name="lugar_id" valueNumeric="1"/>
+            <column name="nombre" value="Platea San Martín Baja"/>
+            <column name="precio" valueNumeric="0.0"/>
+            <column name="tipo_sector" value="NUMERADO"/>
+        </insert>
+
+        <!-- Asientos de prueba para la Platea del Estadio -->
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="2"/><column name="fila" valueNumeric="1"/><column name="numero" valueNumeric="1"/></insert>
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="2"/><column name="fila" valueNumeric="1"/><column name="numero" valueNumeric="2"/></insert>
+
+
+        <!-- ============================================== -->
+        <!-- 2. LUGAR: TEATRO                               -->
+        <!-- ============================================== -->
+        <insert tableName="lugares">
+            <column name="id" valueNumeric="2"/>
+            <column name="nombre" value="Teatro Gran Rex"/>
+            <column name="tipo" value="Teatro"/>
+            <column name="capacidad" valueNumeric="3000"/>
+            <column name="direccion" value="Av. Corrientes 857"/>
+            <column name="ciudad" value="CABA"/>
+            <column name="latitud" valueNumeric="-34.6037"/>
+            <column name="longitud" valueNumeric="-58.3794"/>
+        </insert>
+
+        <!-- Sector 3: Platea Baja (Numerada) -->
+        <insert tableName="sectores">
+            <column name="id" valueNumeric="3"/>
+            <column name="lugar_id" valueNumeric="2"/>
+            <column name="nombre" value="Platea Fila 1 a 10"/>
+            <column name="precio" valueNumeric="0.0"/>
+            <column name="tipo_sector" value="NUMERADO"/>
+        </insert>
+
+        <!-- Asientos de prueba para el Teatro -->
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="3"/><column name="fila" valueNumeric="1"/><column name="numero" valueNumeric="1"/></insert>
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="3"/><column name="fila" valueNumeric="1"/><column name="numero" valueNumeric="2"/></insert>
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="3"/><column name="fila" valueNumeric="2"/><column name="numero" valueNumeric="1"/></insert>
+        <insert tableName="sector_asientos"><column name="sector_id" valueNumeric="3"/><column name="fila" valueNumeric="2"/><column name="numero" valueNumeric="2"/></insert>
+
+    </changeSet>
+</databaseChangeLog>

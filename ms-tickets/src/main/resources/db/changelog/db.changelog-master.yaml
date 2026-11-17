@@ -1,1 +1,22 @@
-databaseChangeLog: []
+databaseChangeLog:
+  - include:
+      file: 00001-crear-tablas-tickets.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00002-liberar-reservas-vencidas.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00003-agregar-alta-demanda-disponibilidad-eventos.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00004-agregar-estado-venta-disponibilidad-eventos.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00005-crear-habilitacion-eventos.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00002-pagar-reserva.xml
+      relativeToChangelogFile: true
+  - include:
+      file: 00003-crear-tablas-ventas.xml
+      relativeToChangelogFile: true
