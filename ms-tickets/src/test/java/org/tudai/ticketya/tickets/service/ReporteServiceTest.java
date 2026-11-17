@@ -8,9 +8,10 @@ import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
-import org.tudai.ticketya.tickets.client.EventoClient;
-import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
-import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
+import org.tudai.ticketya.contract.eventos.api.EventosApiClient;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.SectorResponse;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasVendidasDTO;
@@ -41,7 +42,7 @@ class ReporteServiceTest {
             List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
 
     @Mock
-    private EventoClient eventoClient;
+    private EventosApiClient eventoClient;
 
     @Spy
     private EventoAccessValidator eventoAccessValidator = new EventoAccessValidator();
@@ -359,23 +360,21 @@ class ReporteServiceTest {
                 5L, ESTADOS_REPORTE_ENTRADAS, EstadoTicket.DEVUELTO);
     }
 
-    private EventoResponseDto evento(Long id, String nombre, Long organizadorId,
-                                     SectorResponseDto... sectores) {
-        return EventoResponseDto.builder()
+    private EventoDetalleResponse evento(Long id, String nombre, Long organizadorId,
+                                         SectorResponse... sectores) {
+        return new EventoDetalleResponse()
                 .id(id)
                 .nombre(nombre)
                 .fecha(FECHA_EVENTO)
-                .estado("PUBLICADO")
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(organizadorId)
-                .sectores(List.of(sectores))
-                .build();
+                .sectores(List.of(sectores));
     }
 
-    private SectorResponseDto sector(Long id, String nombre) {
-        return SectorResponseDto.builder()
+    private SectorResponse sector(Long id, String nombre) {
+        return new SectorResponse()
                 .id(id)
-                .nombre(nombre)
-                .build();
+                .nombre(nombre);
     }
 
     private Object[] resumen(Long sectorId, long vendidas, long devueltas) {

@@ -12,9 +12,10 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
-import org.tudai.ticketya.tickets.client.EventoClient;
-import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
-import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
+import org.tudai.ticketya.contract.eventos.api.EventosApiClient;
+import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
+import org.tudai.ticketya.contract.eventos.model.SectorResponse;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 import org.tudai.ticketya.tickets.repository.ReporteRepository;
 import org.tudai.ticketya.tickets.service.EventoAccessValidator;
@@ -37,13 +38,13 @@ class ReporteAccesoIntegrationTest {
     private static final Long SOLICITANTE_ID = 42L;
     private static final Long ORGANIZADOR_EVENTO_ID = 99L;
 
-    private EventoClient eventoClient;
+    private EventosApiClient eventoClient;
     private UserContext userContext;
     private MockMvc mvc;
 
     @BeforeEach
     void setUp() {
-        eventoClient = mock(EventoClient.class);
+        eventoClient = mock(EventosApiClient.class);
         userContext = mock(UserContext.class);
 
         ReporteService service = new ReporteService(
@@ -94,17 +95,15 @@ class ReporteAccesoIntegrationTest {
                 .andExpect(status().isNotFound());
     }
 
-    private EventoResponseDto evento() {
-        return EventoResponseDto.builder()
+    private EventoDetalleResponse evento() {
+        return new EventoDetalleResponse()
                 .id(EVENTO_ID)
                 .nombre("Recital")
                 .fecha(LocalDateTime.of(2026, 12, 1, 21, 0))
-                .estado("PUBLICADO")
+                .estado(EstadoEvento.PUBLICADO)
                 .organizadorId(ORGANIZADOR_EVENTO_ID)
-                .sectores(List.of(SectorResponseDto.builder()
+                .sectores(List.of(new SectorResponse()
                         .id(10L)
-                        .nombre("Platea")
-                        .build()))
-                .build();
+                        .nombre("Platea")));
     }
 }

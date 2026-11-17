@@ -2,7 +2,7 @@ package org.tudai.ticketya.tickets.service;
 
 import org.junit.jupiter.api.Test;
 import org.tudai.ticketya.core.exception.ForbiddenException;
-import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
@@ -30,10 +30,9 @@ class EventoAccessValidatorTest {
                 .doesNotThrowAnyException();
     }
 
-    private EventoResponseDto evento(Long organizadorId) {
-        return EventoResponseDto.builder()
+    private EventoDetalleResponse evento(Long organizadorId) {
+        return new EventoDetalleResponse()
                 .id(5L)
-                .organizadorId(organizadorId)
-                .build();
+                .organizadorId(organizadorId);
     }
 }
