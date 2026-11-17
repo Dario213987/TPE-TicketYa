@@ -15,8 +15,9 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_FALLIDAS;
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
-import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_FALLIDAS;
 
 /**
  * Declaracion RabbitMQ para que ms-eventos publique avisos de notificacion.
@@ -43,22 +44,22 @@ public class RabbitNotificacionesConfig {
      * @return cola DLQ
      */
     @Bean
-    public Queue notificacionesDlq() {
-        return QueueBuilder.durable(ROUTING_DLQ).build();
+    public Queue notificacionesFallidas() {
+        return QueueBuilder.durable(COLA_FALLIDAS).build();
     }
 
     /**
      * Vincula la DLQ al exchange de fallidos.
      *
-     * @param notificacionesDlq cola de fallidos
+     * @param notificacionesFallidas cola de fallidos
      * @param notificacionesDlx exchange de fallidos
      * @return binding entre cola y exchange
      */
     @Bean
-    public Binding notificacionesDlqBinding(
-            @Qualifier("notificacionesDlq") Queue notificacionesDlq,
+    public Binding notificacionesFallidasBinding(
+            @Qualifier("notificacionesFallidas") Queue notificacionesFallidas,
             @Qualifier("notificacionesDlx") DirectExchange notificacionesDlx) {
-        return BindingBuilder.bind(notificacionesDlq).to(notificacionesDlx).with(ROUTING_DLQ);
+        return BindingBuilder.bind(notificacionesFallidas).to(notificacionesDlx).with(ROUTING_FALLIDAS);
     }
 
     /**
@@ -70,7 +71,7 @@ public class RabbitNotificacionesConfig {
     public Queue notificacionesEnviar() {
         return QueueBuilder.durable(COLA_ENVIAR)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", ROUTING_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_FALLIDAS)
                 .build();
     }
 

@@ -14,7 +14,7 @@ import org.springframework.context.annotation.Configuration;
 
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
-import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_FALLIDAS;
 
 /**
  * Configuración RabbitMQ productora de notificaciones. Declara la cola "enviar" con los mismos
@@ -27,7 +27,7 @@ public class RabbitNotificacionesConfig {
     public Queue colaEnviarNotificaciones() {
         return QueueBuilder.durable(COLA_ENVIAR)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", ROUTING_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_FALLIDAS)
                 .build();
     }
 

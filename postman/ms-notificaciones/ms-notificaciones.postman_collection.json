@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ms-notificaciones",
-    "description": "Colección de ms-notificaciones. Incluye el runbook E2E de PUBLICACION_ARTISTA y la inspección/reproceso de la DLQ `enviar.dlq`.",
+    "description": "Colección de ms-notificaciones. Incluye el runbook E2E de PUBLICACION_ARTISTA y la inspección/reproceso de la DLQ `notificaciones.fallidas`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -241,7 +241,7 @@
       "name": "DLQ y reintentos",
       "item": [
         {
-          "name": "1. Inspeccionar DLQ enviar.dlq",
+          "name": "1. Inspeccionar DLQ notificaciones.fallidas",
           "event": [
             {
               "listen": "test",
@@ -271,9 +271,9 @@
               "options": { "raw": { "language": "json" } }
             },
             "url": {
-              "raw": "{{rabbitmqUrl}}/api/queues/%2F/enviar.dlq/get",
+              "raw": "{{rabbitmqUrl}}/api/queues/%2F/notificaciones.fallidas/get",
               "host": ["{{rabbitmqUrl}}"],
-              "path": ["api", "queues", "%2F", "enviar.dlq", "get"]
+              "path": ["api", "queues", "%2F", "notificaciones.fallidas", "get"]
             }
           }
         },
@@ -338,9 +338,9 @@
             "method": "GET",
             "header": [],
             "url": {
-              "raw": "{{rabbitmqUrl}}/api/queues/%2F/enviar.dlq",
+              "raw": "{{rabbitmqUrl}}/api/queues/%2F/notificaciones.fallidas",
               "host": ["{{rabbitmqUrl}}"],
-              "path": ["api", "queues", "%2F", "enviar.dlq"]
+              "path": ["api", "queues", "%2F", "notificaciones.fallidas"]
             }
           }
         },

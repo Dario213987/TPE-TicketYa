@@ -10,7 +10,8 @@ public final class ColasNotificacion {
 
     public static final String COLA_ENVIAR = "enviar";
     public static final String EXCHANGE_DLX = "enviar.dlx";
-    public static final String ROUTING_DLQ = "enviar.dlq";
+    public static final String COLA_FALLIDAS = "notificaciones.fallidas";
+    public static final String ROUTING_FALLIDAS = COLA_FALLIDAS;
 
     private ColasNotificacion() {
     }

@@ -19,15 +19,16 @@ import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_FALLIDAS;
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
-import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_FALLIDAS;
 
 /**
  * Configuracion de RabbitMQ para consumir mensajes de notificacion.
  * <p>
  * Declara la cola principal, el exchange y la cola de mensajes fallidos (DLQ), y
  * configura reintentos con backoff exponencial. Al agotar los intentos el recoverer
- * marca las filas pendientes como fallidas y el broker enruta el mensaje a la DLQ.
+ * marca las filas pendientes como fallidas y el broker enruta el mensaje a la cola de fallidas.
  */
 @Configuration
 @EnableRabbit
@@ -50,20 +51,20 @@ public class RabbitConfig {
      * @return cola DLQ
      */
     @Bean
-    public Queue colaDlq() {
-        return QueueBuilder.durable(ROUTING_DLQ).build();
+    public Queue colaFallidas() {
+        return QueueBuilder.durable(COLA_FALLIDAS).build();
     }
 
     /**
      * Vincula la cola de fallidos al exchange DLX con la routing key configurada.
      *
-     * @param colaDlq     cola de fallidos
+     * @param colaFallidas cola de fallidos
      * @param enviarDlx   exchange de fallidos
      * @return binding entre la cola y el exchange
      */
     @Bean
-    public Binding bindingDlq(Queue colaDlq, DirectExchange enviarDlx) {
-        return BindingBuilder.bind(colaDlq).to(enviarDlx).with(ROUTING_DLQ);
+    public Binding bindingFallidas(Queue colaFallidas, DirectExchange enviarDlx) {
+        return BindingBuilder.bind(colaFallidas).to(enviarDlx).with(ROUTING_FALLIDAS);
     }
 
     /**
@@ -75,7 +76,7 @@ public class RabbitConfig {
     public Queue colaEnviar() {
         return QueueBuilder.durable(COLA_ENVIAR)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", ROUTING_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_FALLIDAS)
                 .build();
     }
 
@@ -112,7 +113,7 @@ public class RabbitConfig {
 
     /**
      * Crea la factory de listeners con el conversor JSON, los reintentos y el rechazo
-     * sin reencolado para que los fallos terminen en la DLQ.
+     * sin reencolado para que los fallos terminen en la cola de fallidas.
      *
      * @param connectionFactory  conexion con RabbitMQ
      * @param jsonMessageConverter conversor JSON

@@ -17,7 +17,7 @@ La operación de negocio confirma primero y publica el aviso después:
 2. `NotificacionCompraEventListener` escucha con `@TransactionalEventListener(phase = AFTER_COMMIT)`, por lo que un rollback no genera notificación.
 3. El listener agenda el trabajo en `notificacionesAsyncExecutor` (2 hilos y cola de 200 por defecto), con `MdcTaskDecorator` para preservar `correlationId` y `userId`.
 4. El worker construye `NotificacionEntranteDTO` con `mensajeId = MST-RESERVA-{reservaId}` y publica en la cola `enviar`.
-5. `ms-notificaciones` consume, resuelve destinatarios, persiste el estado y envía el correo. Los fallos transitorios se reintentan 8 veces con backoff exponencial; los definitivos terminan en `enviar.dlq`.
+5. `ms-notificaciones` consume, resuelve destinatarios, persiste el estado y envía el correo. Los fallos transitorios se reintentan 8 veces con backoff exponencial; los definitivos terminan en `notificaciones.fallidas`.
 6. La idempotencia se resuelve por `(mensajeId, destinatarioId)`.
 
 El mismo patrón aplica a `ms-eventos` para `PUBLICACION_ARTISTA`, `CANCELACION` y `EDICION`.

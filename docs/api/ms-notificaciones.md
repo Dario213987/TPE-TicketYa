@@ -10,7 +10,7 @@ Servicio de **notificaciones por email**. Centraliza el envío: consume mensajes
 - `destinatarioId` es obligatorio para `CONFIRMACION_COMPRA` (validado por `validarDestinatario()`) y puede ser `null` en avisos masivos. Si es `null`, `NotificacionService` delega en un `DestinatariosResolver` según el motivo y crea una notificación por destinatario. Sin destinatarios no se envía nada. `CANCELACION`, `EDICION` y `SUSPENSION` consultan los compradores del evento en `ms-tickets` (`GET /api/tickets/internal/eventos/{eventoId}/compradores`). `PUBLICACION_ARTISTA` obtiene `lugar.ciudad` y `participantes[].id` desde `ms-eventos` (`GET /api/eventos/{eventoId}`) y consulta `ms-preferencias` (`GET /api/preferencias/internal/destinatarios`) para quedarse con los clientes que tienen algun participante como favorito y declararon la misma ciudad.
 - `detalle` (opcional): detalle polimórfico del mensaje. El discriminante es `tipo` y por compatibilidad se acepta el nombre anterior `detalleCompra` (`@JsonAlias`).
 - Para `CONFIRMACION_COMPRA`, `detalle` es `DetalleConfirmacionCompra`: `sectorId`, `asientos` (`[{fila, numero}]`, vacío para no numerados), `cantidad`, `monto` (nullable), `moneda`. **No se persiste** en `Notificacion`; viaja en el mensaje y se usa solo para renderizar el mail.
-- Las colas y el exchange se centralizan en `ColasNotificacion`: `enviar`, `enviar.dlx` y `enviar.dlq`.
+- Las colas y el exchange se centralizan en `ColasNotificacion`: `enviar`, `enviar.dlx` y `notificaciones.fallidas`.
 
 ## Flujo
 
@@ -91,7 +91,7 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
    El header `__TypeId__` es obligatorio para que `Jackson2JsonMessageConverter` hidrate `NotificacionEntranteDTO`.
 6. Consultar `GET {{mailhogUrl}}/api/v2/messages`: debe haber 1 mensaje, con `PUBLICACION_ARTISTA` en el asunto y `{{artistaNombre}}`, `{{ciudad}}` y el nombre del evento en el cuerpo.
 7. Republicar exactamente el mismo body del paso 5 y repetir el paso 6: no debe aparecer un segundo mail (misma clave `(mensaje_id, destinatario_id)`).
-8. Si no llega el correo, revisar logs de `ms-notificaciones`, el estado de la cola `enviar` y la DLQ `enviar.dlq`. Un fallo de `ms-preferencias` ocurre antes de persistir: Rabbit reintenta 8 veces y termina en DLQ sin filas parciales.
+8. Si no llega el correo, revisar logs de `ms-notificaciones`, el estado de la cola `enviar` y la DLQ `notificaciones.fallidas`. Un fallo de `ms-preferencias` ocurre antes de persistir: Rabbit reintenta 8 veces y termina en DLQ sin filas parciales.
 
 ## Reintentos y cola de fallidos
 
@@ -103,13 +103,13 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
   - `AddressException` / SMTP 5xx de dirección → `NO_ENTREGABLE`, no se relanza.
   - Autenticación, parseo, preparación y SMTP 5xx general → `FALLIDO`, no se relanza.
 - En avisos masivos, los fallos de conexión cortan el lote y se relanza para reintentar solo las filas `PENDIENTE`; los fallos permanentes se registran y el lote continúa. En el reintento se reutilizan las filas existentes y se omiten `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE`.
-- Al agotar reintentos, `NotificacionDlqRecoverer` extrae `mensajeId` del body, marca como `FALLIDO` (con `ultimo_error`) todas las filas `PENDIENTE` de ese mensaje, loguea en `ERROR` y lanza `AmqpRejectAndDontRequeueException`. El broker enruta por **DLX** `enviar.dlx` a la **DLQ** `enviar.dlq`. Si el body no trae `mensajeId`, solo rechaza y loguea.
+- Al agotar reintentos, `NotificacionDlqRecoverer` extrae `mensajeId` del body, marca como `FALLIDO` (con `ultimo_error`) todas las filas `PENDIENTE` de ese mensaje, loguea en `ERROR` y lanza `AmqpRejectAndDontRequeueException`. El broker enruta por **DLX** `enviar.dlx` a la **DLQ** `notificaciones.fallidas`. Si el body no trae `mensajeId`, solo rechaza y loguea.
 - Reproceso operativo: corregir la causa, inspeccionar la DLQ y republicar exactamente el mismo payload en `enviar` (debe mantener el header `__TypeId__` y el mismo `mensajeId`). Las filas `FALLIDO` vuelven a intentarse; las filas `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE` se omiten.
 
 ```bash
 # Ver mensajes en la DLQ
 curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" \
-  "http://localhost:15672/api/queues/%2F/enviar.dlq/get" \
+  "http://localhost:15672/api/queues/%2F/notificaciones.fallidas/get" \
   -H 'content-type:application/json' \
   -d '{"count":10,"requeue":false,"encoding":"auto"}'
 

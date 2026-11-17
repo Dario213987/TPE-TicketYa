@@ -41,7 +41,7 @@ Resultado:
 [INFO] Tests run: 3, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 3.736 s -- in org.tudai.ticketya.notificaciones.config.NotificacionDlqRecovererTest
 [INFO] Tests run: 6, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 0.801 s -- in org.tudai.ticketya.notificaciones.service.EmailServiceTest
 [INFO] Tests run: 29, Failures: 0, Errors: 0, Skipped: 0, Time elapsed: 1.729 s -- in org.tudai.ticketya.notificaciones.service.NotificacionServiceTest
-[INFO] Tests run: 38, Failures: 0, Errors: 0, Skipped: 0
+[INFO] Tests run: 39, Failures: 0, Errors: 0, Skipped: 0
 
 [INFO] BUILD SUCCESS
 ```
@@ -73,7 +73,7 @@ Cobertura: `NotificacionDlqRecovererTest`, `EmailServiceTest`, `NotificacionServ
 
 Capturas E2E pendientes:
 
-- `capturas/01-smtp-caido-dlq.png`: logs de reintentos y mensaje en `enviar.dlq`.
+- `capturas/01-smtp-caido-dlq.png`: logs de reintentos y mensaje en `notificaciones.fallidas`.
 - `capturas/01-republicacion-mailhog.png`: correo recibido en MailHog y log de duplicado omitido.
 
 ## E2E-02: `ms-notificaciones` caído durante la compra
@@ -139,7 +139,7 @@ Resultado:
 [INFO] BUILD SUCCESS
 ```
 
-`ms-notificaciones`: 67 tests, 0 failures, 0 errors.
+`ms-notificaciones`: 68 tests, 0 failures, 0 errors.
 `ms-preferencias`: 79 tests, 0 failures, 0 errors, 10 skipped por `disabledWithoutDocker`.
 
 ## Cómo completar las capturas

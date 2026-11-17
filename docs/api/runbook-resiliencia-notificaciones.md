@@ -97,7 +97,7 @@ Pasos:
 
    ```powershell
    Invoke-RestMethod -Method Get `
-     -Uri "$rabbit/api/queues/%2F/enviar.dlq" `
+     -Uri "$rabbit/api/queues/%2F/notificaciones.fallidas" `
      -Credential $cred
    ```
 

@@ -65,7 +65,7 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
 
 No se duplican envíos por destinatario: el `mensajeId` y la restricción única `(mensaje_id, destinatario_id)` en `ms-notificaciones` evitan duplicados ante reintentos del mismo mensaje. La publicación no tiene reintento automático: si Rabbit falla, se registra el error en logs con `mensajeId` y requiere reproceso operativo. El hilo HTTP no espera a Rabbit; ver `docs/api/publicacion-no-bloqueante.md`.
 
-La publicación usa las mismas colas y argumentos que `ms-notificaciones`: cola `enviar` con DLX `enviar.dlx` y DLQ `enviar.dlq`. El mensaje se serializa como JSON.
+La publicación usa las mismas colas y argumentos que `ms-notificaciones`: cola `enviar` con DLX `enviar.dlx` y DLQ `notificaciones.fallidas`. El mensaje se serializa como JSON.
 
 ## Fecha de evento
 
