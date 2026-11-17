@@ -30,4 +30,11 @@ public class Preferencia {
     private List<Long> artistasFavoritos = new ArrayList<>();
 
     private String ciudad;
+
+    /**
+     * Historial de compras y asistencias. Lo mantiene el consumidor de eventos,
+     * nunca se reemplaza desde el PUT de preferencias.
+     */
+    @Builder.Default
+    private List<HistorialCompra> historial = new ArrayList<>();
 }

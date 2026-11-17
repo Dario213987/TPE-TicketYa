@@ -73,6 +73,29 @@ paths:
         '400': { $ref: '#/components/responses/Error' }
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+  /api/preferencias/historial:
+    get:
+      tags: [preferencias]
+      operationId: obtenerHistorial
+      summary: Historial de compras y asistencias del cliente autenticado
+      description: |
+        Devuelve el historial que ms-preferencias construye a partir de los eventos
+        asincronos `venta.pagada` y `ticket.utilizado`. Es de solo lectura para el
+        cliente: lo escribe unicamente el consumidor de eventos.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/UserRole'
+      responses:
+        '200':
+          description: Historial del cliente, vacio si todavia no compro
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/HistorialCompraDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 components:
   parameters:
     UserId:
@@ -156,6 +179,23 @@ components:
           description: |
             Ciudad declarada por el cliente. Puede ser null cuando todavia no cargo
             preferencias y no hay perfil del que tomarla.
+    HistorialCompraDTO:
+      type: object
+      description: |
+        Una entrada del historial: el evento que el cliente compro y, si ya ingreso,
+        si lo uso. Lo escribe el consumidor de eventos, no el cliente.
+      required: [eventoId, comprado, usado]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        participanteIds:
+          type: array
+          items: { type: integer, format: int64 }
+        ciudad: { type: string, nullable: true }
+        fecha: { type: string, format: date-time, nullable: true }
+        comprado: { type: boolean }
+        usado: { type: boolean }
     Problema:
       type: object
       properties:

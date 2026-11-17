@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import jakarta.validation.constraints.AssertTrue;
 import jakarta.validation.constraints.Min;
 import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Positive;
 import lombok.*;
 import org.tudai.ticketya.tickets.domain.TipoSector;
 
@@ -24,6 +25,9 @@ public class SectorDisponibilidadDTO {
 
     @Min(value = 1, message = "La capacidad maxima debe ser mayor a 0")
     private Integer capacidadMaxima;
+
+    @Positive(message = "El precio del sector debe ser mayor a 0")
+    private Double precio;
 
     @Valid
     private List<AsientoDTO> asientos;

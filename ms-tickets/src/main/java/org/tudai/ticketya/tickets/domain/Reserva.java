@@ -36,6 +36,23 @@ public class Reserva {
     @Column(name = "creado_el", nullable = false, updatable = false)
     private Instant creadoEl;
 
+    @Column(name = "idempotency_key", length = 100)
+    private String idempotencyKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "medio_pago", length = 30)
+    private MedioPago medioPago;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "estado_pago", length = 20)
+    private EstadoPago estadoPago;
+
+    @Column(name = "motivo_rechazo")
+    private String motivoRechazo;
+
+    @Column(name = "pagado_el")
+    private Instant pagadoEl;
+
     @Column(name = "pago_en_curso", nullable = false)
     @Builder.Default
     private boolean pagoEnCurso = false;
