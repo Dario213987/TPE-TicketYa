@@ -14,6 +14,8 @@ import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasVendidasDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasSectorDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionSectorDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionSectorDTO;
 import org.tudai.ticketya.tickets.service.ReporteService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -175,6 +177,76 @@ class ReporteControllerTest {
         when(userContext.role()).thenReturn(Role.CLIENTE);
 
         mvc.perform(get("/api/tickets/reportes/eventos/5/ocupacion"))
+                .andExpect(status().isForbidden())
+                .andExpect(jsonPath("$.title").value("Acceso denegado"));
+
+        verifyNoInteractions(service);
+    }
+
+    @Test
+    void obtenerRecaudacion_conOrganizadorDuenio_respondeOkConElReporte() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.ORGANIZADOR);
+        when(service.obtenerReporteRecaudacion(5L, 42L, false))
+                .thenReturn(ReporteRecaudacionDTO.builder()
+                        .eventoId(5L)
+                        .eventoNombre("Recital")
+                        .eventoFecha(FECHA_EVENTO)
+                        .eventoEstado("PUBLICADO")
+                        .ventas(350.0)
+                        .reintegros(100.0)
+                        .recaudacionTotal(250.0)
+                        .sectores(List.of(ReporteRecaudacionSectorDTO.builder()
+                                .sectorId(10L)
+                                .sectorNombre("Platea")
+                                .ventas(300.0)
+                                .reintegros(100.0)
+                                .recaudacion(200.0)
+                                .build()))
+                        .build());
+
+        mvc.perform(get("/api/tickets/reportes/eventos/5/recaudacion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventoId").value(5))
+                .andExpect(jsonPath("$.eventoNombre").value("Recital"))
+                .andExpect(jsonPath("$.eventoFecha").value("2026-12-01T21:00:00"))
+                .andExpect(jsonPath("$.eventoEstado").value("PUBLICADO"))
+                .andExpect(jsonPath("$.ventas").value(350.0))
+                .andExpect(jsonPath("$.reintegros").value(100.0))
+                .andExpect(jsonPath("$.recaudacionTotal").value(250.0))
+                .andExpect(jsonPath("$.sectores[0].sectorId").value(10))
+                .andExpect(jsonPath("$.sectores[0].sectorNombre").value("Platea"))
+                .andExpect(jsonPath("$.sectores[0].ventas").value(300.0))
+                .andExpect(jsonPath("$.sectores[0].reintegros").value(100.0))
+                .andExpect(jsonPath("$.sectores[0].recaudacion").value(200.0));
+
+        verify(service).obtenerReporteRecaudacion(5L, 42L, false);
+    }
+
+    @Test
+    void obtenerRecaudacion_conAdmin_pasaEsAdministradorTrue() throws Exception {
+        when(userContext.userId()).thenReturn(99L);
+        when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+        when(service.obtenerReporteRecaudacion(5L, 99L, true))
+                .thenReturn(ReporteRecaudacionDTO.builder()
+                        .eventoId(5L)
+                        .eventoNombre("Recital")
+                        .sectores(List.of())
+                        .build());
+
+        mvc.perform(get("/api/tickets/reportes/eventos/5/recaudacion"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.eventoId").value(5));
+
+        verify(service).obtenerReporteRecaudacion(5L, 99L, true);
+    }
+
+    @Test
+    void obtenerRecaudacion_conCliente_responde403() throws Exception {
+        when(userContext.userId()).thenReturn(42L);
+        when(userContext.role()).thenReturn(Role.CLIENTE);
+
+        mvc.perform(get("/api/tickets/reportes/eventos/5/recaudacion"))
                 .andExpect(status().isForbidden())
                 .andExpect(jsonPath("$.title").value("Acceso denegado"));
 

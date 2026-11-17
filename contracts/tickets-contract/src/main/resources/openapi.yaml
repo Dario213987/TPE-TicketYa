@@ -281,6 +281,31 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reportes/eventos/{id}/recaudacion:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteRecaudacion
+      summary: Reporta ventas, reintegros y recaudación neta por sector y total del evento
+      description: |
+        Recaudación neta = ventas brutas menos reintegros efectivamente realizados. Las ventas
+        incluyen tickets vendidos y devueltos; los reintegros incluyen los tickets devueltos.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden consultar el reporte. El organizador
+        solo puede consultar eventos propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte de recaudación del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteRecaudacionDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/tickets/internal/eventos/{eventoId}/cancelar:
     put:
       tags: [interno]
@@ -607,6 +632,30 @@ components:
         sectorId: { type: integer, format: int64 }
         sectorNombre: { type: string }
         ocupacion: { type: number, format: double }
+    ReporteRecaudacionDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, ventas, reintegros, recaudacionTotal, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        ventas: { type: number, format: double }
+        reintegros: { type: number, format: double }
+        recaudacionTotal: { type: number, format: double }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteRecaudacionSectorDTO'
+    ReporteRecaudacionSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, ventas, reintegros, recaudacion]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        ventas: { type: number, format: double }
+        reintegros: { type: number, format: double }
+        recaudacion: { type: number, format: double }
     TurnoFilaResponseDTO:
       type: object
       required: [eventoId, clienteId, totalEnFila, yaEstabaEnFila, estado]

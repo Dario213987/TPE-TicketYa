@@ -11,6 +11,7 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasVendidasDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionDTO;
 import org.tudai.ticketya.tickets.service.ReporteService;
 
 @RestController
@@ -41,8 +42,13 @@ public class ReporteController {
         return ResponseEntity.ok(service.obtenerReporteOcupacion(id, solicitanteId, esAdmin));
     }
 
+    @GetMapping("/eventos/{id}/recaudacion")
+    @Authorize("hasAnyRole('ADMINISTRADOR','ORGANIZADOR')")
+    public ResponseEntity<ReporteRecaudacionDTO> obtenerReporteRecaudacion(
+            @PathVariable long id) {
+        Long solicitanteId = userContext.userId();
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
 
-
-
-
+        return ResponseEntity.ok(service.obtenerReporteRecaudacion(id, solicitanteId, esAdmin));
+    }
 }

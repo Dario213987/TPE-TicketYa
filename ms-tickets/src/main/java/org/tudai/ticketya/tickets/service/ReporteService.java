@@ -3,7 +3,7 @@ package org.tudai.ticketya.tickets.service;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.tudai.ticketya.core.exception.ForbiddenException;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.client.EventoClient;
 import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
 import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
@@ -13,13 +13,14 @@ import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasVendidasDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionSectorDTO;
 import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasSectorDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionSectorDTO;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 import org.tudai.ticketya.tickets.repository.ReporteRepository;
 
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Objects;
 import java.util.stream.Collectors;
 
 @Service
@@ -33,6 +34,7 @@ public class ReporteService {
             List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
 
     private final EventoClient eventoClient;
+    private final EventoAccessValidator eventoAccessValidator;
     private final ReporteRepository reporteRepository;
     private final DisponibilidadSectorRepository disponibilidadSectorRepository;
 
@@ -43,11 +45,7 @@ public class ReporteService {
     public ReporteEntradasVendidasDTO obtenerReporteEntradasVendidas(
             Long eventoId, Long solicitanteId, boolean esAdmin) {
 
-        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
-
-        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), solicitanteId)) {
-            throw new ForbiddenException("No tenés permiso para consultar el reporte de este evento");
-        }
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
 
         // Mapa de resumen por secor, la clave es el id del sector y el objeto el resumen
         Map<Long, Object[]> resumenPorSector = new HashMap<>();
@@ -100,11 +98,7 @@ public class ReporteService {
     @Transactional(readOnly = true)
     public ReporteOcupacionDTO obtenerReporteOcupacion(Long eventoId, Long solicitanteId, boolean esAdmin) {
 
-        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
-
-        if (!esAdmin && !Objects.equals(evento.getOrganizadorId(), solicitanteId)) {
-            throw new ForbiddenException("No tenés permiso para consultar el reporte de este evento");
-        }
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
 
         // Capacidad total de cada sector, la clave es el id del sector
         Map<Long, Integer> capacidades = disponibilidadSectorRepository
@@ -153,6 +147,62 @@ public class ReporteService {
                 .build();
     }
 
+    @Transactional(readOnly = true)
+    public ReporteRecaudacionDTO obtenerReporteRecaudacion(Long eventoId, Long solicitanteId, boolean esAdmin) {
+
+        EventoResponseDto evento = obtenerEventoAutorizado(eventoId, solicitanteId, esAdmin);
+
+        Map<Long, Object[]> resumenPorSector = new HashMap<>();
+
+        for (Object[] fila : reporteRepository.resumirRecaudacionPorSector(
+                eventoId, ESTADOS_REPORTE_ENTRADAS, EstadoTicket.DEVUELTO)) {
+            if (fila[0] == null) {
+                continue;
+            }
+
+            resumenPorSector.put(((Number) fila[0]).longValue(), fila);
+        }
+
+        List<SectorResponseDto> sectoresEvento = evento.getSectores() == null
+                ? List.of()
+                : evento.getSectores();
+
+        List<ReporteRecaudacionSectorDTO> sectores = sectoresEvento.stream()
+                .map(sector -> aRecaudacionSector(sector, resumenPorSector.get(sector.getId())))
+                .toList();
+
+        double ventas = redondear(sectores.stream()
+                .mapToDouble(ReporteRecaudacionSectorDTO::getVentas)
+                .sum());
+
+        double reintegros = redondear(sectores.stream()
+                .mapToDouble(ReporteRecaudacionSectorDTO::getReintegros)
+                .sum());
+
+        return ReporteRecaudacionDTO.builder()
+                .eventoId(evento.getId())
+                .eventoNombre(evento.getNombre())
+                .eventoFecha(evento.getFecha())
+                .eventoEstado(evento.getEstado())
+                .ventas(ventas)
+                .reintegros(reintegros)
+                .recaudacionTotal(redondear(ventas - reintegros))
+                .sectores(sectores)
+                .build();
+    }
+
+
+    /** Busca el evento en el cliente y confirma la autorizacion del solicitante*/
+    private EventoResponseDto obtenerEventoAutorizado(
+            Long eventoId, Long solicitanteId, boolean esAdmin) {
+
+        EventoResponseDto evento = eventoClient.obtenerEvento(eventoId);
+        if (evento == null) {
+            throw new NotFoundException("Evento no encontrado con id: " + eventoId);
+        }
+        eventoAccessValidator.validarAcceso(evento, solicitanteId, esAdmin);
+        return evento;
+    }
 
     private ReporteEntradasSectorDTO aReporteSector(SectorResponseDto sector, Object[] resumen) {
         long vendidas = resumen == null ? 0 : ((Number) resumen[1]).longValue();
@@ -172,6 +222,27 @@ public class ReporteService {
                 .sectorNombre(sector.getNombre())
                 .ocupacion(porcentaje(vendidas, capacidad))
                 .build();
+    }
+
+    private ReporteRecaudacionSectorDTO aRecaudacionSector(SectorResponseDto sector, Object[] resumen) {
+        double ventas = resumen == null ? 0.0 : monto(resumen[1]);
+        double reintegros = resumen == null ? 0.0 : monto(resumen[2]);
+
+        return ReporteRecaudacionSectorDTO.builder()
+                .sectorId(sector.getId())
+                .sectorNombre(sector.getNombre())
+                .ventas(ventas)
+                .reintegros(reintegros)
+                .recaudacion(redondear(ventas - reintegros))
+                .build();
+    }
+
+    private double monto(Object valor) {
+        return valor == null ? 0.0 : redondear(((Number) valor).doubleValue());
+    }
+
+    private double redondear(double valor) {
+        return Math.round(valor * 100.0) / 100.0;
     }
 
     private double porcentaje(long vendidas, long capacidad) {
