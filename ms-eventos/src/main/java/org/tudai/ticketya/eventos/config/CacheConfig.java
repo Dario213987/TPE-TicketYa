@@ -12,6 +12,7 @@ import org.springframework.cache.annotation.CachingConfigurer;
 import org.springframework.cache.annotation.EnableCaching;
 import org.springframework.cache.interceptor.CacheErrorHandler;
 import org.springframework.cache.support.NoOpCache;
+import org.springframework.cache.transaction.TransactionAwareCacheDecorator;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
@@ -29,6 +30,10 @@ import java.util.Map;
  *   siguiente. Los errores al leer, guardar o invalidar se registran como WARN y se ignoran. En
  *   todos los casos la llamada sigue contra la base. Los timeouts son cortos y sin reintentos para
  *   que un Redis caído no demore las respuestas.</li>
+ *   <li><b>Transaccional (TKY-82):</b> las escrituras e invalidaciones se aplican después del commit,
+ *   así un pedido simultáneo no vuelve a guardar el dato viejo antes de que se confirme el cambio.
+ *   Como esas operaciones corren fuera del {@code CacheErrorHandler}, cada cache va envuelta en
+ *   {@link CacheSegura}, que también ignora los errores de Redis.</li>
  * </ul>
  * Qué se cachea y cómo se invalida lo definen TKY-82 (detalle de evento) y TKY-83 (búsquedas).
  */
@@ -66,7 +71,8 @@ public class CacheConfig implements CachingConfigurer {
             @Override
             public Cache getCache(String name) {
                 try {
-                    return super.getCache(name);
+                    // Después del commit (TKY-82) y sin que un error de Redis rompa la llamada.
+                    return new TransactionAwareCacheDecorator(new CacheSegura(super.getCache(name)));
                 } catch (RuntimeException e) {
                     // Redis caído al crear la cache (también al arrancar, por las métricas de Actuator).
                     log.warn("Cache {} no disponible; se consulta la base: {}", name, e.getMessage());
