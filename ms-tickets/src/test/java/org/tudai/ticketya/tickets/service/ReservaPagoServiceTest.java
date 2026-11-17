@@ -68,7 +68,7 @@ class ReservaPagoServiceTest {
         Ticket dos = ticket(2L, sector(1500.0), null, EstadoTicket.RESERVADO);
         prepararReserva(reserva, evento(ORGANIZADOR_ID), List.of(uno, dos));
 
-        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA");
+        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO);
 
         assertThat(preparacion.yaTerminada()).isFalse();
         assertThat(preparacion.organizadorId()).isEqualTo(ORGANIZADOR_ID);
@@ -79,7 +79,7 @@ class ReservaPagoServiceTest {
         });
         assertThat(reserva.getEstadoPago()).isEqualTo(EstadoPago.PENDIENTE_PAGO);
         assertThat(reserva.getIdempotencyKey()).isEqualTo(CLAVE);
-        assertThat(reserva.getMedioPago()).isEqualTo("TARJETA");
+        assertThat(reserva.getMedioPago()).isEqualTo(MedioPago.TARJETA_CREDITO);
         verify(reservaVencidaService).liberarVencidas(eq(EVENTO_ID), any(Instant.class));
     }
 
@@ -92,7 +92,7 @@ class ReservaPagoServiceTest {
         when(eventoRepository.findById(EVENTO_ID)).thenReturn(Optional.of(evento(ORGANIZADOR_ID)));
         when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(pendiente));
 
-        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA");
+        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO);
 
         assertThat(preparacion.cobros()).containsExactly(new Cobro(1L, 1500.0));
         verifyNoInteractions(reservaVencidaService);
@@ -106,7 +106,7 @@ class ReservaPagoServiceTest {
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
         when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(vendido));
 
-        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA");
+        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO);
 
         assertThat(preparacion.yaTerminada()).isTrue();
         assertThat(preparacion.compraExistente().getEstadoPago()).isEqualTo(EstadoPago.APROBADO);
@@ -121,7 +121,7 @@ class ReservaPagoServiceTest {
             reserva.setMotivoRechazo("fondos insuficientes");
             when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
 
-            assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+            assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                     .isInstanceOf(PagoRechazadoException.class)
                     .hasMessageContaining("fondos insuficientes");
         }
@@ -133,7 +133,7 @@ class ReservaPagoServiceTest {
         reserva.setIdempotencyKey("otra-clave");
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("ya fue procesada");
     }
@@ -142,7 +142,7 @@ class ReservaPagoServiceTest {
     void preparar_reservaDeOtroCliente_lanzaForbiddenException() {
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva(null)));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, 1000L, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, 1000L, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ForbiddenException.class);
     }
 
@@ -150,7 +150,7 @@ class ReservaPagoServiceTest {
     void preparar_reservaInexistente_lanzaNotFoundException() {
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.empty());
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(NotFoundException.class)
                 .hasMessageContaining("99");
     }
@@ -160,7 +160,7 @@ class ReservaPagoServiceTest {
         prepararReserva(reserva(null), evento(ORGANIZADOR_ID),
                 List.of(ticket(1L, sector(1500.0), null, EstadoTicket.LIBERADO)));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("venció");
     }
@@ -170,7 +170,7 @@ class ReservaPagoServiceTest {
         prepararReserva(reserva(null), evento(null),
                 List.of(ticket(1L, sector(1500.0), null, EstadoTicket.RESERVADO)));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("organizador");
     }
@@ -180,7 +180,7 @@ class ReservaPagoServiceTest {
         prepararReserva(reserva(null), evento(ORGANIZADOR_ID),
                 List.of(ticket(1L, sector(null), null, EstadoTicket.RESERVADO)));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("precio");
     }
@@ -190,7 +190,7 @@ class ReservaPagoServiceTest {
         prepararReserva(reserva(null), evento(ORGANIZADOR_ID),
                 List.of(ticket(1L, sector(0.0), null, EstadoTicket.RESERVADO)));
 
-        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("precio válido");
     }
@@ -230,7 +230,7 @@ class ReservaPagoServiceTest {
     @Test
     void emitir_registraLaVentaConSusItemsYElPrecioCobrado() {
         Reserva reserva = reserva(EstadoPago.PENDIENTE_PAGO);
-        reserva.setMedioPago("TARJETA");
+        reserva.setMedioPago(MedioPago.TARJETA_CREDITO);
         DisponibilidadSector sector = sector(1500.0);
         DisponibilidadAsiento asiento = DisponibilidadAsiento.builder()
                 .sector(sector).fila(2).numero(5).estado(EstadoDisponibilidad.RESERVADO).build();
@@ -251,7 +251,7 @@ class ReservaPagoServiceTest {
         assertThat(venta.getReservaId()).isEqualTo(RESERVA_ID);
         assertThat(venta.getClienteId()).isEqualTo(CLIENTE_ID);
         assertThat(venta.getEventoId()).isEqualTo(EVENTO_ID);
-        assertThat(venta.getMedioPago()).isEqualTo("TARJETA");
+        assertThat(venta.getMedioPago()).isEqualTo(MedioPago.TARJETA_CREDITO);
         assertThat(venta.getTotal()).isEqualTo(2300.0);
         assertThat(venta.getCreadoEl()).isNotNull();
         assertThat(venta.getItems())

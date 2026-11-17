@@ -18,7 +18,7 @@ Verificá con `mvn -v` que Maven use Java 25.
 | `libs/`                                                                    | Librerías compartidas de infraestructura (`ticketya-core`, `ticketya-web-starter`) |
 | `contracts/`                                                               | Contratos OpenAPI, uno por microservicio |
 | `eureka-server/`, `api-gateway/`                                           | Descubrimiento y punto de entrada único |
-| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, etc | Microservicios de negocio |
+| `ms-eventos/`, `ms-tickets/`, `ms-transacciones/`, `ms-devoluciones/`, `ms-notificaciones/`, etc | Microservicios de negocio |
 | `specs/`                                                                   | Propuestas y specs |
 | `postman/`                                                                 | Colección de requests |
 
@@ -39,7 +39,7 @@ Verificá con `mvn -v` que Maven use Java 25.
     cp infra/.env.example infra/.env   # completar contraseñas
     docker compose -f infra/docker-compose.yml up -d
 
-Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto):
+Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto, MongoDB en `ms-preferencias`):
 
 | Servicio | Puerto en el host |
 |---|---|
@@ -47,10 +47,18 @@ Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto
 | ms-tickets | 5434 |
 | ms-transacciones | 5435 |
 | ms-devoluciones | 5436 |
+| ms-notificaciones | 5437 |
+| ms-preferencias (MongoDB) | 5438 |
 
 Cada servicio puede usar PostgreSQL o MySQL. Para pasar uno a MySQL, seguí los pasos de la plantilla comentada en `infra/docker-compose.yml` (bloque del compose, driver en el pom y `DB_URL`).
 
-Redis está desactivado por ahora (ver el comentario en el compose).
+`ms-preferencias` guarda documentos en MongoDB (`db-preferencias`, puerto 5437) y se configura con la variable `MONGODB_URI`.
+
+Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`redis-tickets`, puerto 6380 en el host). Un job periódico habilita a los clientes por tandas y emite pases con TTL; la coordinación entre instancias se apoya en `habilitacion_eventos` y en scripts Lua atómicos. Ver [`docs/api/ms-tickets-fila.md`](docs/api/ms-tickets-fila.md).
+
+Redis Streams se usan en `ms-preferencias` para el historial de compras y asistencias (`redis-preferencias`, puerto 6381 en el host). Ver [`docs/api/ms-preferencias.md`](docs/api/ms-preferencias.md).
+
+RabbitMQ se usa como broker de mensajería (`rabbitmq`, AMQP `5672`, UI `15672`, credenciales `RABBITMQ_USER`/`RABBITMQ_PASSWORD`/`RABBITMQ_VHOST` en `infra/.env`). MailHog provee un SMTP de pruebas para `ms-notificaciones` (SMTP `1025`, UI `8025`). Para levantar `ms-notificaciones` se requieren `DB_PASSWORD`, `RABBITMQ_*` y el broker/MailHog en ejecución.
 
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 

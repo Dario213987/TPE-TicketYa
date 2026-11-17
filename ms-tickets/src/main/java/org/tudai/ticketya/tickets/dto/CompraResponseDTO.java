@@ -2,6 +2,7 @@ package org.tudai.ticketya.tickets.dto;
 
 import lombok.*;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
+import org.tudai.ticketya.tickets.domain.MedioPago;
 
 import java.time.Instant;
 import java.util.List;
@@ -17,7 +18,7 @@ public class CompraResponseDTO {
     private Long ventaId;
     private Long eventoId;
     private Long clienteId;
-    private String medioPago;
+    private MedioPago medioPago;
     private EstadoPago estadoPago;
     private Double total;
     private Instant pagadoEl;

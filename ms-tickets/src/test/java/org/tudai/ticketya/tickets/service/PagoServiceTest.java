@@ -18,8 +18,10 @@ import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
+import org.tudai.ticketya.tickets.domain.MedioPago;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
 import org.tudai.ticketya.tickets.dto.PagoRequestDTO;
 import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
@@ -93,7 +95,7 @@ class PagoServiceTest {
     @Test
     void pagar_reintentoDeUnaCompraTerminada_devuelveLaOriginalSinCobrar() {
         CompraResponseDTO original = compra(EstadoPago.APROBADO);
-        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .thenReturn(new Preparacion(original, null, List.of()));
 
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago())).isSameAs(original);
@@ -166,6 +168,37 @@ class PagoServiceTest {
     }
 
     @Test
+    void pagar_debitoTodaviaPendienteEnTransacciones_quedaPendienteSinLiberar() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.PENDIENTE));
+        when(reservaPagoService.consultar(RESERVA_ID)).thenReturn(compra(EstadoPago.PENDIENTE_PAGO));
+
+        assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()).getEstadoPago())
+                .isEqualTo(EstadoPago.PENDIENTE_PAGO);
+
+        verify(reservaPagoService, never()).liberar(any(), any(), any());
+        verify(reservaPagoService, never()).emitir(any(), any());
+        verify(transaccionesClient, never()).generarCredito(any());
+    }
+
+    @Test
+    void pagar_transaccionesRechazaElPedido_lanza502YQuedaPendienteSinCompensar() {
+        prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 800.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA))
+                .thenThrow(new ForbiddenException("el organizador no coincide"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOfSatisfying(RemoteServiceException.class,
+                        e -> assertThat(e.getRemoteStatus()).isEqualTo(502))
+                .hasMessageContaining("el organizador no coincide");
+
+        verify(reservaPagoService, never()).liberar(any(), any(), any());
+        verify(reservaPagoService, never()).emitir(any(), any());
+        verify(transaccionesClient, never()).generarCredito(any());
+    }
+
+    @Test
     void pagar_reintentoDespuesDelTimeout_consultaElEstadoRealYEmite() {
         prepararCobros(new Cobro(1L, 1500.0));
         when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
@@ -219,7 +252,7 @@ class PagoServiceTest {
     }
 
     private void prepararCobros(Cobro... cobros) {
-        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, "TARJETA"))
+        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .thenReturn(new Preparacion(null, ORGANIZADOR_ID, List.of(cobros)));
     }
 
@@ -236,6 +269,6 @@ class PagoServiceTest {
     }
 
     private PagoRequestDTO pago() {
-        return PagoRequestDTO.builder().medioPago("TARJETA").build();
+        return PagoRequestDTO.builder().medioPago(MedioPago.TARJETA_CREDITO).build();
     }
 }

@@ -6,19 +6,21 @@ Los endpoints internos de `ms-eventos` son llamados servicio-a-servicio (por eje
 
 ### PUT /api/eventos/internal/{id}/estado/agotado
 
-Marca un evento `PUBLICADO` como `AGOTADO`. Es idempotente: si el evento ya está `AGOTADO`, devuelve su estado sin cambios.
+Marca un evento `PUBLICADO` como `AGOTADO` y notifica a `ms-tickets` para que la venta pase a `AGOTADA`. Es idempotente: si el evento ya está `AGOTADO`, devuelve su estado sin cambios.
 
 - Respuesta `200 OK`: `EventoEstadoResponse` (`id`, `nombre`, `estado`).
 - `404`: el evento no existe.
 - `409`: el estado actual no permite la transición.
+- `502`: `ms-tickets` no está disponible; el evento no cambia de estado.
 
 ### PUT /api/eventos/internal/{id}/estado/publicar
 
-Vuelve a publicar un evento `AGOTADO` (`AGOTADO` -> `PUBLICADO`). Es idempotente si ya está `PUBLICADO`.
+Vuelve a publicar un evento `AGOTADO` (`AGOTADO` -> `PUBLICADO`) y notifica a `ms-tickets` para que la venta vuelva a `ABIERTA`. Es idempotente si ya está `PUBLICADO`.
 
 - Respuesta `200 OK`: `EventoEstadoResponse`.
 - `404`: el evento no existe.
 - `409`: el estado actual no permite la transición.
+- `502`: `ms-tickets` no está disponible; el evento no cambia de estado.
 
 ### PUT /api/eventos/internal/finalizar-vencidos
 
@@ -34,7 +36,7 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
 - Estados finalizables: `PUBLICADO`, `AGOTADO`, `SUSPENDIDO`.
 - ShedLock evita ejecuciones concurrentes entre instancias de `ms-eventos`.
 - Al finalizar, se encola una notificación `FINALIZAR` en el outbox para `ms-tickets`.
-- Las transiciones `cancelar`, `suspender` y `reactivar` se notifican a `ms-tickets` de forma síncrona, antes de confirmar el nuevo estado. Si `ms-tickets` falla, la operación devuelve `502` y el estado no cambia.
+- Las transiciones `cancelar`, `suspender`, `reactivar`, `agotar` y `publicar` se notifican a `ms-tickets` de forma síncrona, antes de confirmar el nuevo estado. Si `ms-tickets` falla, la operación devuelve `502` y el estado no cambia.
 
 ### Configuración
 

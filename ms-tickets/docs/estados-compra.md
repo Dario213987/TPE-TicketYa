@@ -23,11 +23,14 @@ posterior falla.
               preparar
  (sin pago) ───────────► PENDIENTE_PAGO ──── débitos OK + emisión OK ────► APROBADO
                               │   ▲
-                              │   └── timeout / 5xx de ms-transacciones: queda igual;
-                              │       el reintento con la misma Idempotency-Key consulta
-                              │       el estado real (los débitos son idempotentes)
+                              │   ├── timeout / 5xx de ms-transacciones, o débito todavía
+                              │   │   PENDIENTE: queda igual (202); el reintento con la misma
+                              │   │   Idempotency-Key consulta el estado real (los débitos son
+                              │   │   idempotentes)
+                              │   └── 4xx de ms-transacciones (error de integración): queda
+                              │       igual, no se compensa y responde 502
                               │
-                              ├── algún débito rechazado ──► reintegro de los aprobados ──► RECHAZADO
+                              ├── algún débito FALLIDA ────► reintegro de los aprobados ──► RECHAZADO
                               │
                               ├── falla la emisión ────────► reintegro de todos ─────────► REINTEGRADO
                               │
@@ -36,14 +39,21 @@ posterior falla.
 
 | Estado | Significado | Lugares | Respuesta |
 |---|---|---|---|
-| `PENDIENTE_PAGO` | Se pidió el cobro y todavía no hay un resultado definitivo. | Tomados: los tickets `PENDIENTE_PAGO` no se liberan por vencimiento. | 202 |
+| `PENDIENTE_PAGO` | Se pidió el cobro y todavía no hay un resultado definitivo. | Tomados: los tickets `PENDIENTE_PAGO` no se liberan por vencimiento. | 202 (502 si ms-transacciones rechazó el pedido con un 4xx) |
 | `APROBADO` | Cobrado y emitido. | Vendidos | 201 |
-| `RECHAZADO` | ms-transacciones rechazó un débito. Los débitos que se habían aprobado se reintegraron. | Liberados | 409 con el motivo |
+| `RECHAZADO` | El procesador rechazó un débito (`FALLIDA`). Los débitos que se habían aprobado se reintegraron. | Liberados | 409 con el motivo |
 | `REINTEGRADO` | Se cobró pero falló la emisión. Se reintegró todo. | Liberados | 409 |
 | `REINTEGRO_PENDIENTE` | Falló la emisión o un rechazo parcial, y además falló el reintegro de algún débito. Hay que resolverlo a mano. | Liberados (para no trabar lugares) | 409 |
 
 Un reintento con la misma `Idempotency-Key` sobre un estado final devuelve el mismo resultado
-sin volver a cobrar.
+sin volver a cobrar. Un reintento sobre `PENDIENTE_PAGO` conserva el medio de pago del primer
+intento.
+
+Un 4xx de ms-transacciones (headers, monto u organizador inválidos) no es un rechazo del pago:
+se reintenta con la misma clave cuando se corrige la integración.
+
+El medio de pago es un valor cerrado (`TARJETA_CREDITO`, `TARJETA_DEBITO`), así nunca se guardan
+datos de la tarjeta (US-05.07).
 
 ## Estados del ticket (`tickets.estado_ticket`)
 
@@ -57,7 +67,8 @@ Toda compensación se registra en el log de `PagoService`:
 - `WARN Compensación: reserva=… ticket=… monto=… reintegrado (transacción …)`
 - `ERROR Compensación fallida: reserva=… ticket=… monto=…`, cuando no se pudo reintegrar.
 - `WARN Compensación: reserva=… liberada, estado …`
-- `WARN Pago pendiente: reserva=… ticket=…`, en un timeout, que no se compensa.
+- `WARN Pago pendiente: reserva=… ticket=…`, en un timeout o débito PENDIENTE, que no se compensa.
+- `ERROR Error de integración con ms-transacciones: reserva=… ticket=…`, en un 4xx, que no se compensa.
 
 ## Pendiente para la Saga (E2)
 

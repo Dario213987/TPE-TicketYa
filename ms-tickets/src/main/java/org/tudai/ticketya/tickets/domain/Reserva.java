@@ -39,8 +39,9 @@ public class Reserva {
     @Column(name = "idempotency_key", length = 100)
     private String idempotencyKey;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "medio_pago", length = 30)
-    private String medioPago;
+    private MedioPago medioPago;
 
     @Enumerated(EnumType.STRING)
     @Column(name = "estado_pago", length = 20)

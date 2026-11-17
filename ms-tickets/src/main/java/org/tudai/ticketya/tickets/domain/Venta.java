@@ -40,8 +40,9 @@ public class Venta {
     @Column(name = "total", nullable = false, updatable = false)
     private Double total;
 
+    @Enumerated(EnumType.STRING)
     @Column(name = "medio_pago", nullable = false, length = 30, updatable = false)
-    private String medioPago;
+    private MedioPago medioPago;
 
     @Column(name = "creado_el", nullable = false, updatable = false)
     private Instant creadoEl;
