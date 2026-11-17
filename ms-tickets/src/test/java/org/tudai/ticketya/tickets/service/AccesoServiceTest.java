@@ -12,14 +12,13 @@ import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
+import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
 import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
-import static org.mockito.ArgumentMatchers.anyString;
-import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -33,17 +32,22 @@ class AccesoServiceTest {
     @Mock
     private TicketRepository ticketRepository;
 
+    @Mock
+    private TicketUtilizadoPublisher ticketUtilizadoPublisher;
+
     private AccesoService service;
 
     @BeforeEach
     void setUp() {
-        service = new AccesoService(ticketRepository);
+        service = new AccesoService(ticketRepository, ticketUtilizadoPublisher);
     }
 
     @Test
-    void validar_ticketVendidoDelEvento_loMarcaComoUsado() {
+    void validar_ticketVendidoDelEvento_loMarcaComoUsadoYPublicaElEvento() {
         when(ticketRepository.marcarComoUsado(QR, EVENTO_ID, EstadoTicket.VENDIDO, EstadoTicket.USADO))
                 .thenReturn(1);
+        Ticket ticket = ticketUsado();
+        when(ticketRepository.buscarPorCodigoQr(QR)).thenReturn(Optional.of(ticket));
 
         ResultadoAccesoDTO resultado = service.validar(EVENTO_ID, "  " + QR + "  ");
 
@@ -52,7 +56,7 @@ class AccesoServiceTest {
         assertThat(resultado.getCodigoQr()).isEqualTo(QR);
         assertThat(resultado.getEventoId()).isEqualTo(EVENTO_ID);
         assertThat(resultado.getEstadoTicket()).isEqualTo(EstadoTicket.USADO);
-        verify(ticketRepository, never()).buscarPorCodigoQr(anyString());
+        verify(ticketUtilizadoPublisher).publicar(ticket);
     }
 
     @Test
@@ -82,6 +86,8 @@ class AccesoServiceTest {
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("ya fue utilizado");
+
+        verifyNoInteractions(ticketUtilizadoPublisher);
     }
 
     @Test
@@ -131,6 +137,16 @@ class AccesoServiceTest {
                 .codigo_qr(QR)
                 .estadoTicket(estado)
                 .evento(DisponibilidadEvento.builder().eventoId(eventoId).build())
+                .build();
+    }
+
+    private Ticket ticketUsado() {
+        return Ticket.builder()
+                .id(99L)
+                .codigo_qr(QR)
+                .clienteId(7L)
+                .estadoTicket(EstadoTicket.USADO)
+                .evento(DisponibilidadEvento.builder().eventoId(EVENTO_ID).build())
                 .build();
     }
 }

@@ -1,10 +1,15 @@
 package org.tudai.ticketya.tickets.controller;
 
+import ch.qos.logback.classic.Logger;
+import ch.qos.logback.classic.spi.ILoggingEvent;
+import ch.qos.logback.core.read.ListAppender;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.ConflictException;
@@ -16,6 +21,9 @@ import org.tudai.ticketya.tickets.service.AccesoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 
+import java.util.List;
+
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
@@ -34,7 +42,7 @@ class AccesoControllerTest {
     void setUp() {
         service = mock(AccesoService.class);
         userContext = mock(UserContext.class);
-        mvc = MockMvcBuilders.standaloneSetup(new AccesoController(service))
+        mvc = MockMvcBuilders.standaloneSetup(new AccesoController(service, userContext))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .addInterceptors(new AuthorizeInterceptor(userContext))
                 .build();
@@ -66,17 +74,69 @@ class AccesoControllerTest {
     }
 
     @Test
+    void validar_exitoso_registraLaOperacion() throws Exception {
+        when(userContext.userId()).thenReturn(7L);
+        when(userContext.role()).thenReturn(Role.PERSONAL_ACCESO);
+        when(service.validar(5L, "qr-1")).thenReturn(ResultadoAccesoDTO.builder()
+                .resultado("OK")
+                .valido(true)
+                .codigoQr("qr-1")
+                .eventoId(5L)
+                .estadoTicket(EstadoTicket.USADO)
+                .build());
+
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"codigoQr\":\"qr-1\"}"))
+                        .andExpect(status().isOk()));
+
+        assertThat(operaciones).singleElement().satisfies(event ->
+                assertThat(event.getMDCPropertyMap())
+                        .containsEntry("operation", "ACCESS")
+                        .containsEntry("result", "OK")
+                        .containsEntry("userId", "7")
+                        .containsEntry("entity", "Ticket")
+                        .containsEntry("entityId", "qr-1"));
+    }
+
+    @Test
+    void validar_fallido_registraLaOperacionConElMotivo() throws Exception {
+        when(userContext.userId()).thenReturn(7L);
+        when(userContext.role()).thenReturn(Role.PERSONAL_ACCESO);
+        when(service.validar(5L, "qr-1"))
+                .thenThrow(new ConflictException("El ticket ya fue utilizado"));
+
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"codigoQr\":\"qr-1\"}"))
+                        .andExpect(status().isConflict()));
+
+        assertThat(operaciones).singleElement().satisfies(event ->
+                assertThat(event.getMDCPropertyMap())
+                        .containsEntry("operation", "ACCESS")
+                        .containsEntry("result", "FAILED")
+                        .containsEntry("userId", "7")
+                        .containsEntry("entity", "Ticket")
+                        .containsEntry("entityId", "qr-1")
+                        .containsEntry("reason", "El ticket ya fue utilizado"));
+    }
+
+    @Test
     void validar_conRolCliente_responde403() throws Exception {
         when(userContext.userId()).thenReturn(42L);
         when(userContext.role()).thenReturn(Role.CLIENTE);
 
-        mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"codigoQr\":\"qr-1\"}"))
-                .andExpect(status().isForbidden())
-                .andExpect(jsonPath("$.title").value("Acceso denegado"));
+        List<ILoggingEvent> operaciones = capturarOperaciones(() ->
+                mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
+                                .contentType(MediaType.APPLICATION_JSON)
+                                .content("{\"codigoQr\":\"qr-1\"}"))
+                        .andExpect(status().isForbidden())
+                        .andExpect(jsonPath("$.title").value("Acceso denegado")));
 
         verifyNoInteractions(service);
+        assertThat(operaciones).isEmpty();
     }
 
     @Test
@@ -132,5 +192,23 @@ class AccesoControllerTest {
                         .content("{\"codigoQr\":\"qr-1\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("El ticket ya fue utilizado"));
+    }
+
+    private List<ILoggingEvent> capturarOperaciones(ThrowingRunnable request) throws Exception {
+        Logger logger = (Logger) LoggerFactory.getLogger(OperationLogger.LOGGER_NAME);
+        ListAppender<ILoggingEvent> appender = new ListAppender<>();
+        appender.start();
+        logger.addAppender(appender);
+        try {
+            request.run();
+        } finally {
+            logger.detachAppender(appender);
+        }
+        return appender.list;
+    }
+
+    @FunctionalInterface
+    private interface ThrowingRunnable {
+        void run() throws Exception;
     }
 }

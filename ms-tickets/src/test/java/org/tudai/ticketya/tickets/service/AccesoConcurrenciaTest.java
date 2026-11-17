@@ -4,12 +4,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.domain.TipoSector;
+import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
@@ -24,6 +26,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:tickets-acceso-concurrency;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=30000",
@@ -52,6 +57,9 @@ class AccesoConcurrenciaTest {
 
     @Autowired
     private TicketRepository ticketRepository;
+
+    @MockitoBean
+    private TicketUtilizadoPublisher ticketUtilizadoPublisher;
 
     @Test
     void escaneosSimultaneosDelMismoQr_soloUnoValidaElAcceso() throws Exception {
@@ -103,5 +111,6 @@ class AccesoConcurrenciaTest {
         assertThat(exitos).isEqualTo(1);
         assertThat(ticketRepository.buscarPorCodigoQr(CODIGO_QR).orElseThrow().getEstadoTicket())
                 .isEqualTo(EstadoTicket.USADO);
+        verify(ticketUtilizadoPublisher, times(1)).publicar(any(Ticket.class));
     }
 }
