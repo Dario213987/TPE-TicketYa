@@ -52,6 +52,8 @@ class LiquibaseMigrationTest {
                         "tickets",
                         "reservas",
                         "bloqueos_job",
+                        "ventas",
+                        "venta_items",
                         "habilitacion_eventos");
     }
 
@@ -59,11 +61,11 @@ class LiquibaseMigrationTest {
     void creaLasColumnasEsperadasEnCadaTabla() throws Exception {
         assertThat(columnas("disponibilidad_eventos"))
                 .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente",
-                        "alta_demanda", "estado_venta");
+                        "organizador_id", "alta_demanda", "estado_venta");
 
         assertThat(columnas("disponibilidad_sectores"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id_externo", "tipo",
-                        "capacidad_total", "disponibles");
+                        "capacidad_total", "disponibles", "precio");
 
         assertThat(columnas("disponibilidad_asientos"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id", "fila", "numero",
@@ -72,11 +74,20 @@ class LiquibaseMigrationTest {
         assertThat(columnas("tickets"))
                 .containsExactlyInAnyOrder("id", "codigo_qr", "estado_ticket", "precio",
                         "fecha_emision", "cliente_id", "expira_el", "evento_id", "sector_id",
-                        "asiento_id", "reserva_id", "pago_en_curso");
+                        "asiento_id", "reserva_id", "venta_id", "pago_en_curso");
+
+        assertThat(columnas("ventas"))
+                .containsExactlyInAnyOrder("id", "reserva_id", "cliente_id", "evento_id", "total",
+                        "medio_pago", "creado_el");
+
+        assertThat(columnas("venta_items"))
+                .containsExactlyInAnyOrder("id", "venta_id", "ticket_id", "sector_id_externo", "fila",
+                        "numero", "precio", "transaccion_id");
 
         assertThat(columnas("reservas"))
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
-                        "expira_el", "creado_el", "pago_en_curso");
+                        "expira_el", "creado_el", "idempotency_key", "medio_pago", "estado_pago",
+                        "motivo_rechazo", "pagado_el", "pago_en_curso");
 
         assertThat(columnas("habilitacion_eventos"))
                 .containsExactlyInAnyOrder("evento_id", "habilitada", "tamano_tanda",
@@ -124,8 +135,9 @@ class LiquibaseMigrationTest {
         liquibase.update(new Contexts());
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
+                "bloqueos_job",
                 "habilitacion_eventos");
-        assertThat(contarCambiosAplicados()).isEqualTo(9);
+        assertThat(contarCambiosAplicados()).isEqualTo(11);
     }
 
     @Test

@@ -26,6 +26,8 @@ public class DisponibilidadEvento {
     @Column(name = "limite_entradas_por_cliente")
     private Integer limiteEntradasPorCliente;
 
+    @Column(name = "organizador_id")
+    private Long organizadorId;
     @Builder.Default
     @Column(name = "alta_demanda", nullable = false)
     private boolean altaDemanda = false;
