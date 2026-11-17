@@ -19,6 +19,8 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.transacciones.domain.Transaccion;
 import org.tudai.ticketya.transacciones.repository.TransaccionRepository;
+import org.tudai.ticketya.transacciones.service.PasarelaNoDisponibleException;
+import org.tudai.ticketya.transacciones.service.PasarelaResiliente;
 import org.tudai.ticketya.transacciones.service.temp_mock_gateway.PaymentGateway;
 
 import java.util.ArrayList;
@@ -34,6 +36,7 @@ import java.util.concurrent.TimeUnit;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -65,9 +68,14 @@ class TransaccionApiTest {
     @Autowired
     TransaccionRepository repository;
 
+    @Autowired
+    PasarelaResiliente pasarela;
+
     @BeforeEach
     void preparar() {
         repository.deleteAllInBatch();
+        // El circuito es un singleton del contexto: cada test empieza con el circuito cerrado.
+        pasarela.circuito().reset();
         when(gateway.debitar(any())).thenReturn(new PaymentGateway.Resultado(true, null));
         when(gateway.acreditar(any())).thenReturn(new PaymentGateway.Resultado(true, null));
     }
@@ -117,6 +125,32 @@ class TransaccionApiTest {
         mvc.perform(debito(10))
                 .andExpect(status().isBadGateway())
                 .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
+
+        verify(gateway, times(3)).debitar(any());
+        assertThat(repository.findAll()).singleElement()
+                .extracting(Transaccion::getEstado).isEqualTo(EstadoTransaccion.PENDIENTE);
+    }
+
+    @Test
+    void circuitoAbierto_transaccionNuevaQuedaFallidaSinLlamarALaPasarela() throws Exception {
+        pasarela.circuito().transitionToOpenState();
+
+        mvc.perform(debito(10))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("FALLIDA"))
+                .andExpect(jsonPath("$.motivoFallo").value(PasarelaNoDisponibleException.MOTIVO));
+
+        verify(gateway, never()).debitar(any());
+    }
+
+    @Test
+    void circuitoAbierto_transaccionPendienteSiguePendienteY502() throws Exception {
+        when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
+        mvc.perform(debito(10)).andExpect(status().isBadGateway());
+
+        pasarela.circuito().transitionToOpenState();
+        mvc.perform(debito(10))
+                .andExpect(status().isBadGateway());
 
         verify(gateway, times(3)).debitar(any());
         assertThat(repository.findAll()).singleElement()

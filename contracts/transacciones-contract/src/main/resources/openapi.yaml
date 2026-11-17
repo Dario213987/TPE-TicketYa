@@ -18,6 +18,11 @@ info:
         ticketya.pasarela.backoff-inicial-ms), siempre con la misma clave. Un rechazo del procesador
         no se reintenta. Si después de los reintentos no hay respuesta, responde 502 y la transacción
         queda PENDIENTE.
+
+        Circuit breaker: si la pasarela sigue fallando, el circuito se abre (ticketya.pasarela.circuito.*)
+        y deja de llamarla por un tiempo. Con el circuito abierto, una transacción nueva se crea FALLIDA
+        con motivoFallo "La pasarela de pagos no está disponible" (no se cobró nada), y una que ya
+        estaba PENDIENTE sigue PENDIENTE y responde 502 (un intento anterior pudo haber cobrado).
 tags:
     - name: transacciones
 paths:

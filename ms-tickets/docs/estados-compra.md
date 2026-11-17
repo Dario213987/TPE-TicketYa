@@ -75,6 +75,29 @@ asiento vuelve a `LIBRE`. Los tickets `PENDIENTE_PAGO` cuentan para el límite p
   los 2 intentos de ms-tickets (~14,3 s) entran en los 15 s del `response-timeout` del gateway.
 - Los reintentos se registran como `WARN Reintento N de ms-transacciones en … ms`.
 
+## Circuit breaker de la pasarela (TKY-86)
+
+ms-transacciones envuelve los reintentos hacia la pasarela con un circuit breaker: una llamada
+que agota sus intentos cuenta como una sola falla y un rechazo de la pasarela no cuenta.
+
+| Propiedad (`ticketya.pasarela.circuito.*`) | Valor | Significado |
+|---|---|---|
+| `ventana` | 10 | Últimas llamadas que se miran |
+| `minimo-llamadas` | 5 | Llamadas mínimas antes de evaluar |
+| `porcentaje-fallas` | 50 | Si fallan al menos este %, el circuito se abre |
+| `espera-abierto-ms` | 30000 | Tiempo abierto sin llamar a la pasarela |
+| `llamadas-semiabierto` | 3 | Llamadas de prueba para decidir si se cierra |
+
+Con el circuito abierto la compra responde un error controlado y libera la reserva:
+ms-transacciones deja el débito `FALLIDA` con el motivo "La pasarela de pagos no está
+disponible" (sin llamarla, así que no se cobró), y ms-tickets lo trata como cualquier rechazo:
+reintegra los débitos ya aprobados, libera la reserva (`RECHAZADO`) y responde 409 con ese
+motivo. Las compras que habían quedado `PENDIENTE_PAGO` antes de abrirse el circuito siguen así,
+porque un intento anterior pudo haber cobrado; las resuelve la reconciliación (TKY-87).
+
+Los cambios de estado se registran como `WARN Circuito de la pasarela: CLOSED_TO_OPEN` (y
+`OPEN_TO_HALF_OPEN`, `HALF_OPEN_TO_CLOSED`).
+
 ## Log
 
 Toda compensación se registra en el log de `PagoService`:

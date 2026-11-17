@@ -36,8 +36,13 @@ public class TransaccionService {
      * la devuelve sin volver a llamar a la pasarela. Si existe una PENDIENTE (porque la pasarela
      * no respondió en un intento anterior), la vuelve a procesar con la misma clave de
      * idempotencia, así la pasarela no cobra dos veces.
+     * <p>
+     * Si el circuito de la pasarela está abierto (TKY-86), una transacción nueva queda FALLIDA con
+     * {@link PasarelaNoDisponibleException#MOTIVO}, porque nunca llegó a la pasarela. Una que ya
+     * estaba PENDIENTE sigue PENDIENTE: un intento anterior pudo haber cobrado.
      *
-     * @throws RemoteServiceException si la pasarela no responde después de los reintentos; la
+     * @throws RemoteServiceException si la pasarela no responde después de los reintentos, o si el
+     *                                circuito está abierto al reprocesar una PENDIENTE; la
      *                                transacción queda PENDIENTE para reintentarla después
      */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
@@ -48,7 +53,7 @@ public class TransaccionService {
         if (existente.isPresent()) {
             Transaccion transaccion = existente.get();
             return transaccion.getEstado() == EstadoTransaccion.PENDIENTE
-                    ? procesar(transaccion) : transaccion;
+                    ? procesar(transaccion, false) : transaccion;
         }
 
         pedido.setOrganizadorId(organizadorId);
@@ -59,15 +64,23 @@ public class TransaccionService {
             return find(pedido, organizadorId).orElseThrow();
         }
 
-        return procesar(pedido);
+        return procesar(pedido, true);
     }
 
-    private Transaccion procesar(Transaccion transaccion) {
+    private Transaccion procesar(Transaccion transaccion, boolean nueva) {
         var orden = new PaymentGateway.Orden(transaccion.getId(), claveIdempotencia(transaccion),
                 transaccion.getTicketId(), transaccion.getClienteId(), transaccion.getMonto());
 
         // Si la pasarela no responde, lanza RemoteServiceException y la transacción queda PENDIENTE.
-        PaymentGateway.Resultado resultado = pasarela.procesar(transaccion.getTipo(), orden);
+        PaymentGateway.Resultado resultado;
+        try {
+            resultado = pasarela.procesar(transaccion.getTipo(), orden);
+        } catch (PasarelaNoDisponibleException e) {
+            if (!nueva) {
+                throw e;
+            }
+            resultado = new PaymentGateway.Resultado(false, PasarelaNoDisponibleException.MOTIVO);
+        }
 
         transaccion.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
         transaccion.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());

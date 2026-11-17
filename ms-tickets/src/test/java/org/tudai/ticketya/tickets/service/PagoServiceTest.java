@@ -141,6 +141,25 @@ class PagoServiceTest {
     }
 
     @Test
+    void pagar_pasarelaCaidaConElCircuitoAbierto_reintegraLiberaYResponde409ConElMotivo() {
+        // Con el circuito abierto, ms-transacciones deja el débito FALLIDA sin llamar a la pasarela (TKY-86).
+        String motivo = "La pasarela de pagos no está disponible";
+        prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA))
+                .thenReturn(transaccion(EstadoTransaccion.FALLIDA).motivoFallo(motivo));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(PagoRechazadoException.class)
+                .hasMessageContaining(motivo);
+
+        verify(transaccionesClient).generarCredito(any());
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.RECHAZADO, motivo);
+        verify(reservaPagoService, never()).emitir(any(), any());
+    }
+
+    @Test
     void pagar_timeoutDeTransacciones_quedaPendienteSinLiberar() {
         prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
         when(transaccionesClient.generarDebito(any()))
