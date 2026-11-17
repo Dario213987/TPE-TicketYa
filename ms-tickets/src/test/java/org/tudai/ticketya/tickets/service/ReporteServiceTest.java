@@ -24,6 +24,7 @@ import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
+import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
@@ -32,6 +33,12 @@ import static org.mockito.Mockito.when;
 class ReporteServiceTest {
 
     private static final LocalDateTime FECHA_EVENTO = LocalDateTime.of(2026, 12, 1, 21, 0);
+
+    private static final List<EstadoTicket> ESTADOS_VENDIDOS =
+            List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO);
+
+    private static final List<EstadoTicket> ESTADOS_REPORTE_ENTRADAS =
+            List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
 
     @Mock
     private EventoClient eventoClient;
@@ -54,9 +61,9 @@ class ReporteServiceTest {
                 sector(10L, "Platea"), sector(20L, "Campo"), sector(30L, "Pullman")));
         when(reporteRepository.resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO)))
+                ESTADOS_REPORTE_ENTRADAS))
                 .thenReturn(List.<Object[]>of(resumen(10L, 2, 1)));
 
         ReporteEntradasVendidasDTO reporte = service.obtenerReporteEntradasVendidas(5L, 42L, false);
@@ -80,9 +87,9 @@ class ReporteServiceTest {
 
         verify(reporteRepository).resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO));
+                ESTADOS_REPORTE_ENTRADAS);
     }
 
     @Test
@@ -119,9 +126,9 @@ class ReporteServiceTest {
                 sector(10L, "Platea")));
         when(reporteRepository.resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO)))
+                ESTADOS_REPORTE_ENTRADAS))
                 .thenReturn(List.of());
 
         ReporteEntradasVendidasDTO reporte = service.obtenerReporteEntradasVendidas(5L, 42L, true);
@@ -140,9 +147,9 @@ class ReporteServiceTest {
                 .thenReturn(List.of(disponibilidadSector(10L, 100), disponibilidadSector(20L, 50)));
         when(reporteRepository.resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO)))
+                ESTADOS_REPORTE_ENTRADAS))
                 .thenReturn(List.<Object[]>of(resumen(10L, 30, 0), resumen(20L, 10, 0)));
 
         ReporteOcupacionDTO reporte = service.obtenerReporteOcupacion(5L, 42L, false);
@@ -180,9 +187,9 @@ class ReporteServiceTest {
                 .thenReturn(List.of(disponibilidadSector(10L, 100)));
         when(reporteRepository.resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO)))
+                ESTADOS_REPORTE_ENTRADAS))
                 .thenReturn(List.of());
 
         ReporteOcupacionDTO reporte = service.obtenerReporteOcupacion(5L, 42L, true);
@@ -200,9 +207,9 @@ class ReporteServiceTest {
                 .thenReturn(List.of());
         when(reporteRepository.resumirPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO),
+                ESTADOS_VENDIDOS,
                 EstadoTicket.DEVUELTO,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO)))
+                ESTADOS_REPORTE_ENTRADAS))
                 .thenReturn(List.<Object[]>of(resumen(10L, 5, 0)));
 
         ReporteOcupacionDTO reporte = service.obtenerReporteOcupacion(5L, 42L, false);
@@ -217,7 +224,7 @@ class ReporteServiceTest {
                 sector(10L, "Platea"), sector(20L, "Campo"), sector(30L, "Pullman")));
         when(reporteRepository.resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO))
                 .thenReturn(List.<Object[]>of(
                         resumenRecaudacion(10L, 300.0, 100.0),
@@ -248,7 +255,7 @@ class ReporteServiceTest {
 
         verify(reporteRepository).resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO);
     }
 
@@ -258,7 +265,7 @@ class ReporteServiceTest {
                 sector(10L, "Platea")));
         when(reporteRepository.resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO))
                 .thenReturn(List.<Object[]>of(resumenRecaudacion(10L, 33.333, 11.111)));
 
@@ -278,7 +285,7 @@ class ReporteServiceTest {
                 sector(10L, "Platea")));
         when(reporteRepository.resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO))
                 .thenReturn(List.of());
 
@@ -310,7 +317,7 @@ class ReporteServiceTest {
                 sector(10L, "Platea")));
         when(reporteRepository.resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO))
                 .thenReturn(List.of());
 
@@ -323,8 +330,33 @@ class ReporteServiceTest {
 
         verify(reporteRepository).resumirRecaudacionPorSector(
                 5L,
-                List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO),
+                ESTADOS_REPORTE_ENTRADAS,
                 EstadoTicket.DEVUELTO);
+    }
+
+    @Test
+    void todosLosReportes_incluyenElEstadoVENDIDOEnLasConsultas() {
+        when(eventoClient.obtenerEvento(5L)).thenReturn(evento(5L, "Recital", 42L,
+                sector(10L, "Platea")));
+        when(disponibilidadSectorRepository.findByEvento_EventoIdOrderByIdAsc(5L))
+                .thenReturn(List.of(disponibilidadSector(10L, 100)));
+        when(reporteRepository.resumirPorSector(
+                5L, ESTADOS_VENDIDOS, EstadoTicket.DEVUELTO, ESTADOS_REPORTE_ENTRADAS))
+                .thenReturn(List.of());
+        when(reporteRepository.resumirRecaudacionPorSector(
+                5L, ESTADOS_REPORTE_ENTRADAS, EstadoTicket.DEVUELTO))
+                .thenReturn(List.of());
+
+        service.obtenerReporteEntradasVendidas(5L, 42L, false);
+        service.obtenerReporteOcupacion(5L, 42L, false);
+        service.obtenerReporteRecaudacion(5L, 42L, false);
+
+        assertThat(ESTADOS_VENDIDOS).contains(EstadoTicket.VENDIDO);
+        assertThat(ESTADOS_REPORTE_ENTRADAS).contains(EstadoTicket.VENDIDO);
+        verify(reporteRepository, times(2)).resumirPorSector(
+                5L, ESTADOS_VENDIDOS, EstadoTicket.DEVUELTO, ESTADOS_REPORTE_ENTRADAS);
+        verify(reporteRepository).resumirRecaudacionPorSector(
+                5L, ESTADOS_REPORTE_ENTRADAS, EstadoTicket.DEVUELTO);
     }
 
     private EventoResponseDto evento(Long id, String nombre, Long organizadorId,

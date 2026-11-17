@@ -28,10 +28,10 @@ import java.util.stream.Collectors;
 public class ReporteService {
 
     private static final List<EstadoTicket> ESTADOS_VENDIDOS =
-            List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO);
+            List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO);
 
     private static final List<EstadoTicket> ESTADOS_REPORTE_ENTRADAS =
-            List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
+            List.of(EstadoTicket.EMITIDO, EstadoTicket.VENDIDO, EstadoTicket.USADO, EstadoTicket.DEVUELTO);
 
     private final EventoClient eventoClient;
     private final EventoAccessValidator eventoAccessValidator;
