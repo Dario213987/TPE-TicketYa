@@ -4,5 +4,6 @@ public enum EstadoNotificacion {
     PENDIENTE,
     ENVIANDO,
     ENVIADO,
-    FALLIDO
+    FALLIDO,
+    NO_ENTREGABLE
 }

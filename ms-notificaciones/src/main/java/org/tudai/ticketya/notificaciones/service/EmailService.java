@@ -18,6 +18,9 @@ public class EmailService {
     }
 
     public void enviar(String destinatario, String asunto, String html) {
+        if (destinatario == null || destinatario.isBlank()) {
+            throw new IllegalArgumentException("El destinatario del email es obligatorio");
+        }
         try {
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");

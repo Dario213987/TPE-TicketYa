@@ -8,6 +8,7 @@ import org.springframework.stereotype.Repository;
 
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 
 /**
  * Acceso a la fila virtual de un evento en Redis.
@@ -30,6 +31,11 @@ public class FilaRedisRepository {
     public static final String PREFIJO_CLAVE = "tickets:fila:evento:";
 
     private static final RedisScript<List> REGISTRAR = new DefaultRedisScript<>("""
+            -- Si el cliente ya tiene un pase, no se vuelve a insertar en la fila.
+            -- La comprobacion y el ZADD son atomicos respecto de la emision de pases.
+            if redis.call('EXISTS', KEYS[2]) == 1 then
+                return {2}
+            end
             local actual = redis.call('ZSCORE', KEYS[1], ARGV[1])
             if actual then
                 local score = math.floor(tonumber(actual))
@@ -47,11 +53,33 @@ public class FilaRedisRepository {
                     redis.call('ZCARD', KEYS[1]), score}
             """, List.class);
 
+    private static final RedisScript<List> CONSULTAR = new DefaultRedisScript<>("""
+            local rank = redis.call('ZRANK', KEYS[1], ARGV[1])
+            if not rank then
+                return {}
+            end
+            return {rank, redis.call('ZCARD', KEYS[1])}
+            """, List.class);
+
+    private static final RedisScript<Long> SALIR = new DefaultRedisScript<>("""
+            local enFila = redis.call('ZREM', KEYS[1], ARGV[1])
+            local pase = redis.call('DEL', KEYS[2])
+            redis.call('ZREM', KEYS[3], ARGV[1])
+            return enFila + pase
+            """, Long.class);
+
     private final StringRedisTemplate redisTemplate;
 
     public Registro registrar(Long eventoId, Long clienteId) {
         List<?> resultado = redisTemplate.execute(
-                REGISTRAR, List.of(clave(eventoId)), String.valueOf(clienteId));
+                REGISTRAR,
+                List.of(clave(eventoId), PaseRedisRepository.clave(eventoId, clienteId)),
+                String.valueOf(clienteId));
+
+        if (resultado != null && resultado.size() == 1
+                && numero(resultado.get(0)) == 2L) {
+            return new Registro(false, 0, 0, Instant.EPOCH, true);
+        }
 
         if (resultado == null || resultado.size() < 4) {
             throw new IllegalStateException(
@@ -69,6 +97,48 @@ public class FilaRedisRepository {
                         (scoreMicros % 1_000_000) * 1_000));
     }
 
+    public Optional<Posicion> consultar(Long eventoId, Long clienteId) {
+        List<?> resultado = redisTemplate.execute(
+                CONSULTAR, List.of(clave(eventoId)), String.valueOf(clienteId));
+
+        if (resultado == null || resultado.isEmpty()) {
+            return Optional.empty();
+        }
+        if (resultado.size() < 2) {
+            throw new IllegalStateException(
+                    "No se pudo obtener la posición del cliente " + clienteId
+                            + " para el evento " + eventoId);
+        }
+
+        long posicion = numero(resultado.get(0));
+        return Optional.of(new Posicion(
+                posicion + 1, posicion, numero(resultado.get(1))));
+    }
+
+    public long totalEnFila(Long eventoId) {
+        Long total = redisTemplate.opsForZSet().size(clave(eventoId));
+        return total == null ? 0 : total;
+    }
+
+    /**
+     * Saca al cliente de la cola y descarta el pase que tuviera. Las dos
+     * operaciones se hacen en un unico script: si el cliente estaba esperando,
+     * se elimina del sorted set y los demas conservan su orden; si ya habia
+     * sido habilitado, se borra su pase para que la proxima tanda avance.
+     *
+     * @return true si el cliente estaba en la fila o tenia un pase
+     */
+    public boolean salir(Long eventoId, Long clienteId) {
+        Long eliminados = redisTemplate.execute(
+                SALIR,
+                List.of(clave(eventoId),
+                        PaseRedisRepository.clave(eventoId, clienteId),
+                        PaseRedisRepository.claveActivos(eventoId)),
+                String.valueOf(clienteId));
+
+        return eliminados != null && eliminados > 0;
+    }
+
     public static String clave(Long eventoId) {
         return PREFIJO_CLAVE + eventoId;
     }
@@ -81,6 +151,14 @@ public class FilaRedisRepository {
     }
 
     public record Registro(boolean agregado, long posicion, long totalEnFila,
-                           Instant ingresadoEl) {
+                           Instant ingresadoEl, boolean yaHabilitado) {
+
+        public Registro(boolean agregado, long posicion, long totalEnFila,
+                        Instant ingresadoEl) {
+            this(agregado, posicion, totalEnFila, ingresadoEl, false);
+        }
+    }
+
+    public record Posicion(long posicion, long personasDelante, long totalEnFila) {
     }
 }

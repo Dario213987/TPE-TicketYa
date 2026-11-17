@@ -5,6 +5,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 @Getter
 @Setter
@@ -14,6 +15,7 @@ public class EventoClientDTO {
     private String nombre;
     private LocalDateTime fecha;
     private LugarClientDTO lugar;
+    private List<SectorClientDTO> sectores;
 
     public String getNombreLugar() {
         return lugar != null ? lugar.getNombre() : null;

@@ -8,6 +8,6 @@ import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 @FeignClient(name = "ms-usuarios")
 public interface UsuarioClient {
 
-    @GetMapping("/api/usuarios/{id}")
+    @GetMapping("/api/internal/usuarios/{id}")
     UsuarioClientDTO obtenerUsuario(@PathVariable("id") Long id);
 }
