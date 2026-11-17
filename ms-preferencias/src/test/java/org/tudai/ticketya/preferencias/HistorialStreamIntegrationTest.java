@@ -14,6 +14,7 @@ import org.testcontainers.junit.jupiter.Testcontainers;
 import org.testcontainers.utility.DockerImageName;
 import org.tudai.ticketya.contract.preferencias.model.HistorialCompraDTO;
 import org.tudai.ticketya.contract.preferencias.model.TipoEvento;
+import org.tudai.ticketya.preferencias.repository.CoCompraRepository;
 import org.tudai.ticketya.preferencias.repository.PreferenciaRepository;
 import org.tudai.ticketya.preferencias.service.HistorialService;
 
@@ -67,9 +68,13 @@ class HistorialStreamIntegrationTest {
     @Autowired
     private PreferenciaRepository preferenciaRepository;
 
+    @Autowired
+    private CoCompraRepository coCompraRepository;
+
     @AfterEach
     void limpiar() {
         preferenciaRepository.deleteAll();
+        coCompraRepository.deleteAll();
     }
 
     @Test
@@ -128,6 +133,40 @@ class HistorialStreamIntegrationTest {
                     assertThat(entrada.getComprado()).isTrue();
                     assertThat(entrada.getUsado()).isTrue();
                 });
+    }
+
+    @Test
+    void ventaPagadaDeDosEventos_generaLaCoCompraEnAmbasDirecciones() {
+        redisTemplate.opsForStream().add("venta.pagada", Map.of(
+                "clienteId", "7",
+                "eventoId", "5",
+                "tipo", "RECITAL",
+                "ciudad", "Tandil"));
+        esperar(() -> historialService.obtenerHistorial(7L).size() == 1);
+
+        redisTemplate.opsForStream().add("venta.pagada", Map.of(
+                "clienteId", "7",
+                "eventoId", "6",
+                "tipo", "TEATRO",
+                "ciudad", "Tandil"));
+
+        esperar(() -> coCompraRepository.findById(5L)
+                .map(documento -> documento.getRelacionados().stream()
+                        .anyMatch(relacionado -> relacionado.getEventoId().equals(6L)
+                                && relacionado.getCantidad() == 1L))
+                .orElse(false));
+
+        var desdeCinco = coCompraRepository.findById(5L).orElseThrow();
+        var desdeSeis = coCompraRepository.findById(6L).orElseThrow();
+
+        assertThat(desdeCinco.getRelacionados()).anySatisfy(relacionado -> {
+            assertThat(relacionado.getEventoId()).isEqualTo(6L);
+            assertThat(relacionado.getCantidad()).isEqualTo(1);
+        });
+        assertThat(desdeSeis.getRelacionados()).anySatisfy(relacionado -> {
+            assertThat(relacionado.getEventoId()).isEqualTo(5L);
+            assertThat(relacionado.getCantidad()).isEqualTo(1);
+        });
     }
 
     private void esperar(BooleanSupplier condicion) {

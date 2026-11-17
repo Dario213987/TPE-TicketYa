@@ -61,11 +61,20 @@ services:
     ports: ["127.0.0.1:5436:5432"]
     volumes: [devoluciones-data:/var/lib/postgresql]
 
+  db-notificaciones:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: notificaciones
+      POSTGRES_USER: notificaciones
+      POSTGRES_PASSWORD: ${NOTIFICACIONES_DB_PASSWORD}
+    ports: ["127.0.0.1:5437:5432"]
+    volumes: [notificaciones-data:/var/lib/postgresql]
+
   # ms-preferencias usa MongoDB (un documento por cliente).
   db-preferencias:
     image: mongo:7
     restart: unless-stopped
-    ports: ["127.0.0.1:5437:27017"]
+    ports: ["127.0.0.1:5438:27017"]
     volumes: [preferencias-data:/data/db]
     healthcheck:
       test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
@@ -117,9 +126,35 @@ services:
       timeout: 3s
       retries: 10
 
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 volumes:
   eventos-data:
   tickets-data:
   transacciones-data:
   devoluciones-data:
+  notificaciones-data:
   preferencias-data:
+  rabbitmq-data:
