@@ -47,7 +47,7 @@ public class PasarelaResiliente {
     private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
     public PasarelaResiliente(PaymentGateway gateway,
-                              @Value("${ticketya.pasarela.timeout-ms:3000}") long timeoutMs,
+                              @Value("${ticketya.pasarela.timeout-ms:2000}") long timeoutMs,
                               @Value("${ticketya.pasarela.max-intentos:3}") int maxIntentos,
                               @Value("${ticketya.pasarela.backoff-inicial-ms:200}") long backoffInicialMs) {
         this.gateway = gateway;

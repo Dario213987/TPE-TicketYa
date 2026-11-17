@@ -20,6 +20,7 @@ import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.tickets.client.ReintentoTransacciones;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
 import org.tudai.ticketya.tickets.domain.MedioPago;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
@@ -57,7 +58,8 @@ class PagoServiceTest {
 
     @BeforeEach
     void setUp() {
-        service = new PagoService(reservaPagoService, transaccionesClient);
+        // 2 intentos, como en application.properties, con 1 ms de espera para no demorar los tests.
+        service = new PagoService(reservaPagoService, transaccionesClient, new ReintentoTransacciones(2, 1));
         logs = new ListAppender<>();
         logs.start();
         ((Logger) LoggerFactory.getLogger(PagoService.class)).addAppender(logs);
@@ -152,7 +154,27 @@ class PagoServiceTest {
         verify(reservaPagoService, never()).liberar(any(), any(), any());
         verify(reservaPagoService, never()).emitir(any(), any());
         verify(transaccionesClient, never()).generarCredito(any());
+        // 1 débito del primer ticket + 2 intentos del segundo.
+        verify(transaccionesClient, times(3)).generarDebito(any());
         assertThat(mensajes()).anyMatch(m -> m.contains("PENDIENTE_PAGO"));
+    }
+
+    @Test
+    void pagar_timeoutYDespuesResponde_reintentaConElMismoPedidoYEmite() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenThrow(mock(RetryableException.class))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA).id(11L));
+        CompraResponseDTO emitida = compra(EstadoPago.APROBADO);
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenReturn(emitida);
+
+        assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago())).isSameAs(emitida);
+
+        ArgumentCaptor<GenerarTransaccionRequest> debitos = ArgumentCaptor.forClass(GenerarTransaccionRequest.class);
+        verify(transaccionesClient, times(2)).generarDebito(debitos.capture());
+        assertThat(debitos.getAllValues().get(1)).isEqualTo(debitos.getAllValues().get(0));
+        verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L));
+        verify(reservaPagoService, never()).consultar(any());
     }
 
     @Test
@@ -164,6 +186,7 @@ class PagoServiceTest {
         assertThat(service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()).getEstadoPago())
                 .isEqualTo(EstadoPago.PENDIENTE_PAGO);
 
+        verify(transaccionesClient, times(2)).generarDebito(any());
         verify(reservaPagoService, never()).liberar(any(), any(), any());
     }
 
@@ -193,6 +216,8 @@ class PagoServiceTest {
                         e -> assertThat(e.getRemoteStatus()).isEqualTo(502))
                 .hasMessageContaining("el organizador no coincide");
 
+        // Un 4xx no se reintenta: un débito por ticket.
+        verify(transaccionesClient, times(2)).generarDebito(any());
         verify(reservaPagoService, never()).liberar(any(), any(), any());
         verify(reservaPagoService, never()).emitir(any(), any());
         verify(transaccionesClient, never()).generarCredito(any());
@@ -237,9 +262,26 @@ class PagoServiceTest {
         assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
                 .isInstanceOf(ConflictException.class);
 
+        verify(transaccionesClient, times(2)).generarCredito(any());
         verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.REINTEGRO_PENDIENTE,
                 PagoService.MOTIVO_FALLA_EMISION);
         assertThat(mensajes()).anyMatch(m -> m.contains("Compensación fallida") && m.contains("ticket=1"));
+    }
+
+    @Test
+    void pagar_elReintegroFallaUnaVez_seReintentaYQuedaReintegrado() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(transaccionesClient.generarCredito(any()))
+                .thenThrow(new RemoteServiceException(503, "caído"))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(ConflictException.class);
+
+        verify(transaccionesClient, times(2)).generarCredito(any());
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.REINTEGRADO, PagoService.MOTIVO_FALLA_EMISION);
     }
 
     @Test
