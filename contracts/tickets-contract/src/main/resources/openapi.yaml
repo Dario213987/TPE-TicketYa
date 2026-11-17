@@ -478,7 +478,9 @@ paths:
         Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
         Devuelve los identificadores de usuario distintos que compraron al menos una
         entrada para el evento. Se consideran compras los tickets en estado EMITIDO,
-        USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        VENDIDO, USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        DEVUELTO se conserva a propósito: los avisos de cancelación y EDICION incluyen el
+        aviso de reintegro y deben llegar también a quien ya solicitó la devolución.
 
         Un evento sin compras devuelve una lista vacia, no 404. No requiere headers de
         usuario. Pensado para que otro microservicio arme avisos masivos a los compradores.
