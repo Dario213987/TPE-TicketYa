@@ -60,6 +60,19 @@ La resolución de destinatarios para avisos masivos usa el mismo criterio: `Noti
 
 `PreferenciasArtistaResolver` falla con `IllegalStateException` si el evento no tiene `lugar.ciudad`, y envía los ids de participantes en lotes de 100 porque ese es el `maxItems` del contrato. La unión de respuestas se ordena y deduplica antes de persistir.
 
+## Conexión SMTP con MailHog
+
+`ms-notificaciones` no tiene código específico para MailHog: lo alcanza por SMTP. Spring Boot crea el `JavaMailSender` con `spring.mail.host` y `spring.mail.port` (`ms-notificaciones/src/main/resources/application.properties:26-27`); `EmailService.enviar` arma el `MimeMessage` y llama `mailSender.send(...)` (`EmailService.java:45-51`), invocado desde `NotificacionService.java:209` después de resolver destinatario, evento/usuario y plantilla.
+
+| Escenario | SMTP a usar | Configuración |
+| --- | --- | --- |
+| Servicio corriendo en la IDE/host | `127.0.0.1:1025` | Default `MAIL_HOST=localhost`, `MAIL_PORT=1025`. |
+| Servicio corriendo en Docker | `mailhog:1025` | Setear `MAIL_HOST=mailhog` y compartir la red `ticketya-infra_default` con el compose de `infra`. |
+
+MailHog se levanta con `docker compose -f infra/docker-compose.yml up -d mailhog` y expone SMTP en `127.0.0.1:1025` y UI en `http://localhost:8025` (`infra/docker-compose.yml:181-186`). La bandeja se consulta en la UI o con `GET http://localhost:8025/api/v2/messages`, y se limpia con `DELETE http://localhost:8025/api/v1/messages`. Los correos quedan cautivos en MailHog y no se envían a casillas reales; el estado persistido de la notificación está en `db-notificaciones`.
+
+No confundir puertos: RabbitMQ Management está en `15672` y es donde se inspeccionan `enviar` y `notificaciones.fallidas`; MailHog `8025` es donde se ven los mails. Si no llega un correo, revisar logs de `ms-notificaciones`, la cola `enviar`, la DLQ `notificaciones.fallidas` y los timeouts SMTP configurables (`MAIL_SMTP_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS`, `MAIL_SMTP_WRITE_TIMEOUT_MS`).
+
 ## Runbook E2E: `PUBLICACION_ARTISTA` con MailHog
 
 Requisitos: `infra/docker-compose.yml` levantado, `ms-eventos`, `ms-preferencias`, `ms-usuarios` y `ms-notificaciones` disponibles, y MailHog en `127.0.0.1:1025` (SMTP) / `127.0.0.1:8025` (UI). La colección `postman/ms-notificaciones/ms-notificaciones.postman_collection.json` tiene estos pasos con variables.
