@@ -25,7 +25,9 @@ import java.util.Optional;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.BDDMockito.given;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.verifyNoInteractions;
 
 @ExtendWith(MockitoExtension.class)
 class HistorialServiceTest {
@@ -35,6 +37,9 @@ class HistorialServiceTest {
 
     @Mock
     private PreferenciaRepository preferenciaRepository;
+
+    @Mock
+    private CoCompraService coCompraService;
 
     @Spy
     private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
@@ -213,6 +218,77 @@ class HistorialServiceTest {
             assertThat(entrada.getComprado()).isTrue();
             assertThat(entrada.getUsado()).isTrue();
         });
+    }
+
+    @Test
+    void registrarCompra_eventoNuevoConPrevios_actualizaLaCoCompra() {
+        Preferencia existente = Preferencia.builder()
+                .clienteId(7L)
+                .historial(List.of(HistorialCompra.builder()
+                        .eventoId(4L)
+                        .comprado(true)
+                        .build()))
+                .build();
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(existente));
+        given(preferenciaRepository.save(any(Preferencia.class)))
+                .willAnswer(invocacion -> invocacion.getArgument(0));
+
+        historialService.registrarCompra(compra(7L, 5L, TipoEvento.RECITAL, List.of(15L), "Tandil"));
+
+        verify(coCompraService).registrarCompra(5L, List.of(4L));
+    }
+
+    @Test
+    void registrarCompra_eventoYaComprado_noActualizaLaCoCompra() {
+        Preferencia existente = Preferencia.builder()
+                .clienteId(7L)
+                .historial(List.of(HistorialCompra.builder()
+                        .eventoId(5L)
+                        .comprado(true)
+                        .build()))
+                .build();
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(existente));
+        given(preferenciaRepository.save(any(Preferencia.class)))
+                .willAnswer(invocacion -> invocacion.getArgument(0));
+
+        historialService.registrarCompra(compra(7L, 5L, TipoEvento.RECITAL, List.of(15L), "Tandil"));
+
+        verifyNoInteractions(coCompraService);
+    }
+
+    @Test
+    void registrarCompra_sinPrevios_noActualizaLaCoCompra() {
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.empty());
+        given(preferenciaRepository.save(any(Preferencia.class)))
+                .willAnswer(invocacion -> invocacion.getArgument(0));
+
+        historialService.registrarCompra(compra(7L, 5L, TipoEvento.RECITAL, List.of(15L), "Tandil"));
+
+        verifyNoInteractions(coCompraService);
+    }
+
+    @Test
+    void registrarCompra_siFallaLaCoCompra_noPropagaYGuardaElHistorial() {
+        Preferencia existente = Preferencia.builder()
+                .clienteId(7L)
+                .historial(List.of(HistorialCompra.builder()
+                        .eventoId(4L)
+                        .comprado(true)
+                        .build()))
+                .build();
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(existente));
+        given(preferenciaRepository.save(any(Preferencia.class)))
+                .willAnswer(invocacion -> invocacion.getArgument(0));
+        doThrow(new RuntimeException("boom"))
+                .when(coCompraService).registrarCompra(any(), any());
+
+        historialService.registrarCompra(compra(7L, 5L, TipoEvento.RECITAL, List.of(15L), "Tandil"));
+
+        verify(coCompraService).registrarCompra(5L, List.of(4L));
+        verify(preferenciaRepository).save(any(Preferencia.class));
+        assertThat(existente.getHistorial())
+                .extracting(HistorialCompra::getEventoId)
+                .contains(4L, 5L);
     }
 
     private Preferencia capturar() {
