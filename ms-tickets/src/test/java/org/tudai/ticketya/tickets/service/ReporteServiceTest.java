@@ -4,8 +4,10 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
 import org.mockito.Mock;
+import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.core.exception.ForbiddenException;
+import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.client.EventoClient;
 import org.tudai.ticketya.tickets.client.dto.EventoResponseDto;
 import org.tudai.ticketya.tickets.client.dto.SectorResponseDto;
@@ -33,6 +35,9 @@ class ReporteServiceTest {
 
     @Mock
     private EventoClient eventoClient;
+
+    @Spy
+    private EventoAccessValidator eventoAccessValidator = new EventoAccessValidator();
 
     @Mock
     private ReporteRepository reporteRepository;
@@ -89,6 +94,23 @@ class ReporteServiceTest {
                 .hasMessageContaining("permiso");
 
         verifyNoInteractions(reporteRepository);
+    }
+
+    @Test
+    void obtenerReporte_cuandoElEventoNoExiste_lanzaNotFound() {
+        when(eventoClient.obtenerEvento(5L)).thenReturn(null);
+
+        assertThatThrownBy(() -> service.obtenerReporteEntradasVendidas(5L, 42L, false))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("5");
+        assertThatThrownBy(() -> service.obtenerReporteOcupacion(5L, 42L, false))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("5");
+        assertThatThrownBy(() -> service.obtenerReporteRecaudacion(5L, 42L, false))
+                .isInstanceOf(NotFoundException.class)
+                .hasMessageContaining("5");
+
+        verifyNoInteractions(reporteRepository, disponibilidadSectorRepository);
     }
 
     @Test
