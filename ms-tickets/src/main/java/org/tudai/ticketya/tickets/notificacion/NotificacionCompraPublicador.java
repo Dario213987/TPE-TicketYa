@@ -19,6 +19,7 @@ import java.util.List;
 public class NotificacionCompraPublicador {
 
     private static final Logger log = LoggerFactory.getLogger(NotificacionCompraPublicador.class);
+    private static final String MONEDA_COMPRA = "ARS";
 
     private final NotificacionCompraMensajeFactory factory;
     private final RabbitTemplate rabbitTemplate;
@@ -33,19 +34,20 @@ public class NotificacionCompraPublicador {
      * Arma el mensaje de confirmación y lo publica en la cola de envío. Ante fallos (ej. broker caído)
      * registra el error y no relanza, preservando la compra ya confirmada.
      */
-    public void producirConfirmacionCompra(Long eventoId, Long destinatarioId, Long sectorId,
+    public void producirConfirmacionCompra(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                            List<AsientoNotificacion> asientos, Integer cantidad,
-                                           BigDecimal monto, String moneda) {
+                                           BigDecimal monto) {
         NotificacionEntranteDTO mensaje = null;
         try {
-            mensaje = factory.crear(eventoId, destinatarioId, sectorId, asientos, cantidad, monto, moneda);
+            mensaje = factory.crear(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad,
+                    monto, MONEDA_COMPRA);
             rabbitTemplate.convertAndSend(RabbitNotificacionesConfig.COLA_ENVIAR, mensaje);
-            log.info("Notificación de confirmación de compra publicada: mensajeId={}, eventoId={}, destinatarioId={}, motivo={}",
-                    mensaje.getMensajeId(), eventoId, destinatarioId, mensaje.getMotivo());
+            log.info("Notificación de confirmación de compra publicada: mensajeId={}, reservaId={}, eventoId={}, destinatarioId={}, motivo={}",
+                    mensaje.getMensajeId(), reservaId, eventoId, destinatarioId, mensaje.getMotivo());
         } catch (Exception e) {
             String mensajeId = mensaje != null ? mensaje.getMensajeId() : null;
-            log.error("No se pudo publicar notificación de confirmación de compra (compra ya confirmada): mensajeId={}, eventoId={}, destinatarioId={}",
-                    mensajeId, eventoId, destinatarioId, e);
+            log.error("No se pudo publicar notificación de confirmación de compra (compra ya confirmada): mensajeId={}, reservaId={}, eventoId={}, destinatarioId={}",
+                    mensajeId, reservaId, eventoId, destinatarioId, e);
         }
     }
 
@@ -56,7 +58,7 @@ public class NotificacionCompraPublicador {
         if (event == null) {
             return;
         }
-        producirConfirmacionCompra(event.getEventoId(), event.getDestinatarioId(), event.getSectorId(),
-                event.getAsientos(), event.getCantidad(), event.getMonto(), event.getMoneda());
+        producirConfirmacionCompra(event.getReservaId(), event.getEventoId(), event.getDestinatarioId(),
+                event.getSectorId(), event.getAsientos(), event.getCantidad(), event.getMonto());
     }
 }

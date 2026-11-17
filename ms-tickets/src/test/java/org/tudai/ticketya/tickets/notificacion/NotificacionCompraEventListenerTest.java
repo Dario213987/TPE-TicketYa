@@ -40,7 +40,7 @@ class NotificacionCompraEventListenerTest {
         ctx.getBeanFactory().registerSingleton("rabbitTemplate", rabbitTemplate);
         ctx.refresh();
 
-        CompraConfirmadaNotificacionEvent event = new CompraConfirmadaNotificacionEvent(10L, 20L, 5L, List.of(), 1, new BigDecimal("100"), "ARS");
+        CompraConfirmadaNotificacionEvent event = new CompraConfirmadaNotificacionEvent(99L, 10L, 20L, 5L, List.of(), 1, new BigDecimal("100"));
 
         // commit: se ejecuta afterCommit de las sincronizaciones registradas por @TransactionalEventListener
         TransactionSynchronizationManager.initSynchronization();

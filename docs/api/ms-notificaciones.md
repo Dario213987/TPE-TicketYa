@@ -4,7 +4,7 @@ Servicio de **notificaciones por email**. Centraliza el envío: consume mensajes
 
 ## Mensaje (`NotificacionEntranteDTO`, contrato compartido)
 
-- `mensajeId` (obligatorio): clave de idempotencia generada por el productor, formato `PREFIJO-<epochMs>-<uuid>` (ej. `MST-1731700000000-3f2a9c1e-...`).
+- `mensajeId` (obligatorio): clave de idempotencia generada por el productor. Formato `PREFIJO-<epochMs>-<uuid>` para IDs únicos por envío (ej. `MST-1731700000000-3f2a9c1e-...`) o `PREFIJO-<ENTIDAD>-<id>` para IDs derivados (ej. `MST-RESERVA-99`, usado por `ms-tickets` en `CONFIRMACION_COMPRA`). Un mismo `mensajeId` se procesa una sola vez.
 - `motivo`: `CANCELACION`, `CONFIRMACION_COMPRA`, `PUBLICACION_ARTISTA`, `EDICION`, `SUSPENSION`.
 - `eventoId`, `destinatarioId`.
 - `detalleCompra` (opcional, solo `CONFIRMACION_COMPRA`): `sectorId`, `asientos` (`[{fila, numero}]`, vacío para no numerados), `cantidad`, `monto` (nullable), `moneda`. **No se persiste** en `Notificacion`; viaja en el mensaje y se usa solo para renderizar el mail.
