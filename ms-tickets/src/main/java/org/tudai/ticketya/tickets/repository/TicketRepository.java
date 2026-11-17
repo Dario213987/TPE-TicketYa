@@ -1,5 +1,8 @@
 package org.tudai.ticketya.tickets.repository;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.repository.EntityGraph;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
@@ -29,6 +32,12 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
                                 @Param("clienteId") Long clienteId,
                                 @Param("estado") EstadoTicket estado,
                                 @Param("ahora") Instant ahora);
+
+    List<Ticket> findByReserva_IdOrderByIdAsc(Long reservaId);
+
+    @EntityGraph(attributePaths = {"evento", "sector", "asiento"})
+    Page<Ticket> findByClienteIdAndEstadoTicketIn(Long clienteId, Collection<EstadoTicket> estados,
+                                                  Pageable pageable);
 
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     List<Ticket> findByEvento_EventoIdAndEstadoTicketAndExpiraElLessThanEqual(

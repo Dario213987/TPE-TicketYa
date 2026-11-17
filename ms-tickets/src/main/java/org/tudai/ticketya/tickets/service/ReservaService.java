@@ -33,7 +33,8 @@ import java.util.UUID;
 public class ReservaService {
 
     private static final List<EstadoTicket> ESTADOS_VENDIDOS =
-            List.of(EstadoTicket.EMITIDO, EstadoTicket.USADO);
+            List.of(EstadoTicket.PENDIENTE_PAGO, EstadoTicket.EMITIDO, EstadoTicket.VENDIDO,
+                    EstadoTicket.USADO);
 
     private final DisponibilidadEventoRepository eventoRepository;
     private final DisponibilidadSectorRepository sectorRepository;
@@ -43,6 +44,7 @@ public class ReservaService {
     private final ReservaProperties properties;
     private final ReservaRepository reservaRepository;
     private final QrFirmaService qrFirmaService;
+    private final HabilitacionTandaService habilitacionTandaService;
 
     @Transactional
     public ReservaResponseDTO reservar(Long eventoId, Long clienteId, ReservaRequestDTO request) {
@@ -71,6 +73,11 @@ public class ReservaService {
             throw new ConflictException(
                     "La venta del evento " + eventoId + " no está abierta ("
                             + evento.getEstadoVenta() + ")");
+        }
+
+        if (habilitacionTandaService.requierePase(eventoId, evento)) {
+            habilitacionTandaService.validarPase(
+                    eventoId, clienteId, request.getPaseToken());
         }
 
         reservaVencidaService.liberarVencidas(eventoId, ahora);

@@ -1,0 +1,19 @@
+openapi: 3.0.3
+info:
+    title: ms-notificaciones
+    version: 1.0.0
+    description: |
+        Envío de notificaciones. Los paths, operaciones y modelos se agregan
+        con las funcionalidades del servicio.
+tags:
+    - name: notificaciones
+paths: {}
+components:
+    schemas:
+        Problema:
+            type: object
+            properties:
+                title: { type: string }
+                status: { type: integer }
+                detail: { type: string }
+                correlationId: { type: string }

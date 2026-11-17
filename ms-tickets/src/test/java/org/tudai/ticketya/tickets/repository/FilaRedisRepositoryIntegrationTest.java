@@ -4,6 +4,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.connection.DataType;
+import org.springframework.data.redis.connection.RedisConnection;
 import org.springframework.data.redis.connection.lettuce.LettuceConnectionFactory;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.testcontainers.containers.GenericContainer;
@@ -43,6 +44,9 @@ class FilaRedisRepositoryIntegrationTest {
         connectionFactory = new LettuceConnectionFactory(
                 REDIS.getHost(), REDIS.getMappedPort(6379));
         connectionFactory.afterPropertiesSet();
+        try (RedisConnection connection = connectionFactory.getConnection()) {
+            connection.serverCommands().flushAll();
+        }
         redisTemplate = new StringRedisTemplate(connectionFactory);
         repository = new FilaRedisRepository(redisTemplate);
     }
@@ -70,6 +74,35 @@ class FilaRedisRepositoryIntegrationTest {
         assertThat(repetido.ingresadoEl()).isEqualTo(primero.ingresadoEl());
         assertThat(redisTemplate.type(FilaRedisRepository.clave(7L)))
                 .isEqualTo(DataType.ZSET);
+    }
+
+    @Test
+    void consultaLaPosicionYLaCantidadDePersonasDelante() {
+        assertThat(repository.consultar(7L, 42L)).isEmpty();
+
+        repository.registrar(7L, 42L);
+        repository.registrar(7L, 43L);
+        FilaRedisRepository.Posicion posicion = repository.consultar(7L, 43L).orElseThrow();
+
+        assertThat(posicion.posicion()).isEqualTo(2);
+        assertThat(posicion.personasDelante()).isEqualTo(1);
+        assertThat(posicion.totalEnFila()).isEqualTo(2);
+    }
+
+    @Test
+    void salirSacaSoloAlClienteYConservaElOrdenDeLosDemas() {
+        repository.registrar(7L, 42L);
+        repository.registrar(7L, 43L);
+        repository.registrar(7L, 44L);
+
+        assertThat(repository.salir(7L, 43L)).isTrue();
+
+        assertThat(repository.totalEnFila(7L)).isEqualTo(2);
+        assertThat(repository.consultar(7L, 44L).orElseThrow().posicion())
+                .isEqualTo(2);
+        assertThat(repository.consultar(7L, 43L)).isEmpty();
+
+        assertThat(repository.salir(7L, 43L)).isFalse();
     }
 
     @Test

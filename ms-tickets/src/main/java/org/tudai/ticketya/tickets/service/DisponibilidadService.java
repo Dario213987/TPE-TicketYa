@@ -31,6 +31,7 @@ public class DisponibilidadService {
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
     private final ReservaProperties reservaProperties;
     private final ReservaVencidaService reservaVencidaService;
+    private final HabilitacionTandaService habilitacionTandaService;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
     private int batchSize;
@@ -69,13 +70,31 @@ public class DisponibilidadService {
 
         boolean altaDemandaFinal = yaExistia ? evento.isAltaDemanda() : altaDemanda;
 
+        // El organizador recibe los pagos: se completa si falta, pero nunca se reemplaza por otro.
+        if (request.getOrganizadorId() != null
+                && !request.getOrganizadorId().equals(evento.getOrganizadorId())) {
+            if (evento.getOrganizadorId() != null) {
+                throw new ConflictException("El evento " + request.getEventoId()
+                        + " ya tiene otro organizador informado");
+            }
+            evento.setOrganizadorId(request.getOrganizadorId());
+            eventoRepository.save(evento);
+        }
+
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
         int asientosOmitidos = 0;
 
         for (SectorDisponibilidadDTO dto : request.getSectores()) {
-            if (sectorRepository.findByEvento_EventoIdAndSectorIdExterno(
-                    request.getEventoId(), dto.getSectorId()).isPresent()) {
+            var existente = sectorRepository.findByEvento_EventoIdAndSectorIdExterno(
+                    request.getEventoId(), dto.getSectorId());
+            if (existente.isPresent()) {
+                // Republicar completa el precio de los sectores publicados antes de que se informara.
+                DisponibilidadSector sector = existente.get();
+                if (sector.getPrecio() == null && dto.getPrecio() != null) {
+                    sector.setPrecio(dto.getPrecio());
+                    sectorRepository.save(sector);
+                }
                 continue;
             }
 
@@ -96,6 +115,7 @@ public class DisponibilidadService {
                     .tipo(dto.getTipo())
                     .capacidadTotal(capacidad)
                     .disponibles(capacidad)
+                    .precio(dto.getPrecio())
                     .build();
 
             sectorRepository.save(sector);
@@ -117,6 +137,8 @@ public class DisponibilidadService {
                 asientosOmitidos += entidades.size() - insertados;
             }
         }
+
+        habilitacionTandaService.sincronizar(request.getEventoId(), altaDemandaFinal);
 
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
@@ -153,6 +175,10 @@ public class DisponibilidadService {
 
         evento.setEstadoVenta(estado);
         eventoRepository.save(evento);
+
+        if (estado == EstadoVenta.ABIERTA) {
+            habilitacionTandaService.reactivar(eventoId);
+        }
     }
 
     /**
@@ -174,6 +200,7 @@ public class DisponibilidadService {
             }
             evento.setAltaDemanda(altaDemanda);
             eventoRepository.save(evento);
+            habilitacionTandaService.sincronizar(eventoId, altaDemanda);
         });
     }
 
