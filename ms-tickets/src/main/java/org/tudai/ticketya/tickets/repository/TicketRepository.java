@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -35,6 +36,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     List<Ticket> findByReserva_IdOrderByIdAsc(Long reservaId);
 
+    @Query("""
+            select t from Ticket t
+            join fetch t.evento
+            where t.codigo_qr = :codigoQr
+            """)
+    Optional<Ticket> buscarPorCodigoQr(@Param("codigoQr") String codigoQr);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Ticket t
+               set t.estadoTicket = :usado
+             where t.codigo_qr = :codigoQr
+               and t.evento.eventoId = :eventoId
+               and t.estadoTicket = :vendido
+            """)
+    int marcarComoUsado(@Param("codigoQr") String codigoQr,
+                        @Param("eventoId") Long eventoId,
+                        @Param("vendido") EstadoTicket vendido,
+                        @Param("usado") EstadoTicket usado);
+
     @EntityGraph(attributePaths = {"evento", "sector", "asiento"})
     Page<Ticket> findByClienteIdAndEstadoTicketIn(Long clienteId, Collection<EstadoTicket> estados,
                                                   Pageable pageable);
@@ -44,9 +65,6 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             Long eventoId, EstadoTicket estado, Instant ahora);
 
     List<Ticket> findByReserva_Id(Long reservaId);
-
-    @Query("select t from Ticket t where t.codigo_qr = :codigoQr")
-    Optional<Ticket> findByCodigoQr(@Param("codigoQr") String codigoQr);
 
     @Query("""
             select distinct t.evento.eventoId from Ticket t

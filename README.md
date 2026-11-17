@@ -78,7 +78,7 @@ Primero Eureka y después lo demás:
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
 
-`ms-tickets` además necesita `TICKETS_QR_SECRET` para firmar los códigos QR con HMAC. Sin esa variable las reservas fallan, para no emitir entradas sin firma:
+`ms-tickets` firma los códigos QR con HMAC usando `TICKETS_QR_SECRET`. En desarrollo hay un valor por defecto (`dev-secret-cambiar`), pero en producción hay que definir un secreto propio y largo (también está en `infra/.env.example`):
 
     env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
 
