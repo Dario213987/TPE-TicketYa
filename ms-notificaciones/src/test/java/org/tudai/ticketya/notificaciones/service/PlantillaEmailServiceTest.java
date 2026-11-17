@@ -12,10 +12,12 @@ import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.LugarClientDTO;
+import org.tudai.ticketya.notificaciones.client.dto.ParticipanteClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.SectorClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.service.plantilla.AvisoGeneralPlantilla;
 import org.tudai.ticketya.notificaciones.service.plantilla.ConfirmacionCompraPlantilla;
+import org.tudai.ticketya.notificaciones.service.plantilla.PublicacionArtistaPlantilla;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -36,7 +38,8 @@ class PlantillaEmailServiceTest {
         templateEngine = mock(SpringTemplateEngine.class);
         when(templateEngine.process(any(String.class), any(Context.class))).thenReturn("html");
         service = new PlantillaEmailService(templateEngine,
-                List.of(new ConfirmacionCompraPlantilla(), new AvisoGeneralPlantilla()));
+                List.of(new ConfirmacionCompraPlantilla(), new AvisoGeneralPlantilla(),
+                        new PublicacionArtistaPlantilla()));
     }
 
     @Test
@@ -127,6 +130,26 @@ class PlantillaEmailServiceTest {
     }
 
     @Test
+    void publicacionArtistaMuestraCiudadYParticipantes() {
+        EventoClientDTO evento = eventoBase();
+        evento.getLugar().setCiudad("Tandil");
+        evento.setParticipantes(List.of(participante("La Renga"), participante("Divididos")));
+        NotificacionEntranteDTO entrante = entrante(MotivoNotificacion.PUBLICACION_ARTISTA, null);
+
+        String asunto = service.asunto(entrante, evento);
+        service.renderizar(entrante, evento, usuarioBase());
+
+        ArgumentCaptor<Context> captor = ArgumentCaptor.forClass(Context.class);
+        verify(templateEngine).process(eq("mail/PUBLICACION_ARTISTA"), captor.capture());
+        Context ctx = captor.getValue();
+
+        assertEquals("Notificación PUBLICACION_ARTISTA - Show", asunto);
+        assertEquals("Tandil", ctx.getVariable("eventoCiudad"));
+        assertEquals("La Renga, Divididos", ctx.getVariable("participantesTexto"));
+        assertEquals("", ctx.getVariable("sectorNombre"));
+    }
+
+    @Test
     void registroIncompletoFalla() {
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> new PlantillaEmailService(templateEngine, List.of(new ConfirmacionCompraPlantilla())));
@@ -139,7 +162,7 @@ class PlantillaEmailServiceTest {
         IllegalStateException error = assertThrows(IllegalStateException.class,
                 () -> new PlantillaEmailService(templateEngine,
                         List.of(new ConfirmacionCompraPlantilla(), new ConfirmacionCompraPlantilla(),
-                                new AvisoGeneralPlantilla())));
+                                new AvisoGeneralPlantilla(), new PublicacionArtistaPlantilla())));
 
         assertTrue(error.getMessage().contains("mas de una plantilla"));
     }
@@ -173,6 +196,12 @@ class PlantillaEmailServiceTest {
         usuario.setNombre("Ana");
         usuario.setEmail("ana@test.com");
         return usuario;
+    }
+
+    private ParticipanteClientDTO participante(String nombre) {
+        ParticipanteClientDTO participante = new ParticipanteClientDTO();
+        participante.setNombre(nombre);
+        return participante;
     }
 
     private DetalleConfirmacionCompra detalle(Long sectorId, List<AsientoNotificacion> asientos,

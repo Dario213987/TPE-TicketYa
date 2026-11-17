@@ -9,9 +9,8 @@ import java.util.Set;
 /**
  * Estrategia de plantilla para avisos generales de evento.
  * <p>
- * Cubre cancelacion, edicion, publicacion de artista y suspension. No usa detalle de
- * compra: limpia esas variables y deja que la plantilla comun muestre los datos del
- * evento y del usuario.
+ * Cubre cancelacion, edicion y suspension. No usa detalle de compra: limpia esas
+ * variables y deja que la plantilla comun muestre los datos del evento y del usuario.
  */
 @Component
 public class AvisoGeneralPlantilla implements PlantillaNotificacion {
@@ -19,7 +18,6 @@ public class AvisoGeneralPlantilla implements PlantillaNotificacion {
     private static final Set<MotivoNotificacion> MOTIVOS = Set.of(
             MotivoNotificacion.CANCELACION,
             MotivoNotificacion.EDICION,
-            MotivoNotificacion.PUBLICACION_ARTISTA,
             MotivoNotificacion.SUSPENSION);
 
     /**

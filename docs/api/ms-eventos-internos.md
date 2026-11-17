@@ -54,14 +54,14 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
 
 `ms-eventos` publica avisos para los compradores sólo después de que la transacción que cambia el estado hace commit. Es el único destino asíncrono de este servicio; `ms-tickets` y `ms-devoluciones` se siguen notificando por HTTP.
 
-1. Un administrador cancela el evento o cambia su fecha/lugar (el cambio de fecha/lugar en eventos no borrador es una excepción reservada a administradores; los estados válidos son `PUBLICADO`, `AGOTADO` y `SUSPENDIDO`).
-2. `ms-eventos` notifica sincrónicamente a `ms-tickets` (`cancelar`) y, en la cancelación, a `ms-devoluciones` (`reintegrar`).
+1. Un organizador publica un evento en borrador, un administrador lo cancela o cambia su fecha/lugar (el cambio de fecha/lugar en eventos no borrador es una excepción reservada a administradores; los estados válidos son `PUBLICADO`, `AGOTADO` y `SUSPENDIDO`).
+2. `ms-eventos` notifica sincrónicamente a `ms-tickets` (`crearDisponibilidad` más `actualizarAltaDemanda` en la publicación, `cancelar` en la cancelación) y, en la cancelación, a `ms-devoluciones` (`reintegrar`).
 3. Dentro de la transacción se publica un `AvisoEventoEvent` con:
-   - `motivo`: `CANCELACION` o `EDICION`;
+   - `motivo`: `PUBLICACION_ARTISTA`, `CANCELACION` o `EDICION`;
    - `eventoId`;
-   - `mensajeId`: `MSE-CANCELACION-{eventoId}` (estable, porque un evento se cancela una vez) o `MSE-EDICION-{timestamp}-{uuid}` (uno por cambio).
+   - `mensajeId`: `MSE-PUBLICACION_ARTISTA-{eventoId}` y `MSE-CANCELACION-{eventoId}` (estables, porque un evento se publica y se cancela una sola vez) o `MSE-EDICION-{timestamp}-{uuid}` (uno por cambio).
 4. `AvisoEventoListener` publica el mensaje en la cola `enviar` con `@TransactionalEventListener(AFTER_COMMIT)`, con `destinatarioId: null`.
-5. `ms-notificaciones` consulta `GET /api/tickets/internal/eventos/{eventoId}/compradores` y envía un email por comprador: el de cancelación indica que el reintegro ya fue solicitado, el de edición muestra la fecha/lugar actualizados.
+5. Para `CANCELACION` y `EDICION`, `ms-notificaciones` consulta `GET /api/tickets/internal/eventos/{eventoId}/compradores` y envía un email por comprador: el de cancelación indica que el reintegro ya fue solicitado, el de edición muestra la fecha/lugar actualizados. Para `PUBLICACION_ARTISTA`, `ms-notificaciones` obtiene de `ms-eventos` la ciudad del lugar y los ids de participantes, y consulta `GET /api/preferencias/internal/destinatarios` para enviar el mail a los clientes que tienen alguno de esos participantes como favorito y declararon la misma ciudad; no usa compras previas.
 
 No se duplican envíos por destinatario: el `mensajeId` y la restricción única `(mensaje_id, destinatario_id)` en `ms-notificaciones` evitan duplicados ante reintentos del mismo mensaje. La publicación no tiene reintento automático: si Rabbit falla, se registra el error en logs y requiere reproceso operativo.
 
