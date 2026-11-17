@@ -40,7 +40,7 @@
             <column name="cliente_id"/>
         </createIndex>
 
-        <sql dbms="postgresql,h2">
+        <sql dbms="postgresql">
             CREATE UNIQUE INDEX uq_devoluciones_ticket_pendiente ON devoluciones (ticket_id) WHERE estado = 'PENDIENTE';
         </sql>
     </changeSet>
