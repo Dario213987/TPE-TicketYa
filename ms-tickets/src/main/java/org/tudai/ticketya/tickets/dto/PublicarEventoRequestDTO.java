@@ -23,6 +23,8 @@ public class PublicarEventoRequestDTO {
 
     private Long organizadorId;
 
+    private Boolean altaDemanda;
+
     @NotEmpty(message = "El evento debe tener al menos un sector")
     @Valid
     private List<SectorDisponibilidadDTO> sectores;

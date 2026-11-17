@@ -3,6 +3,7 @@ package org.tudai.ticketya.eventos.controller;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.modelmapper.ModelMapper;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
@@ -15,7 +16,9 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.contract.eventos.model.EventoBorradorCreateRequest;
+import org.tudai.ticketya.contract.eventos.model.EventoDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
 import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
@@ -31,6 +34,7 @@ import java.util.Set;
 public class EventoController {
 
     private static final Set<String> ORDENABLES = Set.of("id", "nombre", "fecha", "tipo");
+    private static final int MAX_SIZE = 50;
 
     private final EventoService eventoService;
     private final ModelMapper modelMapper;
@@ -38,10 +42,21 @@ public class EventoController {
 
     @GetMapping
     public PagedModel<EventoResumen> listarEventos(
-            @PageableDefault(size = 20, sort = "fecha") Pageable pageable) {
+            // Vincula los parámetros del request con los campos de EventoFiltroRequest
+            @ModelAttribute EventoFiltroRequest filtro,
+            @PageableDefault(size = 20) Pageable pageable) {
 
-        return new PagedModel<>(eventoService.listarPublicados(ordenable(pageable))
+        Pageable pageableValidado = ordenable(limitarSize(pageable));
+        return new PagedModel<>(eventoService.listarPublicados(filtro, pageableValidado)
                 .map(evento -> modelMapper.map(evento, EventoResumen.class)));
+    }
+
+    @GetMapping("/{eventoId}")
+    public EventoDetalleResponse obtenerEvento(@PathVariable Long eventoId) {
+        boolean hayUsuario = userContext.isPresent();
+        Long userId = hayUsuario ? userContext.userId() : null;
+        boolean esAdmin = hayUsuario && userContext.role() == Role.ADMINISTRADOR;
+        return eventoService.obtenerEvento(eventoId, userId, esAdmin);
     }
 
     @Authorize("hasAnyRole('ORGANIZADOR','ADMINISTRADOR')")
@@ -93,6 +108,13 @@ public class EventoController {
             }
         });
         return pageable;
+    }
+
+    private static Pageable limitarSize(Pageable pageable) {
+        if (pageable.isUnpaged() || pageable.getPageSize() <= MAX_SIZE) {
+            return pageable;
+        }
+        return PageRequest.of(pageable.getPageNumber(), MAX_SIZE, pageable.getSort());
     }
 
     @PostMapping

@@ -53,14 +53,15 @@ class LiquibaseMigrationTest {
                         "reservas",
                         "bloqueos_job",
                         "ventas",
-                        "venta_items");
+                        "venta_items",
+                        "habilitacion_eventos");
     }
 
     @Test
     void creaLasColumnasEsperadasEnCadaTabla() throws Exception {
         assertThat(columnas("disponibilidad_eventos"))
                 .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente",
-                        "organizador_id");
+                        "organizador_id", "alta_demanda", "estado_venta");
 
         assertThat(columnas("disponibilidad_sectores"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id_externo", "tipo",
@@ -87,6 +88,11 @@ class LiquibaseMigrationTest {
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
                         "expira_el", "creado_el", "idempotency_key", "medio_pago", "estado_pago",
                         "motivo_rechazo", "pagado_el", "pago_en_curso");
+
+        assertThat(columnas("habilitacion_eventos"))
+                .containsExactlyInAnyOrder("evento_id", "habilitada", "tamano_tanda",
+                        "intervalo_segundos", "ttl_pase_segundos", "proxima_tanda_el",
+                        "ultima_tanda_el", "total_habilitados");
     }
 
     @Test
@@ -98,6 +104,8 @@ class LiquibaseMigrationTest {
         assertThat(indices("tickets"))
                 .contains("idx_tickets_evento_cliente_estado", "idx_tickets_estado_expira");
         assertThat(indices("reservas")).contains("idx_reservas_evento_cliente");
+        assertThat(indices("habilitacion_eventos"))
+                .contains("idx_habilitacion_proxima_tanda");
 
         assertThat(restricciones("disponibilidad_sectores"))
                 .contains("pk_disponibilidad_sectores",
@@ -118,6 +126,8 @@ class LiquibaseMigrationTest {
                         "fk_tickets_reserva");
         assertThat(restricciones("reservas"))
                 .contains("pk_reservas", "fk_reservas_evento");
+        assertThat(restricciones("habilitacion_eventos"))
+                .contains("pk_habilitacion_eventos", "fk_habilitacion_eventos_evento");
     }
 
     @Test
@@ -125,8 +135,8 @@ class LiquibaseMigrationTest {
         liquibase.update(new Contexts());
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
-                "bloqueos_job");
-        assertThat(contarCambiosAplicados()).isEqualTo(8);
+                "bloqueos_job", "habilitacion_eventos");
+        assertThat(contarCambiosAplicados()).isEqualTo(11);
     }
 
     @Test

@@ -19,11 +19,13 @@ public interface DisponibilidadEventoRepository extends JpaRepository<Disponibil
 
     @Modifying
     @Query(value = """
-            INSERT INTO disponibilidad_eventos (evento_id, creado_el, limite_entradas_por_cliente)
-            VALUES (:eventoId, :creadoEl, :limiteEntradasPorCliente)
+            INSERT INTO disponibilidad_eventos
+                (evento_id, creado_el, limite_entradas_por_cliente, alta_demanda)
+            VALUES (:eventoId, :creadoEl, :limiteEntradasPorCliente, :altaDemanda)
             ON CONFLICT (evento_id) DO NOTHING
             """, nativeQuery = true)
     int insertarSiNoExiste(@Param("eventoId") Long eventoId,
                            @Param("creadoEl") Instant creadoEl,
-                           @Param("limiteEntradasPorCliente") Integer limiteEntradasPorCliente);
+                           @Param("limiteEntradasPorCliente") Integer limiteEntradasPorCliente,
+                           @Param("altaDemanda") boolean altaDemanda);
 }

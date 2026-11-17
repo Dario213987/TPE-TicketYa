@@ -43,6 +43,7 @@ public class ReservaService {
     private final ReservaVencidaService reservaVencidaService;
     private final ReservaProperties properties;
     private final ReservaRepository reservaRepository;
+    private final HabilitacionTandaService habilitacionTandaService;
 
     @Transactional
     public ReservaResponseDTO reservar(Long eventoId, Long clienteId, ReservaRequestDTO request) {
@@ -66,6 +67,17 @@ public class ReservaService {
         DisponibilidadEvento evento = eventoRepository.findByIdForUpdate(eventoId)
                 .orElseThrow(() -> new ConflictException(
                         "El evento " + eventoId + " no está publicado"));
+
+        if (evento.getEstadoVenta() != EstadoVenta.ABIERTA) {
+            throw new ConflictException(
+                    "La venta del evento " + eventoId + " no está abierta ("
+                            + evento.getEstadoVenta() + ")");
+        }
+
+        if (habilitacionTandaService.requierePase(eventoId, evento)) {
+            habilitacionTandaService.validarPase(
+                    eventoId, clienteId, request.getPaseToken());
+        }
 
         reservaVencidaService.liberarVencidas(eventoId, ahora);
 

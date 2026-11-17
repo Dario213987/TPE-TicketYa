@@ -31,6 +31,7 @@ public class DisponibilidadService {
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
     private final ReservaProperties reservaProperties;
     private final ReservaVencidaService reservaVencidaService;
+    private final HabilitacionTandaService habilitacionTandaService;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
     private int batchSize;
@@ -39,9 +40,10 @@ public class DisponibilidadService {
     public DisponibilidadResponseDTO publicar(PublicarEventoRequestDTO request) {
         Instant ahora = Instant.now();
         int limite = limiteEntradasPorCliente(request.getLimiteEntradasPorCliente());
+        boolean altaDemanda = Boolean.TRUE.equals(request.getAltaDemanda());
 
         int eventoInsertado = eventoRepository.insertarSiNoExiste(
-                request.getEventoId(), ahora, limite);
+                request.getEventoId(), ahora, limite, altaDemanda);
         boolean yaExistia = eventoInsertado == 0;
 
         DisponibilidadEvento evento = yaExistia
@@ -69,6 +71,15 @@ public class DisponibilidadService {
             evento.setOrganizadorId(request.getOrganizadorId());
             eventoRepository.save(evento);
         }
+
+        if (yaExistia && request.getAltaDemanda() != null
+                && request.getAltaDemanda() != evento.isAltaDemanda()) {
+            throw new ConflictException(
+                    "La condición de alta demanda del evento " + request.getEventoId()
+                            + " solo se define al publicar su disponibilidad");
+        }
+
+        boolean altaDemandaFinal = yaExistia ? evento.isAltaDemanda() : altaDemanda;
 
         int sectoresProcesados = 0;
         int asientosInsertados = 0;
@@ -127,14 +138,70 @@ public class DisponibilidadService {
             }
         }
 
+        habilitacionTandaService.sincronizar(request.getEventoId(), altaDemandaFinal);
+
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
                 .yaExistia(yaExistia)
+                .altaDemanda(altaDemandaFinal)
                 .sectoresProcesados(sectoresProcesados)
                 .asientosInsertados(asientosInsertados)
                 .asientosOmitidos(asientosOmitidos)
                 .creadoEl(creadoEl)
                 .build();
+    }
+
+    /**
+     * Actualiza el estado de venta de la disponibilidad de un evento.
+     * <p>
+     * Es idempotente: si el estado ya es el solicitado no vuelve a guardar.
+     * Lo consumen los endpoints internos que invoca {@code ms-eventos} al
+     * cancelar, suspender, reactivar o finalizar un evento.
+     *
+     * @param eventoId id del evento
+     * @param estado   nuevo estado de venta
+     *
+     * @throws NotFoundException si el evento no tiene disponibilidad publicada
+     */
+    @Transactional
+    public void actualizarEstadoVenta(Long eventoId, EstadoVenta estado) {
+        DisponibilidadEvento evento = eventoRepository.findByIdForUpdate(eventoId)
+                .orElseThrow(() -> new NotFoundException(
+                        "No hay disponibilidad para el evento " + eventoId));
+
+        if (evento.getEstadoVenta() == estado) {
+            return;
+        }
+
+        evento.setEstadoVenta(estado);
+        eventoRepository.save(evento);
+
+        if (estado == EstadoVenta.ABIERTA) {
+            habilitacionTandaService.reactivar(eventoId);
+        }
+    }
+
+    /**
+     * Sincroniza la condición de alta demanda de la disponibilidad de un evento.
+     * <p>
+     * Lo usa {@code ms-eventos} al reintentar una publicación que quedó a medias:
+     * la disponibilidad ya existe en {@code ms-tickets} pero el evento todavía
+     * está en {@code BORRADOR} y el organizador pudo haber cambiado el flag.
+     * Es idempotente y no hace nada si todavía no hay disponibilidad.
+     *
+     * @param eventoId    id del evento
+     * @param altaDemanda nuevo valor del flag
+     */
+    @Transactional
+    public void actualizarAltaDemanda(Long eventoId, boolean altaDemanda) {
+        eventoRepository.findByIdForUpdate(eventoId).ifPresent(evento -> {
+            if (evento.isAltaDemanda() == altaDemanda) {
+                return;
+            }
+            evento.setAltaDemanda(altaDemanda);
+            eventoRepository.save(evento);
+            habilitacionTandaService.sincronizar(eventoId, altaDemanda);
+        });
     }
 
     @Transactional
@@ -151,7 +218,8 @@ public class DisponibilidadService {
                 .map(this::mapearSector)
                 .toList();
 
-        Integer limite = eventoRepository.findById(eventoId)
+        var evento = eventoRepository.findById(eventoId);
+        Integer limite = evento
                 .map(DisponibilidadEvento::getLimiteEntradasPorCliente)
                 .filter(valor -> valor != null && valor >= 1)
                 .orElseGet(reservaProperties::getLimitePorCliente);
@@ -159,6 +227,7 @@ public class DisponibilidadService {
         return DisponibilidadEventoResponseDTO.builder()
                 .eventoId(eventoId)
                 .limiteEntradasPorCliente(limite)
+                .altaDemanda(evento.map(DisponibilidadEvento::isAltaDemanda).orElse(false))
                 .sectores(respuesta)
                 .build();
     }
