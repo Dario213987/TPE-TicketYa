@@ -20,6 +20,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Pasos transaccionales del pago de una reserva. Cada método corre en su propia transacción
@@ -213,6 +214,34 @@ public class ReservaPagoService {
         reserva.setEstadoPago(estadoFinal);
         reserva.setMotivoRechazo(motivo);
         reservaRepository.save(reserva);
+    }
+
+    /**
+     * Pago sin resolver que revisa la reconciliación (TKY-87).
+     */
+    public record Pendiente(Long reservaId, Long clienteId, Long organizadorId, List<Cobro> cobros) {}
+
+    /**
+     * Reservas en PENDIENTE_PAGO que vencieron antes de {@code limite}: ningún pago en línea
+     * las está procesando, así que la reconciliación puede resolverlas.
+     */
+    @Transactional(readOnly = true)
+    public List<Long> pendientesVencidas(Instant limite) {
+        return reservaRepository.findIdsByEstadoPagoAndExpiraElBefore(EstadoPago.PENDIENTE_PAGO, limite);
+    }
+
+    /**
+     * Datos para reconciliar una reserva, si su pago sigue PENDIENTE_PAGO.
+     */
+    @Transactional(readOnly = true)
+    public Optional<Pendiente> pendiente(Long reservaId) {
+        return reservaRepository.findById(reservaId)
+                .filter(reserva -> reserva.getEstadoPago() == EstadoPago.PENDIENTE_PAGO)
+                .map(reserva -> new Pendiente(reservaId, reserva.getClienteId(),
+                        eventoRepository.findById(reserva.getEventoId())
+                                .map(DisponibilidadEvento::getOrganizadorId)
+                                .orElse(null),
+                        cobros(ticketsDe(reservaId))));
     }
 
     /**

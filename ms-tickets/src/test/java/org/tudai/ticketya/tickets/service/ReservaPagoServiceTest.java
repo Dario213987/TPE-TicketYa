@@ -370,6 +370,36 @@ class ReservaPagoServiceTest {
         assertThat(reserva.getEstadoPago()).isEqualTo(EstadoPago.APROBADO);
     }
 
+    @Test
+    void pendiente_reservaEnPendientePago_devuelveClienteOrganizadorYCobros() {
+        Reserva reserva = reserva(EstadoPago.PENDIENTE_PAGO);
+        Ticket pendiente = ticket(1L, sector(1500.0), null, EstadoTicket.PENDIENTE_PAGO);
+        pendiente.setPrecio(1500.0);
+        when(reservaRepository.findById(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(eventoRepository.findById(EVENTO_ID)).thenReturn(Optional.of(evento(ORGANIZADOR_ID)));
+        when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(pendiente));
+
+        assertThat(service.pendiente(RESERVA_ID)).contains(new ReservaPagoService.Pendiente(
+                RESERVA_ID, CLIENTE_ID, ORGANIZADOR_ID, List.of(new Cobro(1L, 1500.0))));
+    }
+
+    @Test
+    void pendiente_reservaYaResuelta_devuelveVacio() {
+        when(reservaRepository.findById(RESERVA_ID)).thenReturn(Optional.of(reserva(EstadoPago.APROBADO)));
+
+        assertThat(service.pendiente(RESERVA_ID)).isEmpty();
+        verifyNoInteractions(eventoRepository, ticketRepository);
+    }
+
+    @Test
+    void pendientesVencidas_buscaLasReservasEnPendientePagoVencidasAntesDelLimite() {
+        Instant limite = Instant.now();
+        when(reservaRepository.findIdsByEstadoPagoAndExpiraElBefore(EstadoPago.PENDIENTE_PAGO, limite))
+                .thenReturn(List.of(5L, 6L));
+
+        assertThat(service.pendientesVencidas(limite)).containsExactly(5L, 6L);
+    }
+
     private void prepararReserva(Reserva reserva, DisponibilidadEvento evento, List<Ticket> tickets) {
         when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
         when(eventoRepository.findByIdForUpdate(EVENTO_ID)).thenReturn(Optional.of(evento));

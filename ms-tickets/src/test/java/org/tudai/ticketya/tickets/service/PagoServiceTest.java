@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import org.tudai.ticketya.contract.transacciones.api.TransaccionesApiClient;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest;
+import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
@@ -27,16 +28,21 @@ import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
 import org.tudai.ticketya.tickets.dto.PagoRequestDTO;
 import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Cobro;
+import org.tudai.ticketya.tickets.service.ReservaPagoService.Pendiente;
 import org.tudai.ticketya.tickets.service.ReservaPagoService.Preparacion;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.web.PagedModel;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -310,6 +316,137 @@ class PagoServiceTest {
                 .hasMessageContaining("Idempotency-Key");
 
         verifyNoInteractions(reservaPagoService, transaccionesClient);
+    }
+
+    // ---------- Reconciliación (TKY-87) ----------
+
+    @Test
+    void reconciliar_todosLosDebitosCompletos_emiteLasEntradas() {
+        pendienteDe(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+        debitos(2L, transaccion(EstadoTransaccion.COMPLETA).id(12L).clienteId(CLIENTE_ID));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.EMITIDA);
+
+        verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L, 2L, 12L));
+        verify(transaccionesClient, never()).generarDebito(any());
+        verify(reservaPagoService, never()).liberar(any(), any(), any());
+    }
+
+    @Test
+    void reconciliar_unDebitoFallido_reintegraLosAprobadosYLiberaRechazada() {
+        pendienteDe(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+        debitos(2L, transaccion(EstadoTransaccion.FALLIDA).clienteId(CLIENTE_ID).motivoFallo("fondos insuficientes"));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.RECHAZADA);
+
+        ArgumentCaptor<GenerarTransaccionRequest> creditos = ArgumentCaptor.forClass(GenerarTransaccionRequest.class);
+        verify(transaccionesClient).generarCredito(creditos.capture());
+        assertThat(creditos.getValue().getTicketId()).isEqualTo(1L);
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.RECHAZADO, "fondos insuficientes");
+        verify(reservaPagoService, never()).emitir(any(), any());
+    }
+
+    @Test
+    void reconciliar_debitoPendiente_loVuelveAPedirYSiSeCompletaEmite() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.PENDIENTE).id(11L).clienteId(CLIENTE_ID));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA).id(11L));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.EMITIDA);
+
+        ArgumentCaptor<GenerarTransaccionRequest> debito = ArgumentCaptor.forClass(GenerarTransaccionRequest.class);
+        verify(transaccionesClient).generarDebito(debito.capture());
+        assertThat(debito.getValue().getTicketId()).isEqualTo(1L);
+        assertThat(debito.getValue().getMonto()).isEqualTo(1500.0);
+        verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L));
+    }
+
+    @Test
+    void reconciliar_debitoQueSiguePendiente_noCambiaNada() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.PENDIENTE).clienteId(CLIENTE_ID));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.PENDIENTE));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.SIGUE_PENDIENTE);
+
+        verify(reservaPagoService, never()).emitir(any(), any());
+        verify(reservaPagoService, never()).liberar(any(), any(), any());
+        verify(transaccionesClient, never()).generarCredito(any());
+    }
+
+    @Test
+    void reconciliar_ticketSinDebito_reintegraLosAprobadosYLiberaComoNoConfirmado() {
+        pendienteDe(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+        // El débito del ticket 2 es de otro cliente: para esta reserva no hay débito.
+        debitos(2L, transaccion(EstadoTransaccion.COMPLETA).id(99L).clienteId(1000L));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.RECHAZADA);
+
+        verify(transaccionesClient).generarCredito(any());
+        verify(transaccionesClient, never()).generarDebito(any());
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.RECHAZADO, PagoService.MOTIVO_PAGO_NO_CONFIRMADO);
+    }
+
+    @Test
+    void reconciliar_fallaLaEmision_reintegraTodo() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.REINTEGRADA);
+
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.REINTEGRADO, PagoService.MOTIVO_FALLA_EMISION);
+    }
+
+    @Test
+    void reconciliar_transaccionesNoResponde_lanzaYNoCambiaNada() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        when(transaccionesClient.buscarPorTicket(eq(1L), eq(TipoTransaccion.DEBITO), eq(0), eq(100), isNull()))
+                .thenThrow(new RemoteServiceException(503, "caído"));
+
+        assertThatThrownBy(() -> service.reconciliar(RESERVA_ID)).isInstanceOf(RemoteServiceException.class);
+
+        verify(reservaPagoService, never()).emitir(any(), any());
+        verify(reservaPagoService, never()).liberar(any(), any(), any());
+    }
+
+    @Test
+    void reconciliar_reservaQueYaNoEstaPendiente_noConsultaNada() {
+        when(reservaPagoService.pendiente(RESERVA_ID)).thenReturn(Optional.empty());
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.SIN_CAMBIOS);
+
+        verifyNoInteractions(transaccionesClient);
+    }
+
+    @Test
+    void reconciliar_laPaginaLlegaComoMapas_losConvierteATransacciones() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        when(transaccionesClient.buscarPorTicket(eq(1L), eq(TipoTransaccion.DEBITO), eq(0), eq(100), isNull()))
+                .thenReturn(new PagedModel<>(new PageImpl<>(List.of(Map.of(
+                        "id", 11, "tipo", "DEBITO", "estado", "COMPLETA", "monto", 1500.0,
+                        "clienteId", CLIENTE_ID.intValue(), "organizadorId", 5, "ticketId", 1,
+                        "creadoEl", "2026-11-05T12:00:00Z", "actualizadoEl", "2026-11-05T12:00:00Z")))));
+
+        assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.EMITIDA);
+
+        verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L));
+    }
+
+    private void pendienteDe(Cobro... cobros) {
+        when(reservaPagoService.pendiente(RESERVA_ID))
+                .thenReturn(Optional.of(new Pendiente(RESERVA_ID, CLIENTE_ID, ORGANIZADOR_ID, List.of(cobros))));
+    }
+
+    private void debitos(Long ticketId, TransaccionResponse... transacciones) {
+        when(transaccionesClient.buscarPorTicket(eq(ticketId), eq(TipoTransaccion.DEBITO), eq(0), eq(100), isNull()))
+                .thenReturn(new PagedModel<>(new PageImpl<>(List.of(transacciones))));
     }
 
     private void prepararCobros(Cobro... cobros) {
