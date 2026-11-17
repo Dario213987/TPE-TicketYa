@@ -60,10 +60,10 @@ Dispara manualmente el mismo proceso que ejecuta el scheduler. Pasa a `FINALIZAD
    - `motivo`: `PUBLICACION_ARTISTA`, `CANCELACION` o `EDICION`;
    - `eventoId`;
    - `mensajeId`: `MSE-PUBLICACION_ARTISTA-{eventoId}` y `MSE-CANCELACION-{eventoId}` (estables, porque un evento se publica y se cancela una sola vez) o `MSE-EDICION-{timestamp}-{uuid}` (uno por cambio).
-4. `AvisoEventoListener` publica el mensaje en la cola `enviar` con `@TransactionalEventListener(AFTER_COMMIT)`, con `destinatarioId: null`.
+4. `AvisoEventoListener` agenda la publicación con `@TransactionalEventListener(AFTER_COMMIT)` en un executor acotado; el worker publica el mensaje en la cola `enviar` con `destinatarioId: null`.
 5. Para `CANCELACION` y `EDICION`, `ms-notificaciones` consulta `GET /api/tickets/internal/eventos/{eventoId}/compradores` y envía un email por comprador: el de cancelación indica que el reintegro ya fue solicitado, el de edición muestra la fecha/lugar actualizados. Para `PUBLICACION_ARTISTA`, `ms-notificaciones` obtiene de `ms-eventos` la ciudad del lugar y los ids de participantes, y consulta `GET /api/preferencias/internal/destinatarios` para enviar el mail a los clientes que tienen alguno de esos participantes como favorito y declararon la misma ciudad; no usa compras previas.
 
-No se duplican envíos por destinatario: el `mensajeId` y la restricción única `(mensaje_id, destinatario_id)` en `ms-notificaciones` evitan duplicados ante reintentos del mismo mensaje. La publicación no tiene reintento automático: si Rabbit falla, se registra el error en logs y requiere reproceso operativo.
+No se duplican envíos por destinatario: el `mensajeId` y la restricción única `(mensaje_id, destinatario_id)` en `ms-notificaciones` evitan duplicados ante reintentos del mismo mensaje. La publicación no tiene reintento automático: si Rabbit falla, se registra el error en logs con `mensajeId` y requiere reproceso operativo. El hilo HTTP no espera a Rabbit; ver `docs/api/publicacion-no-bloqueante.md`.
 
 La publicación usa las mismas colas y argumentos que `ms-notificaciones`: cola `enviar` con DLX `enviar.dlx` y DLQ `enviar.dlq`. El mensaje se serializa como JSON.
 
@@ -93,6 +93,13 @@ El envío es at-least-once. `ms-tickets` debe ser idempotente al recibir una not
 | `spring.rabbitmq.username` | `RABBITMQ_USER` | `ticketya` |
 | `spring.rabbitmq.password` | `RABBITMQ_PASSWORD` | `guest` |
 | `spring.rabbitmq.virtual-host` | `RABBITMQ_VHOST` | `/` |
+| `spring.rabbitmq.connection-timeout` | `RABBITMQ_CONNECTION_TIMEOUT_MS` | `2s` |
+| `spring.rabbitmq.channel-rpc-timeout` | `RABBITMQ_CHANNEL_RPC_TIMEOUT_MS` | `2s` |
+| `spring.rabbitmq.requested-heartbeat` | `RABBITMQ_REQUESTED_HEARTBEAT_S` | `30s` |
+| `ticketya.rabbitmq.handshake-timeout-ms` | `RABBITMQ_HANDSHAKE_TIMEOUT_MS` | `2000` |
+| `ticketya.rabbitmq.shutdown-timeout-ms` | `RABBITMQ_SHUTDOWN_TIMEOUT_MS` | `2000` |
+| `ticketya.notificaciones.async.core-pool-size` | `NOTIFICACIONES_ASYNC_CORE_POOL_SIZE` | `2` |
+| `ticketya.notificaciones.async.queue-capacity` | `NOTIFICACIONES_ASYNC_QUEUE_CAPACITY` | `200` |
 
 El relay se controla con `ticketya.eventos.notificaciones.*` (`EVENTOS_NOTIFICACIONES_ENABLED`, `EVENTOS_NOTIFICACIONES_FIXED_DELAY_MS`, `EVENTOS_NOTIFICACIONES_BATCH_SIZE`, `EVENTOS_NOTIFICACIONES_MAX_INTENTOS`).
 

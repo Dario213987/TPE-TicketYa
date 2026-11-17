@@ -10,9 +10,10 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
+import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
@@ -25,11 +26,12 @@ import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotifica
  * Configuracion de RabbitMQ para consumir mensajes de notificacion.
  * <p>
  * Declara la cola principal, el exchange y la cola de mensajes fallidos (DLQ), y
- * configura reintentos con backoff exponencial. Al agotar los intentos el mensaje se
- * rechaza y el broker lo enruta a la DLQ.
+ * configura reintentos con backoff exponencial. Al agotar los intentos el recoverer
+ * marca las filas pendientes como fallidas y el broker enruta el mensaje a la DLQ.
  */
 @Configuration
 @EnableRabbit
+@EnableConfigurationProperties(ReintentosNotificacionProperties.class)
 public class RabbitConfig {
 
     /**
@@ -90,16 +92,21 @@ public class RabbitConfig {
     }
 
     /**
-     * Configura tres intentos con backoff exponencial de 1s, 2s y 4s.
+     * Configura los intentos y el backoff exponencial desde propiedades.
      *
      * @return interceptor de reintentos
      */
     @Bean
-    public RetryOperationsInterceptor retryInterceptor() {
+    public RetryOperationsInterceptor retryInterceptor(
+            ReintentosNotificacionProperties propiedades,
+            MessageRecoverer messageRecoverer) {
         return RetryInterceptorBuilder.stateless()
-                .maxAttempts(3)
-                .backOffOptions(1000, 2.0, 4000)
-                .recoverer(new RejectAndDontRequeueRecoverer())
+                .maxAttempts(propiedades.getMaxIntentos())
+                .backOffOptions(
+                        propiedades.getIntervaloInicialMs(),
+                        propiedades.getMultiplicador(),
+                        propiedades.getIntervaloMaximoMs())
+                .recoverer(messageRecoverer)
                 .build();
     }
 

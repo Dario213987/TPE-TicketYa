@@ -22,11 +22,12 @@ public class NotificacionCompraMensajeFactory {
     /**
      * Genera mensajeId con prefijo MST y construye el DTO con motivo CONFIRMACION_COMPRA y detalle de compra.
      */
-    public NotificacionEntranteDTO crear(Long eventoId, Long destinatarioId, Long sectorId,
+    public NotificacionEntranteDTO crear(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                          List<AsientoNotificacion> asientos, Integer cantidad,
                                          BigDecimal monto, String moneda) {
         NotificacionEntranteDTO dto = new NotificacionEntranteDTO();
-        dto.setMensajeId(MensajeIdNotificacion.generar(PREFIJO_NOTIFICACION));
+        dto.setMensajeId(MensajeIdNotificacion.generarDerivado(
+                PREFIJO_NOTIFICACION, "RESERVA", reservaId));
         dto.setMotivo(MotivoNotificacion.CONFIRMACION_COMPRA);
         dto.setEventoId(eventoId);
         dto.setDestinatarioId(destinatarioId);

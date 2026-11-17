@@ -19,7 +19,7 @@ Servicio de **notificaciones por email**. Centraliza el envío: consume mensajes
 3. **Expansión masiva**: para un mensaje sin `destinatarioId`, primero se buscan filas existentes por `mensajeId`; si ya existen, se reutilizan sin volver a consultar servicios externos. Si no existen, `DestinatariosResolverRegistry` elige la estrategia por motivo, se descartan ids nulos y duplicados, y todas las notificaciones `PENDIENTE` se persisten en una única transacción antes de enviar emails. Si el servicio externo falla, no queda ninguna fila parcial. Sin destinatarios: no hay filas ni envíos.
 4. **Enriquecimiento (Feign, al procesar)**: obtiene evento (`EventoClient` → `ms-eventos`: nombre, fecha, lugar, `lugar.ciudad`, `participantes` y sectores para resolver el nombre del sector por `sectorId`) y usuario (`UsuarioClient` → `ms-usuarios`: nombre, email). Para `PUBLICACION_ARTISTA`, `PreferenciasClient` completa la consulta a `ms-preferencias`; los ids se envían en lotes de hasta 100 y se unifican. El `detalle` se toma del mensaje.
 5. **Plantilla**: `PlantillaEmailService` (Thymeleaf) selecciona la estrategia por motivo y resuelve `mail/{MOTIVO}.html`. Para `CONFIRMACION_COMPRA` usa nombre/fecha/lugar del evento, nombre de usuario, sector, asientos (`fila-numero, ...` o `General x N` si no numerado) y monto (tolerando `null`). Para `PUBLICACION_ARTISTA` usa nombre/fecha/lugar/ciudad del evento y la lista de participantes.
-6. **Persistencia y envío**: por cada destinatario se pasa `PENDIENTE` → `ENVIANDO` → `EmailService` envía el `MimeMessage` HTML por SMTP (MailHog en dev) → `ENVIADO` con `fechaEnvio`. Si un destinatario falla, se marca `FALLIDO`, se continúa con el resto y al final se lanza una excepción agregada para activar el reintento de Rabbit. Un usuario sin email se marca `NO_ENTREGABLE`.
+6. **Persistencia y envío**: por cada destinatario se pasa `PENDIENTE` → `ENVIANDO` → `EmailService` envía el `MimeMessage` HTML por SMTP (MailHog en dev) → `ENVIADO` con `fechaEnvio`. Un fallo de conexión deja la fila en `PENDIENTE` con `ultimo_error` y relanza para que Rabbit reintente; un timeout deja la fila en `ENVIANDO` y no relanza para evitar duplicados; un error permanente marca `NO_ENTREGABLE` (dirección inválida) o `FALLIDO` (autenticación/configuración) y no relanza. Un error de plantilla marca `FALLIDO` y no relanza. En avisos masivos, un fallo de conexión corta el lote y relanza; los fallos permanentes no cortan el lote. Un usuario sin email se marca `NO_ENTREGABLE`.
 
 > Nota: si el correo se envió pero falló la actualización a `ENVIADO`, el reintento encontrará el registro en `ENVIANDO` y no se reenviará (prioridad: evitar duplicados). Los avisos masivos reutilizan las filas ya creadas y omiten los destinatarios en estados terminales.
 
@@ -91,13 +91,34 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
    El header `__TypeId__` es obligatorio para que `Jackson2JsonMessageConverter` hidrate `NotificacionEntranteDTO`.
 6. Consultar `GET {{mailhogUrl}}/api/v2/messages`: debe haber 1 mensaje, con `PUBLICACION_ARTISTA` en el asunto y `{{artistaNombre}}`, `{{ciudad}}` y el nombre del evento en el cuerpo.
 7. Republicar exactamente el mismo body del paso 5 y repetir el paso 6: no debe aparecer un segundo mail (misma clave `(mensaje_id, destinatario_id)`).
-8. Si no llega el correo, revisar logs de `ms-notificaciones`, el estado de la cola `enviar` y la DLQ `enviar.dlq`. Un fallo de `ms-preferencias` ocurre antes de persistir: Rabbit reintenta 3 veces y termina en DLQ sin filas parciales.
+8. Si no llega el correo, revisar logs de `ms-notificaciones`, el estado de la cola `enviar` y la DLQ `enviar.dlq`. Un fallo de `ms-preferencias` ocurre antes de persistir: Rabbit reintenta 8 veces y termina en DLQ sin filas parciales.
 
 ## Reintentos y cola de fallidos
 
-- Listener con **3 intentos** y backoff exponencial **1s → 2s → 4s** (`RetryOperationsInterceptor`), `default-requeue-rejected=false`.
-- En avisos masivos, un fallo por destinatario no aborta el resto: las filas exitosas quedan `ENVIADO`, las fallidas `FALLIDO` y el mensaje se reintenta. En el reintento se reutilizan las filas existentes y se omiten `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE`.
-- Al agotar reintentos el mensaje se rechaza y el broker lo enruta por **DLX** `enviar.dlx` a la **DLQ** `enviar.dlq`. Las filas pueden quedar `FALLIDO`; la reprocesación/gestión de la DLQ es operativa.
+- Listener con **8 intentos** y backoff exponencial **5s → 10s → 20s → 40s → 80s → 160s → 300s → 300s** (`RetryOperationsInterceptor`), tope de 5 min, `default-requeue-rejected=false`.
+- Configurable por entorno: `REINTENTOS_MAX_INTENTOS`, `REINTENTOS_INTERVALO_INICIAL_MS`, `REINTENTOS_MULTIPLICADOR` y `REINTENTOS_INTERVALO_MAXIMO_MS`. Timeouts SMTP: `MAIL_SMTP_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS` y `MAIL_SMTP_WRITE_TIMEOUT_MS` (5000 ms por defecto).
+- Clasificación de errores SMTP:
+  - `ConnectException`, `UnknownHostException`, `SocketException`, SMTP 4xx y errores no clasificados → transitorios: fila `PENDIENTE`, se relanza.
+  - `SocketTimeoutException` o mensaje `timeout`/`timed out` → fila `ENVIANDO`, no se relanza; requiere reconciliación operativa con MailHog antes de reenviar.
+  - `AddressException` / SMTP 5xx de dirección → `NO_ENTREGABLE`, no se relanza.
+  - Autenticación, parseo, preparación y SMTP 5xx general → `FALLIDO`, no se relanza.
+- En avisos masivos, los fallos de conexión cortan el lote y se relanza para reintentar solo las filas `PENDIENTE`; los fallos permanentes se registran y el lote continúa. En el reintento se reutilizan las filas existentes y se omiten `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE`.
+- Al agotar reintentos, `NotificacionDlqRecoverer` extrae `mensajeId` del body, marca como `FALLIDO` (con `ultimo_error`) todas las filas `PENDIENTE` de ese mensaje, loguea en `ERROR` y lanza `AmqpRejectAndDontRequeueException`. El broker enruta por **DLX** `enviar.dlx` a la **DLQ** `enviar.dlq`. Si el body no trae `mensajeId`, solo rechaza y loguea.
+- Reproceso operativo: corregir la causa, inspeccionar la DLQ y republicar exactamente el mismo payload en `enviar` (debe mantener el header `__TypeId__` y el mismo `mensajeId`). Las filas `FALLIDO` vuelven a intentarse; las filas `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE` se omiten.
+
+```bash
+# Ver mensajes en la DLQ
+curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" \
+  "http://localhost:15672/api/queues/%2F/enviar.dlq/get" \
+  -H 'content-type:application/json' \
+  -d '{"count":10,"requeue":false,"encoding":"auto"}'
+
+# Republicar el payload original en la cola enviar
+curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" \
+  "http://localhost:15672/api/exchanges/%2F/amq.default/publish" \
+  -H 'content-type:application/json' \
+  -d '{"properties":{"delivery_mode":2,"content_type":"application/json","headers":{"__TypeId__":"org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO"}},"routing_key":"enviar","payload":"{\"mensajeId\":\"MST-1-u\",\"motivo\":\"CANCELACION\",\"eventoId\":10,\"destinatarioId\":20}","payload_encoding":"string"}'
+```
 
 ## Tecnologías y por qué
 

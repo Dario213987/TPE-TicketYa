@@ -17,6 +17,8 @@ import org.tudai.ticketya.eventos.service.NotificacionEventoPublisher;
 
 import java.lang.reflect.Method;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
@@ -27,6 +29,7 @@ import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.reset;
+import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.verify;
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
 
@@ -44,12 +47,25 @@ class AvisoEventoListenerTest {
     @Test
     void falloDeRabbitNoSePropaga() {
         NotificacionEventoPublisher publicador = mock(NotificacionEventoPublisher.class);
-        AvisoEventoListener listener = new AvisoEventoListener(publicador);
+        AvisoEventoListener listener = new AvisoEventoListener(publicador, Runnable::run);
         doThrow(new RuntimeException("Rabbit caido")).when(publicador).publicar(any(), any(), any());
 
         assertDoesNotThrow(() -> listener.onAviso(
                 new AvisoEventoEvent(MotivoNotificacion.PUBLICACION_ARTISTA, 1L,
                         "MSE-PUBLICACION_ARTISTA-1")));
+    }
+
+    @Test
+    void rechazoDelExecutorNoSePropaga() {
+        NotificacionEventoPublisher publicador = mock(NotificacionEventoPublisher.class);
+        Executor rechazante = tarea -> {
+            throw new RejectedExecutionException("cola llena");
+        };
+        AvisoEventoListener listener = new AvisoEventoListener(publicador, rechazante);
+
+        assertDoesNotThrow(() -> listener.onAviso(new AvisoEventoEvent(
+                MotivoNotificacion.PUBLICACION_ARTISTA, 1L, "MSE-PUBLICACION_ARTISTA-1")));
+        verifyNoInteractions(publicador);
     }
 
     @Test
@@ -108,8 +124,13 @@ class AvisoEventoListenerTest {
         }
 
         @Bean
-        AvisoEventoListener listener(NotificacionEventoPublisher publicador) {
-            return new AvisoEventoListener(publicador);
+        Executor notificacionesAsyncExecutor() {
+            return Runnable::run;
+        }
+
+        @Bean
+        AvisoEventoListener listener(NotificacionEventoPublisher publicador, Executor notificacionesAsyncExecutor) {
+            return new AvisoEventoListener(publicador, notificacionesAsyncExecutor);
         }
     }
 }

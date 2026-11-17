@@ -1,0 +1,13 @@
+databaseChangeLog:
+  - changeSet:
+      id: 00004-agregar-ultimo-error-notificacion
+      author: ticketya
+      changes:
+        - addColumn:
+            tableName: notificacion
+            columns:
+              - column:
+                  name: ultimo_error
+                  type: VARCHAR(1000)
+                  constraints:
+                    nullable: true

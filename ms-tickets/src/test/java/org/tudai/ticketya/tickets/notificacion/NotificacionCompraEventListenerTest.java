@@ -17,6 +17,8 @@ import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntrante
 import java.lang.reflect.Method;
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.concurrent.Executor;
+import java.util.concurrent.RejectedExecutionException;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
@@ -34,6 +36,19 @@ class NotificacionCompraEventListenerTest {
     }
 
     @Test
+    void rechazoDelExecutorNoSePropaga() {
+        NotificacionCompraPublicador publicador = mock(NotificacionCompraPublicador.class);
+        Executor rechazante = tarea -> {
+            throw new RejectedExecutionException("cola llena");
+        };
+        NotificacionCompraEventListener listener = new NotificacionCompraEventListener(publicador, rechazante);
+
+        assertDoesNotThrow(() -> listener.onCompraConfirmada(new CompraConfirmadaNotificacionEvent(
+                7L, 10L, 20L, 5L, List.of(), 1, new BigDecimal("100"), "ARS")));
+        verifyNoInteractions(publicador);
+    }
+
+    @Test
     void commitPublicaYRollbackNoPublica() {
         RabbitTemplate rabbitTemplate = mock(RabbitTemplate.class);
         AnnotationConfigApplicationContext ctx = new AnnotationConfigApplicationContext();
@@ -41,7 +56,7 @@ class NotificacionCompraEventListenerTest {
         ctx.getBeanFactory().registerSingleton("rabbitTemplate", rabbitTemplate);
         ctx.refresh();
 
-        CompraConfirmadaNotificacionEvent event = new CompraConfirmadaNotificacionEvent(10L, 20L, 5L, List.of(), 1, new BigDecimal("100"), "ARS");
+        CompraConfirmadaNotificacionEvent event = new CompraConfirmadaNotificacionEvent(7L, 10L, 20L, 5L, List.of(), 1, new BigDecimal("100"), "ARS");
 
         // commit: se ejecuta afterCommit de las sincronizaciones registradas por @TransactionalEventListener
         TransactionSynchronizationManager.initSynchronization();
@@ -93,8 +108,14 @@ class NotificacionCompraEventListenerTest {
         }
 
         @Bean
-        NotificacionCompraEventListener listener(NotificacionCompraPublicador publicador) {
-            return new NotificacionCompraEventListener(publicador);
+        Executor notificacionesAsyncExecutor() {
+            return Runnable::run;
+        }
+
+        @Bean
+        NotificacionCompraEventListener listener(NotificacionCompraPublicador publicador,
+                                                 Executor notificacionesAsyncExecutor) {
+            return new NotificacionCompraEventListener(publicador, notificacionesAsyncExecutor);
         }
     }
 }

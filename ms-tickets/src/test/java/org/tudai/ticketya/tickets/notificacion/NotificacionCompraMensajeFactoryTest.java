@@ -8,24 +8,19 @@ import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntrante
 
 import java.math.BigDecimal;
 import java.util.List;
-import java.util.regex.Pattern;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 class NotificacionCompraMensajeFactoryTest {
 
-    private static final Pattern FORMATO_ID = Pattern.compile(
-            "^MST-\\d+-[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$");
-
     private final NotificacionCompraMensajeFactory factory = new NotificacionCompraMensajeFactory();
 
     @Test
     void creaMensajeConDatosDeCompraYMensajeIdMst() {
-        NotificacionEntranteDTO dto = factory.crear(10L, 20L, 5L,
+        NotificacionEntranteDTO dto = factory.crear(7L, 10L, 20L, 5L,
                 List.of(new AsientoNotificacion(1, 2)), 1, new BigDecimal("1500.00"), "ARS");
 
-        assertNotNull(dto.getMensajeId());
-        assertTrue(FORMATO_ID.matcher(dto.getMensajeId()).matches(), "mensajeId: " + dto.getMensajeId());
+        assertEquals("MST-RESERVA-7", dto.getMensajeId());
         assertEquals(MotivoNotificacion.CONFIRMACION_COMPRA, dto.getMotivo());
         assertEquals(10L, dto.getEventoId());
         assertEquals(20L, dto.getDestinatarioId().longValue());
@@ -41,9 +36,9 @@ class NotificacionCompraMensajeFactoryTest {
     }
 
     @Test
-    void generaIdsDistintos() {
-        NotificacionEntranteDTO a = factory.crear(1L, 2L, 3L, List.of(), 0, null, null);
-        NotificacionEntranteDTO b = factory.crear(1L, 2L, 3L, List.of(), 0, null, null);
-        assertNotEquals(a.getMensajeId(), b.getMensajeId());
+    void generaIdEstableParaLaMismaReserva() {
+        NotificacionEntranteDTO a = factory.crear(7L, 1L, 2L, 3L, List.of(), 0, null, null);
+        NotificacionEntranteDTO b = factory.crear(7L, 1L, 2L, 3L, List.of(), 0, null, null);
+        assertEquals(a.getMensajeId(), b.getMensajeId());
     }
 }

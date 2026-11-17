@@ -19,6 +19,9 @@ import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.domain.EstadoNotificacion;
 import org.tudai.ticketya.notificaciones.domain.Notificacion;
+import org.tudai.ticketya.notificaciones.exception.EmailConexionException;
+import org.tudai.ticketya.notificaciones.exception.EmailPermanenteException;
+import org.tudai.ticketya.notificaciones.exception.EmailTimeoutException;
 import org.tudai.ticketya.notificaciones.repository.NotificacionRepository;
 import org.tudai.ticketya.notificaciones.service.destinatarios.DestinatariosResolver;
 import org.tudai.ticketya.notificaciones.service.destinatarios.DestinatariosResolverRegistry;
@@ -144,7 +147,7 @@ class NotificacionServiceTest {
     }
 
     @Test
-    void falloEnEnvioMarcaFallidoYRelanza() {
+    void falloDeConexionMarcaPendienteConUltimoErrorYRelanza() {
         Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
         when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
                 .thenReturn(Optional.of(n));
@@ -153,18 +156,20 @@ class NotificacionServiceTest {
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
         when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
         when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
-        doThrow(new RuntimeException("SMTP down")).when(emailService).enviar(any(), any(), any());
+        EmailConexionException error = new EmailConexionException("SMTP down", new RuntimeException("refused"));
+        doThrow(error).when(emailService).enviar(any(), any(), any());
 
         assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("SMTP down");
+                .isSameAs(error);
 
-        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO));
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.PENDIENTE
+                && "refused".equals(x.getUltimoError())));
+        verify(notificacionRepository, never()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO));
         verify(notificacionRepository, never()).save(argThat(x -> x.getEstado() == EstadoNotificacion.ENVIADO));
     }
 
     @Test
-    void falloAlMarcarEnviadoNoMarcaFallidoNiReenvia() {
+    void falloAlMarcarEnviadoDejaEnviandoSinReenviar() {
         Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
         when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
                 .thenReturn(Optional.of(n));
@@ -181,13 +186,94 @@ class NotificacionServiceTest {
             return guardada;
         }).when(notificacionRepository).save(any(Notificacion.class));
 
-        assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("db caida");
+        service.procesarNotificacionEntrante(entrante);
 
         verify(emailService).enviar("ana@test.com", "asunto", "cuerpo");
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.ENVIANDO
+                && "db caida".equals(x.getUltimoError())));
         verify(notificacionRepository, never())
                 .save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO));
+    }
+
+    @Test
+    void timeoutDejaEnviandoYNoRelanza() {
+        Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
+        when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
+                .thenReturn(Optional.of(n));
+        when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
+        when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
+        when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
+        doThrow(new EmailTimeoutException("timeout", new RuntimeException("timed out")))
+                .when(emailService).enviar(any(), any(), any());
+
+        service.procesarNotificacionEntrante(entrante);
+
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.ENVIANDO
+                && "timed out".equals(x.getUltimoError())));
+        verify(notificacionRepository, never()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO));
+    }
+
+    @Test
+    void falloPermanenteNoEntregableNoRelanza() {
+        Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
+        when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
+                .thenReturn(Optional.of(n));
+        when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
+        when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
+        when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
+        doThrow(new EmailPermanenteException("direccion invalida", new RuntimeException("invalid"),
+                EmailPermanenteException.Tipo.NO_ENTREGABLE))
+                .when(emailService).enviar(any(), any(), any());
+
+        service.procesarNotificacionEntrante(entrante);
+
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.NO_ENTREGABLE
+                && "invalid".equals(x.getUltimoError())));
+        verify(notificacionRepository, never()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO));
+    }
+
+    @Test
+    void falloPermanenteFallidoNoRelanza() {
+        Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
+        when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
+                .thenReturn(Optional.of(n));
+        when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
+        when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
+        when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
+        doThrow(new EmailPermanenteException("autenticacion", new RuntimeException("auth"),
+                EmailPermanenteException.Tipo.FALLIDO))
+                .when(emailService).enviar(any(), any(), any());
+
+        service.procesarNotificacionEntrante(entrante);
+
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO
+                && "auth".equals(x.getUltimoError())));
+        verify(notificacionRepository, never()).save(argThat(x -> x.getEstado() == EstadoNotificacion.ENVIADO));
+    }
+
+    @Test
+    void falloDePlantillaMarcaFallidoSinRelanzar() {
+        Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
+        when(notificacionRepository.findByMensajeIdAndDestinatarioId("MST-1-u", 20L))
+                .thenReturn(Optional.of(n));
+        when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
+        when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
+        when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any()))
+                .thenThrow(new IllegalStateException("template roto"));
+
+        service.procesarNotificacionEntrante(entrante);
+
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getEstado() == EstadoNotificacion.FALLIDO
+                && "template roto".equals(x.getUltimoError())));
+        verifyNoInteractions(emailService);
     }
 
     @Test
@@ -347,30 +433,41 @@ class NotificacionServiceTest {
     }
 
     @Test
-    void avisoMasivoConUnFalloContinuaConLosDemasYRelanza() {
+    void avisoMasivoConFalloDeConexionCortaYRelanza() {
         prepararAvisoMasivo(List.of(20L, 21L));
         prepararPersistenciaMasiva();
-        List<String> estados = capturarEstados();
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario("ana@test.com"));
-        when(usuarioClient.obtenerUsuario(21L)).thenReturn(usuario("bruno@test.com"));
-        doAnswer(inv -> {
-            if ("bruno@test.com".equals(inv.getArgument(0, String.class))) {
-                throw new RuntimeException("SMTP down");
-            }
-            return null;
-        }).when(emailService).enviar(any(), any(), any());
+        doThrow(new EmailConexionException("SMTP down", new RuntimeException("refused")))
+                .when(emailService).enviar(eq("ana@test.com"), any(), any());
 
         assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Fallo el envio de 1 notificaciones");
+                .isInstanceOf(EmailConexionException.class);
+
+        verify(emailService).enviar(eq("ana@test.com"), any(), any());
+        verify(emailService, never()).enviar(eq("bruno@test.com"), any(), any());
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getDestinatarioId() == 20L
+                && x.getEstado() == EstadoNotificacion.PENDIENTE
+                && "refused".equals(x.getUltimoError())));
+    }
+
+    @Test
+    void avisoMasivoConFalloPermanenteContinuaSinRelanzar() {
+        prepararAvisoMasivo(List.of(20L, 21L));
+        prepararPersistenciaMasiva();
+        when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario("ana@test.com"));
+        when(usuarioClient.obtenerUsuario(21L)).thenReturn(usuario("bruno@test.com"));
+        doThrow(new EmailPermanenteException("direccion invalida", new RuntimeException("invalid"),
+                EmailPermanenteException.Tipo.NO_ENTREGABLE))
+                .when(emailService).enviar(eq("ana@test.com"), any(), any());
+
+        service.procesarNotificacionEntrante(entrante);
 
         verify(emailService).enviar(eq("ana@test.com"), any(), any());
         verify(emailService).enviar(eq("bruno@test.com"), any(), any());
-        assertThat(estados).containsExactly(
-                "20:" + EstadoNotificacion.ENVIANDO,
-                "20:" + EstadoNotificacion.ENVIADO,
-                "21:" + EstadoNotificacion.ENVIANDO,
-                "21:" + EstadoNotificacion.FALLIDO);
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getDestinatarioId() == 20L
+                && x.getEstado() == EstadoNotificacion.NO_ENTREGABLE));
+        verify(notificacionRepository, atLeastOnce()).save(argThat(x -> x.getDestinatarioId() == 21L
+                && x.getEstado() == EstadoNotificacion.ENVIADO));
     }
 
     @Test
@@ -462,24 +559,19 @@ class NotificacionServiceTest {
         prepararPersistenciaMasiva();
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario("ana@test.com"));
         when(usuarioClient.obtenerUsuario(21L)).thenReturn(usuario("bruno@test.com"));
-        doAnswer(inv -> {
-            if ("bruno@test.com".equals(inv.getArgument(0, String.class))) {
-                throw new RuntimeException("SMTP down");
-            }
-            return null;
-        }).when(emailService).enviar(any(), any(), any());
+        doThrow(new EmailConexionException("SMTP down", new RuntimeException("refused")))
+                .when(emailService).enviar(eq("bruno@test.com"), any(), any());
 
         assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
-                .isInstanceOf(RuntimeException.class)
-                .hasMessageContaining("Fallo el envio de 1 notificaciones");
+                .isInstanceOf(EmailConexionException.class);
         clearInvocations(emailService, destinatariosResolverRegistry, preferenciasResolver);
         doNothing().when(emailService).enviar(any(), any(), any());
 
         Notificacion enviada = notificacion(1L, 20L, EstadoNotificacion.ENVIADO);
-        Notificacion fallida = notificacion(2L, 21L, EstadoNotificacion.FALLIDO);
+        Notificacion pendiente = notificacion(2L, 21L, EstadoNotificacion.PENDIENTE);
         when(notificacionRepository.findByMensajeIdOrderByIdAsc("MST-1-u"))
-                .thenReturn(List.of(enviada, fallida));
-        when(notificacionRepository.findById(2L)).thenReturn(Optional.of(fallida));
+                .thenReturn(List.of(enviada, pendiente));
+        when(notificacionRepository.findById(2L)).thenReturn(Optional.of(pendiente));
 
         service.procesarNotificacionEntrante(entrante);
 
@@ -507,6 +599,30 @@ class NotificacionServiceTest {
 
         verifyNoInteractions(emailService, destinatariosResolverRegistry, preferenciasResolver);
         verify(notificacionRepository, times(1)).saveAllAndFlush(anyList());
+    }
+
+    @Test
+    void marcarPendientesComoFallidosSoloAfectaPendientes() {
+        Notificacion enviada = notificacion(1L, 20L, EstadoNotificacion.ENVIADO);
+        Notificacion pendiente = notificacion(2L, 21L, EstadoNotificacion.PENDIENTE);
+        Notificacion enviando = notificacion(3L, 22L, EstadoNotificacion.ENVIANDO);
+        Notificacion noEntregable = notificacion(4L, 23L, EstadoNotificacion.NO_ENTREGABLE);
+        when(notificacionRepository.findByMensajeIdOrderByIdAsc("MST-1-u"))
+                .thenReturn(List.of(enviada, pendiente, enviando, noEntregable));
+
+        service.marcarPendientesComoFallidos("MST-1-u", new RuntimeException("agotado"));
+
+        ArgumentCaptor<Iterable<Notificacion>> captor = ArgumentCaptor.forClass(Iterable.class);
+        verify(notificacionRepository).saveAllAndFlush(captor.capture());
+        List<Notificacion> guardadas = new ArrayList<>();
+        captor.getValue().forEach(guardadas::add);
+        assertThat(guardadas).hasSize(1);
+        assertThat(guardadas.get(0).getDestinatarioId()).isEqualTo(21L);
+        assertThat(guardadas.get(0).getEstado()).isEqualTo(EstadoNotificacion.FALLIDO);
+        assertThat(guardadas.get(0).getUltimoError()).isEqualTo("agotado");
+        assertThat(enviada.getEstado()).isEqualTo(EstadoNotificacion.ENVIADO);
+        assertThat(enviando.getEstado()).isEqualTo(EstadoNotificacion.ENVIANDO);
+        assertThat(noEntregable.getEstado()).isEqualTo(EstadoNotificacion.NO_ENTREGABLE);
     }
 
     private void prepararAvisoMasivo(List<Long> compradores) {

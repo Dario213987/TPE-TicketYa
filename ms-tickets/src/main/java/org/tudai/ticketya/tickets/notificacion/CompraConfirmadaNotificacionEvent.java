@@ -11,6 +11,7 @@ import java.util.List;
  */
 public class CompraConfirmadaNotificacionEvent {
 
+    private final Long reservaId;
     private final Long eventoId;
     private final Long destinatarioId;
     private final Long sectorId;
@@ -19,9 +20,10 @@ public class CompraConfirmadaNotificacionEvent {
     private final BigDecimal monto;
     private final String moneda;
 
-    public CompraConfirmadaNotificacionEvent(Long eventoId, Long destinatarioId, Long sectorId,
+    public CompraConfirmadaNotificacionEvent(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                              List<AsientoNotificacion> asientos, Integer cantidad,
                                              BigDecimal monto, String moneda) {
+        this.reservaId = reservaId;
         this.eventoId = eventoId;
         this.destinatarioId = destinatarioId;
         this.sectorId = sectorId;
@@ -29,6 +31,10 @@ public class CompraConfirmadaNotificacionEvent {
         this.cantidad = cantidad;
         this.monto = monto;
         this.moneda = moneda;
+    }
+
+    public Long getReservaId() {
+        return reservaId;
     }
 
     public Long getEventoId() {

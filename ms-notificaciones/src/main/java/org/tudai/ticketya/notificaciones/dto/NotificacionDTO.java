@@ -20,4 +20,5 @@ public class NotificacionDTO {
     private Long eventoId;
     private EstadoNotificacion estado;
     private LocalDateTime fechaCreacion;
+    private String ultimoError;
 }

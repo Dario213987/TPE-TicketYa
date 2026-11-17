@@ -16,6 +16,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.context.annotation.ScopedProxyMode;
 import org.springframework.core.Ordered;
+import org.springframework.core.task.TaskDecorator;
 import org.springframework.web.context.annotation.RequestScope;
 import org.springframework.web.servlet.config.annotation.InterceptorRegistry;
 import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
@@ -25,6 +26,7 @@ import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.feign.CorrelationIdFeignInterceptor;
 import org.tudai.ticketya.web.feign.TicketyaErrorDecoder;
 import org.tudai.ticketya.web.feign.UserHeadersFeignInterceptor;
+import org.tudai.ticketya.web.logging.MdcTaskDecorator;
 import org.tudai.ticketya.web.logging.RequestLoggingFilter;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
 import org.tudai.ticketya.web.user.HeaderUserContext;
@@ -41,6 +43,12 @@ public class TicketyaWebAutoConfiguration {
     @ConditionalOnMissingBean(GlobalExceptionHandler.class)
     public GlobalExceptionHandler globalExceptionHandler() {
         return new GlobalExceptionHandler();
+    }
+
+    @Bean
+    @ConditionalOnMissingBean(TaskDecorator.class)
+    public TaskDecorator mdcTaskDecorator() {
+        return new MdcTaskDecorator();
     }
 
     @Bean

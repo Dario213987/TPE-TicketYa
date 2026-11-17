@@ -13,9 +13,13 @@ import org.tudai.ticketya.notificaciones.client.UsuarioClient;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.domain.EstadoNotificacion;
+import org.tudai.ticketya.notificaciones.exception.EmailConexionException;
+import org.tudai.ticketya.notificaciones.exception.EmailPermanenteException;
+import org.tudai.ticketya.notificaciones.exception.EmailTimeoutException;
 import org.tudai.ticketya.notificaciones.service.destinatarios.DestinatariosResolverRegistry;
 import org.tudai.ticketya.notificaciones.domain.Notificacion;
 import org.tudai.ticketya.notificaciones.repository.NotificacionRepository;
+import org.tudai.ticketya.notificaciones.util.ResumidorErrores;
 
 import java.time.LocalDateTime;
 import java.util.ArrayList;
@@ -49,7 +53,9 @@ public class NotificacionService {
      * deja filas parciales.
      * <p>
      * Los estados {@code ENVIADO}, {@code ENVIANDO} y {@code NO_ENTREGABLE} se omiten
-     * para no duplicar envios. {@code PENDIENTE} y {@code FALLIDO} se reintentan.
+     * para no duplicar envios. {@code PENDIENTE} y {@code FALLIDO} se reintentan. Los
+     * fallos de conexion SMTP devuelven la fila a {@code PENDIENTE}; los permanentes no
+     * se reintentan y los timeouts dejan la fila en {@code ENVIANDO}.
      *
      * @param entrante mensaje recibido de la cola
      * @throws IllegalArgumentException si falta mensajeId o motivo
@@ -87,6 +93,8 @@ public class NotificacionService {
         for (Notificacion notificacion : notificaciones) {
             try {
                 procesarNotificacion(entrante, notificacion);
+            } catch (EmailConexionException e) {
+                throw e;
             } catch (RuntimeException e) {
                 fallos.add(e);
             }
@@ -160,29 +168,76 @@ public class NotificacionService {
             return;
         }
 
+        EventoClientDTO evento;
+        UsuarioClientDTO usuario;
         try {
-            EventoClientDTO evento = eventoClient.obtenerEvento(entrante.getEventoId());
-            UsuarioClientDTO usuario = usuarioClient.obtenerUsuario(notificacion.getDestinatarioId());
-
-            String email = usuario != null ? usuario.getEmail() : null;
-            if (email == null || email.isBlank()) {
-                log.warn("Notificacion no entregable (sin email): mensajeId={}, destinatarioId={}",
-                        entrante.getMensajeId(), notificacion.getDestinatarioId());
-                marcarNoEntregable(notificacion.getId());
-                return;
-            }
-
-            String asunto = plantillaEmailService.asunto(entrante, evento);
-            String cuerpo = plantillaEmailService.renderizar(entrante, evento, usuario);
-
-            marcarEnviando(notificacion.getId());
-            emailService.enviar(email, asunto, cuerpo);
+            evento = eventoClient.obtenerEvento(entrante.getEventoId());
+            usuario = usuarioClient.obtenerUsuario(notificacion.getDestinatarioId());
         } catch (RuntimeException e) {
-            marcarFallida(notificacion.getId());
+            marcarFallida(notificacion.getId(), e);
             throw e;
         }
 
-        marcarEnviada(notificacion.getId());
+        String email = usuario != null ? usuario.getEmail() : null;
+        if (email == null || email.isBlank()) {
+            log.warn("Notificacion no entregable (sin email): mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId());
+            marcarNoEntregable(notificacion.getId(), null);
+            return;
+        }
+
+        String asunto;
+        String cuerpo;
+        try {
+            asunto = plantillaEmailService.asunto(entrante, evento);
+            cuerpo = plantillaEmailService.renderizar(entrante, evento, usuario);
+        } catch (RuntimeException e) {
+            marcarFallida(notificacion.getId(), e);
+            log.error("Error permanente de plantilla: mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId(), e);
+            return;
+        }
+
+        try {
+            marcarEnviando(notificacion.getId());
+        } catch (RuntimeException e) {
+            marcarFallida(notificacion.getId(), e);
+            throw e;
+        }
+
+        try {
+            emailService.enviar(email, asunto, cuerpo);
+        } catch (EmailConexionException e) {
+            marcarPendiente(notificacion.getId(), e);
+            log.error("Fallo de conexion SMTP: mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId(), e);
+            throw e;
+        } catch (EmailTimeoutException e) {
+            guardarConEstado(notificacion.getId(), EstadoNotificacion.ENVIANDO, e);
+            log.error("Timeout de SMTP: mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId(), e);
+            return;
+        } catch (EmailPermanenteException e) {
+            if (e.getTipo() == EmailPermanenteException.Tipo.NO_ENTREGABLE) {
+                marcarNoEntregable(notificacion.getId(), e);
+            } else {
+                marcarFallida(notificacion.getId(), e);
+            }
+            log.error("Error permanente de SMTP: mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId(), e);
+            return;
+        } catch (RuntimeException e) {
+            marcarFallida(notificacion.getId(), e);
+            throw e;
+        }
+
+        try {
+            marcarEnviada(notificacion.getId());
+        } catch (RuntimeException e) {
+            guardarConEstado(notificacion.getId(), EstadoNotificacion.ENVIANDO, e);
+            log.error("No se pudo registrar el envio: mensajeId={}, destinatarioId={}",
+                    entrante.getMensajeId(), notificacion.getDestinatarioId(), e);
+        }
     }
 
     /**
@@ -232,9 +287,7 @@ public class NotificacionService {
      */
     @Transactional
     public void marcarEnviando(Long id) {
-        Notificacion notificacion = obtenerPorId(id);
-        notificacion.setEstado(EstadoNotificacion.ENVIANDO);
-        notificacionRepository.save(notificacion);
+        guardarConEstado(id, EstadoNotificacion.ENVIANDO, null);
     }
 
     /**
@@ -247,6 +300,7 @@ public class NotificacionService {
         Notificacion notificacion = obtenerPorId(id);
         notificacion.setEstado(EstadoNotificacion.ENVIADO);
         notificacion.setFechaEnvio(LocalDateTime.now());
+        notificacion.setUltimoError(null);
         notificacionRepository.save(notificacion);
     }
 
@@ -257,9 +311,12 @@ public class NotificacionService {
      */
     @Transactional
     public void marcarFallida(Long id) {
-        Notificacion notificacion = obtenerPorId(id);
-        notificacion.setEstado(EstadoNotificacion.FALLIDO);
-        notificacionRepository.save(notificacion);
+        marcarFallida(id, null);
+    }
+
+    @Transactional
+    public void marcarFallida(Long id, Throwable causa) {
+        guardarConEstado(id, EstadoNotificacion.FALLIDO, causa);
     }
 
     /**
@@ -269,8 +326,38 @@ public class NotificacionService {
      */
     @Transactional
     public void marcarNoEntregable(Long id) {
+        marcarNoEntregable(id, null);
+    }
+
+    @Transactional
+    public void marcarNoEntregable(Long id, Throwable causa) {
+        guardarConEstado(id, EstadoNotificacion.NO_ENTREGABLE, causa);
+    }
+
+    @Transactional
+    public void marcarPendientesComoFallidos(String mensajeId, Throwable causa) {
+        String error = ResumidorErrores.resumir(causa);
+        List<Notificacion> pendientes = notificacionRepository.findByMensajeIdOrderByIdAsc(mensajeId).stream()
+                .filter(notificacion -> notificacion.getEstado() == EstadoNotificacion.PENDIENTE)
+                .map(notificacion -> {
+                    notificacion.setEstado(EstadoNotificacion.FALLIDO);
+                    notificacion.setUltimoError(error);
+                    return notificacion;
+                })
+                .toList();
+        if (!pendientes.isEmpty()) {
+            notificacionRepository.saveAllAndFlush(pendientes);
+        }
+    }
+
+    private void marcarPendiente(Long id, Throwable causa) {
+        guardarConEstado(id, EstadoNotificacion.PENDIENTE, causa);
+    }
+
+    private void guardarConEstado(Long id, EstadoNotificacion estado, Throwable causa) {
         Notificacion notificacion = obtenerPorId(id);
-        notificacion.setEstado(EstadoNotificacion.NO_ENTREGABLE);
+        notificacion.setEstado(estado);
+        notificacion.setUltimoError(causa == null ? null : ResumidorErrores.resumir(causa));
         notificacionRepository.save(notificacion);
     }
 
