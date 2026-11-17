@@ -612,6 +612,13 @@ components:
         altaDemanda:
           type: boolean
           description: Indica que el evento usa fila virtual por alta demanda.
+        ciudad:
+          type: string
+          description: Ciudad del lugar del evento.
+        participanteIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: Ids de los participantes/artistas del evento.
     EventoUpdateRequest:
       type: object
       description: |

@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Consultas internas sobre los compradores de un evento.
  * <p>
- * Un comprador es un usuario con al menos un ticket emitido, usado o devuelto. Las
+ * Un comprador es un usuario con al menos un ticket emitido, vendido, usado o devuelto. Las
  * reservas y los tickets cancelados, vencidos o liberados no representan una compra
  * confirmada y no se incluyen.
  */
@@ -21,6 +21,7 @@ public class CompradoresService {
 
     private static final List<EstadoTicket> ESTADOS_COMPRADOR = List.of(
             EstadoTicket.EMITIDO,
+            EstadoTicket.VENDIDO,
             EstadoTicket.USADO,
             EstadoTicket.DEVUELTO);
 

@@ -19,6 +19,7 @@ class CompradoresServiceTest {
 
     private static final List<EstadoTicket> ESTADOS_COMPRADOR = List.of(
             EstadoTicket.EMITIDO,
+            EstadoTicket.VENDIDO,
             EstadoTicket.USADO,
             EstadoTicket.DEVUELTO);
 
@@ -35,11 +36,11 @@ class CompradoresServiceTest {
     @Test
     void listarCompradores_consultaSoloLosEstadosDeCompra() {
         when(ticketRepository.findClienteIdsDistintosPorEvento(7L, ESTADOS_COMPRADOR))
-                .thenReturn(List.of(10L, 20L));
+                .thenReturn(List.of(10L, 20L, 40L));
 
         List<Long> compradores = service.listarCompradores(7L);
 
-        assertThat(compradores).containsExactly(10L, 20L);
+        assertThat(compradores).containsExactly(10L, 20L, 40L);
         verify(ticketRepository).findClienteIdsDistintosPorEvento(7L, ESTADOS_COMPRADOR);
     }
 

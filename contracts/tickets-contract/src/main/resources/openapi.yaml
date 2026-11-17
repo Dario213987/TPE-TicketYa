@@ -9,6 +9,7 @@ info:
     Roles:
     - CLIENTE: puede reservar entradas, pagar sus reservas y ver sus entradas con el QR.
     - ORGANIZADOR y ADMINISTRADOR: pueden publicar la disponibilidad de un evento.
+    - PERSONAL_ACCESO: puede validar el ingreso de entradas por QR.
     - La consulta de disponibilidad es publica.
 
     Las reservas vencidas se liberan de forma perezosa antes de reservar y antes de consultar
@@ -27,6 +28,7 @@ tags:
   - name: reservas
   - name: entradas
   - name: disponibilidad
+  - name: accesos
   - name: fila
   - name: interno
 paths:
@@ -343,6 +345,39 @@ paths:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/eventos/{eventoId}/accesos/validar:
+    post:
+      tags: [accesos]
+      operationId: validarAcceso
+      summary: Valida el ingreso de una entrada por QR
+      description: |
+        Solo el rol PERSONAL_ACCESO puede validar accesos. Marca la entrada como USADA de forma
+        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Responde
+        404 si el QR no existe y 409 si pertenece a otro evento, ya fue usado, fue devuelto o
+        no esta vendido.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ValidarAccesoRequestDTO'
+      responses:
+        '200':
+          description: Entrada valida; el ticket quedo en estado USADO
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ResultadoAccesoDTO'
+        '400': { $ref: '#/components/responses/Error' }
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/tickets/internal/eventos/{eventoId}/cancelar:
     put:
       tags: [interno]
@@ -443,7 +478,9 @@ paths:
         Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
         Devuelve los identificadores de usuario distintos que compraron al menos una
         entrada para el evento. Se consideran compras los tickets en estado EMITIDO,
-        USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        VENDIDO, USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        DEVUELTO se conserva a propósito: los avisos de cancelación y EDICION incluyen el
+        aviso de reintegro y deben llegar también a quien ya solicitó la devolución.
 
         Un evento sin compras devuelve una lista vacia, no 404. No requiere headers de
         usuario. Pensado para que otro microservicio arme avisos masivos a los compradores.
@@ -668,6 +705,21 @@ components:
     EstadoPago:
       type: string
       enum: [PENDIENTE_PAGO, APROBADO, RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE]
+    ValidarAccesoRequestDTO:
+      type: object
+      required: [codigoQr]
+      properties:
+        codigoQr: { type: string }
+    ResultadoAccesoDTO:
+      type: object
+      required: [resultado, valido, codigoQr, eventoId, estadoTicket]
+      properties:
+        resultado: { type: string, example: OK }
+        valido: { type: boolean }
+        codigoQr: { type: string }
+        eventoId: { type: integer, format: int64 }
+        estadoTicket:
+          $ref: '#/components/schemas/EstadoTicket'
     EstadoTicket:
       type: string
       enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]

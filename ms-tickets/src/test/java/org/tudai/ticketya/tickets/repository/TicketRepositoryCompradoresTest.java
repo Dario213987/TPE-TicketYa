@@ -29,6 +29,7 @@ class TicketRepositoryCompradoresTest {
 
     private static final List<EstadoTicket> ESTADOS_COMPRADOR = List.of(
             EstadoTicket.EMITIDO,
+            EstadoTicket.VENDIDO,
             EstadoTicket.USADO,
             EstadoTicket.DEVUELTO);
 
@@ -55,11 +56,15 @@ class TicketRepositoryCompradoresTest {
         crearTicket("qr-8", 70L, EstadoTicket.LIBERADO, evento, sector);
         crearTicket("qr-9", null, EstadoTicket.EMITIDO, evento, sector);
         crearTicket("qr-10", 80L, EstadoTicket.EMITIDO, otroEvento, otroSector);
+        crearTicket("qr-vendido", 45L, EstadoTicket.VENDIDO, evento, sector);
+        crearTicket("qr-vendido-otro", 85L, EstadoTicket.VENDIDO, otroEvento, otroSector);
 
         entityManager.flush();
 
         assertThat(ticketRepository.findClienteIdsDistintosPorEvento(7L, ESTADOS_COMPRADOR))
-                .containsExactly(10L, 20L, 30L);
+                .containsExactly(10L, 20L, 30L, 45L);
+        assertThat(ticketRepository.findClienteIdsDistintosPorEvento(8L, ESTADOS_COMPRADOR))
+                .containsExactly(80L, 85L);
     }
 
     @Test

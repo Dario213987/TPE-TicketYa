@@ -1,8 +1,9 @@
-# ms-preferencias — preferencias del cliente (US-09.01)
+# ms-preferencias — preferencias, historial y recomendaciones
 
 Guarda los gustos declarados por el cliente: tipos de evento favoritos, artistas favoritos y ciudad.
+También construye el historial de compras y asistencias y calcula sugerencias de eventos.
 Requiere los encabezados `X-User-Id` (numérico) y `X-User-Role: CLIENTE`: sin ellos responde `401` y con
-otro rol `403`. El gateway expone las rutas bajo `/api/preferencias`.
+otro rol `403`. El gateway expone las rutas bajo `/api/preferencias` y `/api/recomendaciones`.
 
 El cliente se toma siempre de `X-User-Id`, nunca del path ni del cuerpo, así que un cliente no puede
 leer ni pisar las preferencias de otro. El contrato está en
@@ -208,7 +209,8 @@ La `fecha` del historial se devuelve en UTC, sin offset.
   volver.
 - **Límites conocidos**: no hay reintento de un mensaje que falla al procesarse (se loguea y se
   confirma); hay un solo consumidor, así que no se garantiza orden entre los dos streams. La
-  co-ocurrencia (`co_compras`) se calcula en US-13.03 y el endpoint de sugerencias es US-13.04.
+  co-ocurrencia (`co_compras`) se calcula en US-13.03 y el endpoint de sugerencias en US-13.04
+  (ver [Endpoint de sugerencias](#endpoint-de-sugerencias-us-0904)).
 
 ### Configuración
 
@@ -255,8 +257,9 @@ actualiza el mismo evento (o se ignora si es el mismo id de mensaje). El test de
 
 ## Recomendaciones simplificadas (US-09.03)
 
-Esta sección cubre el **algoritmo y la co-ocurrencia**; el endpoint `GET /api/recomendaciones`
-(con el cliente de `ms-eventos` y el fallback) es la US-09.04. Acá se explica cómo se calcula el
+Esta sección cubre el **algoritmo y la co-ocurrencia**. El endpoint `GET /api/recomendaciones` (con el
+cliente de `ms-eventos` y el fallback) está en
+[Endpoint de sugerencias](#endpoint-de-sugerencias-us-0904). Acá se explica cómo se calcula el
 puntaje de un evento candidato para que la recomendación sea simple y justificable.
 
 ### Co-ocurrencia de compras (`co_compras`)
@@ -325,6 +328,104 @@ Reglas adicionales:
 - Los candidatos (eventos publicados y futuros) los arma el endpoint de US-09.04 con `ms-eventos`; el
   algoritmo de esta card solo puntúa los que recibe.
 
+## Endpoint de sugerencias (US-09.04)
+
+`GET /api/recomendaciones` (rol `CLIENTE`) devuelve hasta **10** eventos sugeridos para el cliente
+autenticado. Usa los mismos encabezados que el resto del servicio: `401` si faltan y `403` si el rol no
+es `CLIENTE`. Se apoya en el algoritmo de la sección anterior.
+
+### Flujo
+
+1. Pide a `ms-eventos` los eventos visibles con `GET /api/eventos?desde=<hoy>&orden=fecha`, recorriendo
+   hasta 10 páginas de 50 (el tamaño máximo que acepta `ms-eventos`). El `EventoResumen` ya trae
+   `ciudad` e `participanteIds`, así que alcanza con esa consulta y no se pide el detalle de cada evento.
+2. Descarta `AGOTADO` y los eventos sin fecha: solo quedan `PUBLICADO` con fecha desde hoy.
+3. Puntúa los candidatos con `RecomendacionService` (US-09.03): artista +5, tipo +3, co-ocurrencia
+   +1..+3 y ciudad +1. El historial excluye los eventos que el cliente ya compró o usó.
+4. Devuelve los 10 mejores, con el `motivo` y el `puntaje` de cada uno.
+
+### Respuesta
+
+```json
+[
+  {
+    "eventoId": 5,
+    "nombre": "Recital de rock",
+    "tipo": "RECITAL",
+    "fecha": "2026-12-01T20:00:00",
+    "estado": "PUBLICADO",
+    "ciudad": "Tandil",
+    "motivo": "ARTISTA",
+    "puntaje": 6
+  }
+]
+```
+
+`motivo` es el criterio de mayor peso que explica la sugerencia: `ARTISTA` > `TIPO` > `CO_COMPRA` >
+`CIUDAD`. En el fallback también puede ser `CIUDAD` o `PROXIMO`, ambos con `puntaje = 0`. Explicar la
+sugerencia con un motivo es una extensión de esta entrega: la spec lo listaba fuera de alcance, pero el
+front lo usa para mostrar por qué se recomienda cada evento.
+
+### Sin preferencias ni historial (fallback)
+
+Si el cliente no tiene tipos favoritos, artistas favoritos ni historial, no hay nada que puntuar. En ese
+caso se devuelven los próximos eventos (los primeros de la consulta ordenada por fecha):
+
+| Caso | Resultado |
+|---|---|
+| Tiene `ciudad` en sus preferencias | próximos eventos de esa ciudad, `motivo = CIUDAD`, `puntaje = 0` |
+| No tiene ciudad | próximos eventos en general, `motivo = PROXIMO`, `puntaje = 0` |
+| Tiene preferencias pero ningún candidato coincide | `[]` (no se reemplaza por el fallback) |
+
+El fallback se aplica cuando el cliente no tiene tipos favoritos, artistas favoritos ni historial, aunque
+tenga ciudad. Si el cliente cargó favoritos, una lista vacía es un resultado válido.
+
+### ms-eventos caído
+
+Si la llamada a `ms-eventos` falla (timeout, 5xx, conexión rechazada), el servicio registra un `WARN` y
+responde `200 []`. No propaga el error: el cliente ve una lista vacía, como pide la US.
+
+### Contrato y cambios en ms-eventos
+
+- `contracts/preferencias-contract/openapi.yaml`: agrega `GET /api/recomendaciones`,
+  `RecomendacionResponseDTO` y el enum `MotivoRecomendacion` (`ARTISTA`, `TIPO`, `CO_COMPRA`, `CIUDAD`,
+  `PROXIMO`).
+- `contracts/eventos-contract/openapi.yaml`: `EventoResumen` suma `ciudad` (string) y
+  `participanteIds` (array de ids). Al compartir el contrato, el cliente generado `EventosApiClient`
+  puede leerlos.
+- `ms-eventos`: el listado inicializa `lugar` y `participantes` dentro de la transacción. Con
+  `spring.jpa.open-in-view=false` el mapeo a `EventoResumen` ocurre en el controller, después del
+  `@Transactional`, y sin inicializar daría `LazyInitializationException`.
+- `ms-preferencias` registra solo `EventosApiClient` con `@EnableFeignClients(clients = ...)`; así no
+  se registran `LugaresApiClient` ni `SectoresApiClient`, que también genera el contrato de eventos y
+  necesitan sus propias propiedades de nombre.
+
+### Configuración
+
+| Propiedad | Variable de entorno | Default |
+|---|---|---|
+| `eventos.name` | `EVENTOS_SERVICE_NAME` | `ms-eventos` |
+| `eventos.contextId` | — | `eventos` |
+
+### Cómo probarlo
+
+```powershell
+curl.exe -H "X-User-Id: 7" -H "X-User-Role: CLIENTE" http://localhost:8080/api/recomendaciones
+```
+
+En Postman está la carpeta **4. Recomendaciones** de `postman/ms-preferencias`. Los tests automáticos son
+`RecomendacionEndpointServiceTest` (fallback, filtros, paginación y servicio caído) y
+`RecomendacionControllerTest` (200, 401 y 403).
+
+### Límites conocidos
+
+- Se miran como máximo **500 candidatos** (10 páginas de 50). Con más eventos futuros, los que queden
+  fuera de ese recorte no se recomiendan; el tope acota la latencia y las llamadas a `ms-eventos`.
+- La fecha del resumen se interpreta en UTC para ordenar. Todos los eventos pasan por la misma
+  conversión, así que el orden relativo no cambia.
+- El fallback usa la ciudad guardada en `preferencias`; mientras no exista `ms-usuarios`, un cliente sin
+  preferencias cargadas no tiene ciudad y recibe la lista general.
+
 ## Pendientes
 
 - **Artista inexistente**: la spec pide `400` cuando el `participanteId` no existe en `ms-eventos`.
@@ -332,3 +433,5 @@ Reglas adicionales:
   validar contra el servicio.
 - **Ciudad por defecto**: la spec pide devolver la ciudad del perfil cuando no hay preferencias
   cargadas. Depende de `ms-usuarios` (US-01.01), que todavía no existe en el repo.
+- **Relacionados por evento**: `GET /api/recomendaciones/eventos/{id}` (US-09.04) queda fuera de esta
+  entrega; por ahora solo se implementa `GET /api/recomendaciones`.
