@@ -353,8 +353,8 @@ caso se devuelven los próximos eventos (los primeros de la consulta ordenada po
 | No tiene ciudad | próximos eventos en general, `motivo = PROXIMO`, `puntaje = 0` |
 | Tiene preferencias pero ningún candidato coincide | `[]` (no se reemplaza por el fallback) |
 
-El fallback solo se aplica cuando el scorer no devolvió nada **y** el cliente no tiene preferencias ni
-historial. Si el cliente cargó favoritos, una lista vacía es un resultado válido.
+El fallback se aplica cuando el cliente no tiene tipos favoritos, artistas favoritos ni historial, aunque
+tenga ciudad. Si el cliente cargó favoritos, una lista vacía es un resultado válido.
 
 ### ms-eventos caído
 

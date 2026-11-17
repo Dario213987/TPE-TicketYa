@@ -12,7 +12,6 @@ import org.tudai.ticketya.contract.preferencias.model.TipoEvento;
 import org.tudai.ticketya.preferencias.domain.EventoCandidato;
 import org.tudai.ticketya.preferencias.domain.MotivoRecomendacion;
 import org.tudai.ticketya.preferencias.domain.Preferencia;
-import org.tudai.ticketya.preferencias.domain.Recomendacion;
 import org.tudai.ticketya.preferencias.repository.PreferenciaRepository;
 
 import java.time.Instant;
@@ -79,24 +78,20 @@ public class RecomendacionEndpointService {
         List<EventoCandidato> candidatos = porId.values().stream()
                 .map(this::candidato)
                 .toList();
-        List<Recomendacion> recomendaciones = recomendacionService.recomendar(
-                clienteId, candidatos, LIMITE_RECOMENDACIONES);
-
-        if (!recomendaciones.isEmpty()) {
-            return recomendaciones.stream()
-                    .map(recomendacion -> respuesta(
-                            porId.get(recomendacion.eventoId()),
-                            recomendacion.puntaje(),
-                            motivo(recomendacion.motivo())))
-                    .filter(Objects::nonNull)
-                    .toList();
-        }
 
         Preferencia preferencia = preferenciaRepository.findById(clienteId).orElse(null);
-        if (!sinPreferencias(preferencia)) {
-            return List.of();
+        if (sinPreferencias(preferencia)) {
+            return fallback(preferencia, porId.values());
         }
-        return fallback(preferencia, porId.values());
+
+        return recomendacionService.recomendar(clienteId, candidatos, LIMITE_RECOMENDACIONES)
+                .stream()
+                .map(recomendacion -> respuesta(
+                        porId.get(recomendacion.eventoId()),
+                        recomendacion.puntaje(),
+                        motivo(recomendacion.motivo())))
+                .filter(Objects::nonNull)
+                .toList();
     }
 
     private List<EventoResumen> buscarEventos() {

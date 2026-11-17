@@ -52,6 +52,7 @@ class RecomendacionEndpointServiceTest {
     @Test
     void recomendar_mapeaElEventoYElMotivoDelScorer() {
         dadoPagina(resumen(5L, "Recital", "RECITAL", "Tandil", EstadoEvento.PUBLICADO, 15L));
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(preferenciaConFavoritos()));
         given(recomendacionService.recomendar(eq(7L), anyList(), eq(10)))
                 .willReturn(List.of(new Recomendacion(5L, 5, MotivoRecomendacion.ARTISTA)));
 
@@ -74,6 +75,7 @@ class RecomendacionEndpointServiceTest {
         dadoPagina(
                 resumen(5L, "Publicado", "RECITAL", "Tandil", EstadoEvento.PUBLICADO, 15L),
                 resumen(6L, "Agotado", "TEATRO", "Tandil", EstadoEvento.AGOTADO, 20L));
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(preferenciaConFavoritos()));
         given(recomendacionService.recomendar(eq(7L), anyList(), eq(10))).willReturn(List.of());
 
         endpointService.recomendar(7L);
@@ -90,7 +92,6 @@ class RecomendacionEndpointServiceTest {
         dadoPagina(
                 resumen(5L, "Primero", "RECITAL", "Tandil", EstadoEvento.PUBLICADO, 15L),
                 resumen(6L, "Segundo", "TEATRO", "Olavarria", EstadoEvento.PUBLICADO, 20L));
-        given(recomendacionService.recomendar(eq(7L), anyList(), eq(10))).willReturn(List.of());
         given(preferenciaRepository.findById(7L)).willReturn(Optional.empty());
 
         List<RecomendacionResponseDTO> resultado = endpointService.recomendar(7L);
@@ -101,6 +102,7 @@ class RecomendacionEndpointServiceTest {
             assertThat(recomendacion.getMotivo())
                     .isEqualTo(org.tudai.ticketya.contract.preferencias.model.MotivoRecomendacion.PROXIMO);
         });
+        verifyNoInteractions(recomendacionService);
     }
 
     @Test
@@ -108,7 +110,6 @@ class RecomendacionEndpointServiceTest {
         dadoPagina(
                 resumen(5L, "Tandil", "RECITAL", "Tandil", EstadoEvento.PUBLICADO, 15L),
                 resumen(6L, "Olavarria", "TEATRO", "Olavarria", EstadoEvento.PUBLICADO, 20L));
-        given(recomendacionService.recomendar(eq(7L), anyList(), eq(10))).willReturn(List.of());
         given(preferenciaRepository.findById(7L)).willReturn(Optional.of(
                 Preferencia.builder().clienteId(7L).ciudad("Tandil").build()));
 
@@ -116,9 +117,11 @@ class RecomendacionEndpointServiceTest {
 
         assertThat(resultado).singleElement().satisfies(recomendacion -> {
             assertThat(recomendacion.getEventoId()).isEqualTo(5L);
+            assertThat(recomendacion.getPuntaje()).isZero();
             assertThat(recomendacion.getMotivo())
                     .isEqualTo(org.tudai.ticketya.contract.preferencias.model.MotivoRecomendacion.CIUDAD);
         });
+        verifyNoInteractions(recomendacionService);
     }
 
     @Test
@@ -147,6 +150,7 @@ class RecomendacionEndpointServiceTest {
     @Test
     void recomendar_consultaEventosFuturosOrdenadosYConElTamanoMaximo() {
         dadoPagina(resumen(5L, "Recital", "RECITAL", "Tandil", EstadoEvento.PUBLICADO, 15L));
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(preferenciaConFavoritos()));
         given(recomendacionService.recomendar(eq(7L), anyList(), eq(10)))
                 .willReturn(List.of(new Recomendacion(5L, 5, MotivoRecomendacion.TIPO)));
 
@@ -169,6 +173,7 @@ class RecomendacionEndpointServiceTest {
                 .page(new PagedLugaresPage().totalPages(2));
         dadoPagina(0, primera);
         dadoPagina(1, segunda);
+        given(preferenciaRepository.findById(7L)).willReturn(Optional.of(preferenciaConFavoritos()));
         given(recomendacionService.recomendar(eq(7L), anyList(), eq(10))).willReturn(List.of());
 
         endpointService.recomendar(7L);
@@ -178,6 +183,14 @@ class RecomendacionEndpointServiceTest {
         assertThat(captor.getValue())
                 .extracting(EventoCandidato::eventoId)
                 .containsExactly(5L, 6L);
+    }
+
+    private static Preferencia preferenciaConFavoritos() {
+        return Preferencia.builder()
+                .clienteId(7L)
+                .tiposFavoritos(List.of(
+                        org.tudai.ticketya.contract.preferencias.model.TipoEvento.RECITAL))
+                .build();
     }
 
     private void dadoPagina(int numeroPagina, PagedEventos pagina) {
