@@ -1,0 +1,11 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org">
+<head><meta charset="UTF-8" /><title>Notificación</title></head>
+<body>
+  <h2 th:text="${motivo}">MOTIVO</h2>
+  <p>Hola <span th:text="${usuarioNombre}">Usuario</span>,</p>
+  <p>Evento: <strong th:text="${eventoNombre}">Nombre</strong></p>
+  <p>Fecha: <span th:text="${eventoFecha}">Fecha</span></p>
+  <p>Lugar: <span th:text="${eventoLugar}">Lugar</span></p>
+</body>
+</html>

@@ -61,6 +61,15 @@ public class DisponibilidadService {
             eventoRepository.save(evento);
         }
 
+        if (yaExistia && request.getAltaDemanda() != null
+                && request.getAltaDemanda() != evento.isAltaDemanda()) {
+            throw new ConflictException(
+                    "La condición de alta demanda del evento " + request.getEventoId()
+                            + " solo se define al publicar su disponibilidad");
+        }
+
+        boolean altaDemandaFinal = yaExistia ? evento.isAltaDemanda() : altaDemanda;
+
         // El organizador recibe los pagos: se completa si falta, pero nunca se reemplaza por otro.
         if (request.getOrganizadorId() != null
                 && !request.getOrganizadorId().equals(evento.getOrganizadorId())) {
@@ -71,15 +80,6 @@ public class DisponibilidadService {
             evento.setOrganizadorId(request.getOrganizadorId());
             eventoRepository.save(evento);
         }
-
-        if (yaExistia && request.getAltaDemanda() != null
-                && request.getAltaDemanda() != evento.isAltaDemanda()) {
-            throw new ConflictException(
-                    "La condición de alta demanda del evento " + request.getEventoId()
-                            + " solo se define al publicar su disponibilidad");
-        }
-
-        boolean altaDemandaFinal = yaExistia ? evento.isAltaDemanda() : altaDemanda;
 
         int sectoresProcesados = 0;
         int asientosInsertados = 0;

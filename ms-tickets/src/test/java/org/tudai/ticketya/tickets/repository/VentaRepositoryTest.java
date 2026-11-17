@@ -42,14 +42,14 @@ class VentaRepositoryTest {
                 .capacidadTotal(10).disponibles(9).precio(1500.0).build());
         Reserva reserva = em.persist(Reserva.builder()
                 .eventoId(7L).clienteId(42L).sectorIdExterno(3L).expiraEl(ahora).creadoEl(ahora)
-                .estadoPago(EstadoPago.APROBADO).medioPago("TARJETA").build());
+                .estadoPago(EstadoPago.APROBADO).medioPago(MedioPago.TARJETA_CREDITO).build());
         Ticket ticket = em.persist(Ticket.builder()
                 .codigo_qr("qr-1").estadoTicket(EstadoTicket.VENDIDO).precio(1500.0)
                 .fechaEmision(ahora).clienteId(42L).evento(evento).sector(sector).reserva(reserva).build());
 
         Venta venta = Venta.builder()
                 .reservaId(reserva.getId()).clienteId(42L).eventoId(7L)
-                .total(1500.0).medioPago("TARJETA").creadoEl(ahora).build();
+                .total(1500.0).medioPago(MedioPago.TARJETA_CREDITO).creadoEl(ahora).build();
         venta.agregarItem(VentaItem.builder()
                 .ticket(ticket).sectorIdExterno(3L).precio(1500.0).transaccionId(501L).build());
         Venta guardada = ventaRepository.save(venta);

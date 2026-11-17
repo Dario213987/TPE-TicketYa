@@ -1,8 +1,8 @@
 package org.tudai.ticketya.tickets.dto;
 
-import jakarta.validation.constraints.NotBlank;
-import jakarta.validation.constraints.Size;
+import jakarta.validation.constraints.NotNull;
 import lombok.*;
+import org.tudai.ticketya.tickets.domain.MedioPago;
 
 @Getter
 @Setter
@@ -11,7 +11,6 @@ import lombok.*;
 @Builder
 public class PagoRequestDTO {
 
-    @NotBlank(message = "El medio de pago es obligatorio")
-    @Size(max = 30, message = "El medio de pago no puede tener más de 30 caracteres")
-    private String medioPago;
+    @NotNull(message = "El medio de pago es obligatorio")
+    private MedioPago medioPago;
 }

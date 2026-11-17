@@ -9,6 +9,7 @@ import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
+import org.tudai.ticketya.tickets.domain.MedioPago;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
 import org.tudai.ticketya.tickets.dto.PagoRequestDTO;
 import org.tudai.ticketya.tickets.dto.TicketEmitidoDTO;
@@ -23,6 +24,9 @@ import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.hamcrest.Matchers.not;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -52,7 +56,7 @@ class PagoControllerTest {
             mvc.perform(post("/api/tickets/reservas/99/pago")
                             .header("Idempotency-Key", "clave-1")
                             .contentType(MediaType.APPLICATION_JSON)
-                            .content("{\"medioPago\":\"TARJETA\"}"))
+                            .content("{\"medioPago\":\"TARJETA_CREDITO\"}"))
                     .andExpect(status().isForbidden());
         }
 
@@ -65,7 +69,7 @@ class PagoControllerTest {
                 .thenReturn(CompraResponseDTO.builder()
                         .reservaId(99L)
                         .clienteId(42L)
-                        .medioPago("TARJETA")
+                        .medioPago(MedioPago.TARJETA_CREDITO)
                         .estadoPago(EstadoPago.APROBADO)
                         .total(1500.0)
                         .tickets(List.of(TicketEmitidoDTO.builder()
@@ -79,10 +83,10 @@ class PagoControllerTest {
         mvc.perform(post("/api/tickets/reservas/99/pago")
                         .header("Idempotency-Key", "clave-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"medioPago\":\"TARJETA\"}"))
+                        .content("{\"medioPago\":\"TARJETA_CREDITO\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.estadoPago").value("APROBADO"))
-                .andExpect(jsonPath("$.medioPago").value("TARJETA"))
+                .andExpect(jsonPath("$.medioPago").value("TARJETA_CREDITO"))
                 .andExpect(jsonPath("$.tickets[0].codigoQr").value("qr-1"))
                 .andExpect(jsonPath("$.tickets[0].estado").value("VENDIDO"));
 
@@ -101,7 +105,7 @@ class PagoControllerTest {
         mvc.perform(post("/api/tickets/reservas/99/pago")
                         .header("Idempotency-Key", "clave-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"medioPago\":\"TARJETA\"}"))
+                        .content("{\"medioPago\":\"TARJETA_CREDITO\"}"))
                 .andExpect(status().isAccepted())
                 .andExpect(jsonPath("$.estadoPago").value("PENDIENTE_PAGO"));
     }
@@ -110,7 +114,7 @@ class PagoControllerTest {
     void pagar_sinIdempotencyKey_respondeBadRequest() throws Exception {
         mvc.perform(post("/api/tickets/reservas/99/pago")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"medioPago\":\"TARJETA\"}"))
+                        .content("{\"medioPago\":\"TARJETA_CREDITO\"}"))
                 .andExpect(status().isBadRequest());
 
         verifyNoInteractions(pagoService);
@@ -128,6 +132,18 @@ class PagoControllerTest {
     }
 
     @Test
+    void pagar_medioDePagoFueraDeLaLista_respondeBadRequestSinDevolverElValor() throws Exception {
+        mvc.perform(post("/api/tickets/reservas/99/pago")
+                        .header("Idempotency-Key", "clave-1")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"medioPago\":\"4509 1234 5678 9012\"}"))
+                .andExpect(status().isBadRequest())
+                .andExpect(content().string(not(containsString("4509"))));
+
+        verifyNoInteractions(pagoService);
+    }
+
+    @Test
     void pagar_pagoRechazado_respondeConflictConElMotivo() throws Exception {
         when(pagoService.pagar(eq(99L), eq(42L), eq("clave-1"), any(PagoRequestDTO.class)))
                 .thenThrow(new PagoRechazadoException("fondos insuficientes"));
@@ -135,7 +151,7 @@ class PagoControllerTest {
         mvc.perform(post("/api/tickets/reservas/99/pago")
                         .header("Idempotency-Key", "clave-1")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .content("{\"medioPago\":\"TARJETA\"}"))
+                        .content("{\"medioPago\":\"TARJETA_CREDITO\"}"))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("$.detail").value("El pago fue rechazado: fondos insuficientes"));
     }

@@ -17,6 +17,7 @@ import org.tudai.ticketya.core.exception.InvalidUserContextException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.service.AccesoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -58,6 +59,7 @@ class AccesoControllerTest {
                 .codigoQr("qr-1")
                 .eventoId(5L)
                 .estadoTicket(EstadoTicket.USADO)
+                .ticketId(99L)
                 .build());
 
         mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
@@ -83,6 +85,7 @@ class AccesoControllerTest {
                 .codigoQr("qr-1")
                 .eventoId(5L)
                 .estadoTicket(EstadoTicket.USADO)
+                .ticketId(99L)
                 .build());
 
         List<ILoggingEvent> operaciones = capturarOperaciones(() ->
@@ -97,7 +100,8 @@ class AccesoControllerTest {
                         .containsEntry("result", "OK")
                         .containsEntry("userId", "7")
                         .containsEntry("entity", "Ticket")
-                        .containsEntry("entityId", "qr-1"));
+                        .containsEntry("entityId", "99")
+                        .doesNotContainValue("qr-1"));
     }
 
     @Test
@@ -105,7 +109,7 @@ class AccesoControllerTest {
         when(userContext.userId()).thenReturn(7L);
         when(userContext.role()).thenReturn(Role.PERSONAL_ACCESO);
         when(service.validar(5L, "qr-1"))
-                .thenThrow(new ConflictException("El ticket ya fue utilizado"));
+                .thenThrow(new AccesoRechazadoException("El ticket ya fue utilizado", 99L));
 
         List<ILoggingEvent> operaciones = capturarOperaciones(() ->
                 mvc.perform(post("/api/tickets/eventos/5/accesos/validar")
@@ -119,8 +123,9 @@ class AccesoControllerTest {
                         .containsEntry("result", "FAILED")
                         .containsEntry("userId", "7")
                         .containsEntry("entity", "Ticket")
-                        .containsEntry("entityId", "qr-1")
-                        .containsEntry("reason", "El ticket ya fue utilizado"));
+                        .containsEntry("entityId", "99")
+                        .containsEntry("reason", "El ticket ya fue utilizado")
+                        .doesNotContainValue("qr-1"));
     }
 
     @Test

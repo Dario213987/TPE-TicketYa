@@ -12,6 +12,7 @@ import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
@@ -56,6 +57,7 @@ class AccesoServiceTest {
         assertThat(resultado.getCodigoQr()).isEqualTo(QR);
         assertThat(resultado.getEventoId()).isEqualTo(EVENTO_ID);
         assertThat(resultado.getEstadoTicket()).isEqualTo(EstadoTicket.USADO);
+        assertThat(resultado.getTicketId()).isEqualTo(99L);
         verify(ticketUtilizadoPublisher).publicar(ticket);
     }
 
@@ -84,8 +86,9 @@ class AccesoServiceTest {
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.USADO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("ya fue utilizado");
+                .isInstanceOf(AccesoRechazadoException.class)
+                .hasMessageContaining("ya fue utilizado")
+                .hasFieldOrPropertyWithValue("ticketId", 99L);
 
         verifyNoInteractions(ticketUtilizadoPublisher);
     }
@@ -134,6 +137,7 @@ class AccesoServiceTest {
 
     private Ticket ticket(Long eventoId, EstadoTicket estado) {
         return Ticket.builder()
+                .id(99L)
                 .codigo_qr(QR)
                 .estadoTicket(estado)
                 .evento(DisponibilidadEvento.builder().eventoId(eventoId).build())

@@ -7,7 +7,7 @@ info:
     y X-User-Role. El gateway expone estas rutas bajo /api/tickets.
 
     Roles:
-    - CLIENTE: puede reservar entradas y pagar sus reservas.
+    - CLIENTE: puede reservar entradas, pagar sus reservas y ver sus entradas con el QR.
     - ORGANIZADOR y ADMINISTRADOR: pueden publicar la disponibilidad de un evento.
     - PERSONAL_ACCESO: puede validar el ingreso de entradas por QR.
     - La consulta de disponibilidad es publica.
@@ -26,6 +26,7 @@ info:
     descartan y el job habilita al siguiente cliente de la cola.
 tags:
   - name: reservas
+  - name: entradas
   - name: disponibilidad
   - name: accesos
   - name: fila
@@ -96,10 +97,12 @@ paths:
         con otra clave responde 409.
 
         Compensacion (ver ms-tickets/docs/estados-compra.md): si ms-transacciones no responde
-        (timeout o 5xx) la reserva queda PENDIENTE_PAGO, no se libera y responde 202; el
-        reintento con la misma clave consulta el estado real. Si un debito se rechaza, se
-        reintegran los aprobados. Si falla la emision despues de cobrar, se reintegra todo,
-        se libera la reserva y responde 409.
+        (timeout o 5xx) o el debito sigue PENDIENTE, la reserva queda PENDIENTE_PAGO, no se
+        libera y responde 202; el reintento con la misma clave consulta el estado real y
+        conserva el medioPago del primer intento. Si ms-transacciones rechaza el pedido (4xx)
+        es un error de integracion: la reserva queda PENDIENTE_PAGO, no se compensa y responde
+        502. Si un debito se rechaza (FALLIDA), se reintegran los aprobados. Si falla la
+        emision despues de cobrar, se reintegra todo, se libera la reserva y responde 409.
       parameters:
         - name: reservaId
           in: path
@@ -134,6 +137,56 @@ paths:
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
         '502': { $ref: '#/components/responses/Error' }
+  /api/tickets/mis-entradas:
+    get:
+      tags: [entradas]
+      operationId: listarMisEntradas
+      summary: Lista las entradas del cliente autenticado
+      description: |
+        Solo el rol CLIENTE. Devuelve solo los tickets del cliente (X-User-Id) que son entradas:
+        EMITIDO, VENDIDO, USADO o DEVUELTO. Las reservas en curso y las canceladas no aparecen.
+        Paginado y ordenado de la entrada mas reciente a la mas antigua (el parametro sort se ignora).
+      parameters:
+        - name: page
+          in: query
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: size
+          in: query
+          schema: { type: integer, minimum: 1, default: 20 }
+      responses:
+        '200':
+          description: Pagina de entradas
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/PaginaMisEntradas'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+  /api/tickets/{ticketId}/qr:
+    get:
+      tags: [entradas]
+      operationId: obtenerQrEntrada
+      summary: Devuelve el contenido del QR de una entrada
+      description: |
+        Solo el rol CLIENTE y solo sus propias entradas: un ticket de otro cliente responde 404.
+        El contenido es el codigo unico del ticket, generado al reservar. Solo las entradas
+        vigentes (EMITIDO o VENDIDO) tienen QR; una usada, devuelta o sin pagar responde 409.
+      parameters:
+        - name: ticketId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: El contenido del QR
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/QrEntradaDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/fila:
     get:
       tags: [fila]
@@ -637,17 +690,24 @@ components:
         eventoId: { type: integer, format: int64 }
         estadoTicket:
           $ref: '#/components/schemas/EstadoTicket'
+        ticketId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id interno del ticket validado (nunca el código QR)
     EstadoTicket:
       type: string
       enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
+    MedioPago:
+      type: string
+      description: Valor cerrado; nunca se envian ni guardan datos de la tarjeta
+      enum: [TARJETA_CREDITO, TARJETA_DEBITO]
     PagoRequestDTO:
       type: object
       required: [medioPago]
       properties:
         medioPago:
-          type: string
-          maxLength: 30
-          description: Medio de pago usado (por ejemplo TARJETA_CREDITO, TARJETA_DEBITO)
+          $ref: '#/components/schemas/MedioPago'
     TicketEmitidoDTO:
       type: object
       required: [id, codigoQr, estado, sectorId, precio]
@@ -672,7 +732,8 @@ components:
           description: Venta registrada al emitir las entradas (solo cuando estadoPago es APROBADO)
         eventoId: { type: integer, format: int64 }
         clienteId: { type: integer, format: int64 }
-        medioPago: { type: string }
+        medioPago:
+          $ref: '#/components/schemas/MedioPago'
         estadoPago:
           $ref: '#/components/schemas/EstadoPago'
         total: { type: number, format: double }
@@ -681,6 +742,46 @@ components:
           type: array
           items:
             $ref: '#/components/schemas/TicketEmitidoDTO'
+    MiEntradaDTO:
+      type: object
+      required: [id, eventoId, sectorId, estado, utilizado]
+      properties:
+        id: { type: integer, format: int64 }
+        eventoId: { type: integer, format: int64 }
+        sectorId: { type: integer, format: int64 }
+        fila: { type: integer, nullable: true }
+        numero: { type: integer, nullable: true }
+        estado:
+          $ref: '#/components/schemas/EstadoTicket'
+        utilizado:
+          type: boolean
+          description: true si la entrada ya se uso para ingresar (estado USADO)
+        precio: { type: number, format: double }
+        fechaEmision: { type: string, format: date-time }
+    PaginaMisEntradas:
+      type: object
+      description: Pagina en el formato de Spring Data (org.springframework.data.web.PagedModel)
+      required: [content, page]
+      properties:
+        content:
+          type: array
+          items:
+            $ref: '#/components/schemas/MiEntradaDTO'
+        page:
+          type: object
+          properties:
+            size: { type: integer }
+            number: { type: integer }
+            totalElements: { type: integer, format: int64 }
+            totalPages: { type: integer }
+    QrEntradaDTO:
+      type: object
+      required: [ticketId, contenido]
+      properties:
+        ticketId: { type: integer, format: int64 }
+        contenido:
+          type: string
+          description: Texto a codificar en el QR (codigo unico del ticket)
     TurnoFilaResponseDTO:
       type: object
       required: [eventoId, clienteId, totalEnFila, yaEstabaEnFila, estado]

@@ -3,6 +3,7 @@ package org.tudai.ticketya.tickets.service;
 import feign.RetryableException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.tudai.ticketya.contract.transacciones.api.TransaccionesApiClient;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
@@ -46,11 +47,14 @@ public class PagoService {
      * Paga una reserva vigente y emite sus entradas.
      * <ul>
      *   <li>Todos los débitos aprobados: emite los tickets VENDIDO y devuelve la compra APROBADO.</li>
-     *   <li>Algún débito rechazado: reintegra los aprobados, libera la reserva y lanza
-     *       {@link PagoRechazadoException} (409).</li>
-     *   <li>Timeout o error de ms-transacciones: la reserva queda PENDIENTE_PAGO, no se libera y
-     *       se devuelve ese estado. Un reintento con la misma clave consulta el estado real
-     *       (los débitos son idempotentes en ms-transacciones).</li>
+     *   <li>Algún débito FALLIDA (rechazado por el procesador): reintegra los aprobados, libera
+     *       la reserva y lanza {@link PagoRechazadoException} (409).</li>
+     *   <li>Timeout, 5xx o débito todavía PENDIENTE en ms-transacciones: la reserva queda
+     *       PENDIENTE_PAGO, no se libera y se devuelve ese estado. Un reintento con la misma clave
+     *       consulta el estado real (los débitos son idempotentes en ms-transacciones).</li>
+     *   <li>ms-transacciones rechaza el pedido (4xx: headers, monto, organizador): es un error de
+     *       integración, no un rechazo del pago. La reserva queda PENDIENTE_PAGO, sin compensar,
+     *       y se lanza {@link RemoteServiceException} (502).</li>
      *   <li>Falla la emisión después de cobrar: reintegra todo, libera la reserva y lanza
      *       {@link ConflictException} (409).</li>
      * </ul>
@@ -63,13 +67,14 @@ public class PagoService {
      * @throws ConflictException      si la reserva venció, ya se procesó con otra clave, al evento
      *                                le falta organizador o precio, o falló la emisión
      * @throws PagoRechazadoException si el pago fue rechazado
+     * @throws RemoteServiceException si ms-transacciones rechazó el pedido (502)
      */
     public CompraResponseDTO pagar(Long reservaId, Long clienteId, String idempotencyKey,
                                    PagoRequestDTO request) {
         String clave = validarClave(idempotencyKey);
 
         Preparacion preparacion = reservaPagoService.preparar(
-                reservaId, clienteId, clave, request.getMedioPago().trim());
+                reservaId, clienteId, clave, request.getMedioPago());
         if (preparacion.yaTerminada()) {
             return preparacion.compraExistente();
         }
@@ -87,10 +92,18 @@ public class PagoService {
                         reservaId, cobro.ticketId(), e.getMessage());
                 return reservaPagoService.consultar(reservaId);
             } catch (RuntimeException e) {
-                motivoRechazo = e.getMessage();
-                break;
+                log.error("Error de integración con ms-transacciones: reserva={} ticket={} ({}). "
+                        + "La reserva queda PENDIENTE_PAGO, no se compensa", reservaId, cobro.ticketId(),
+                        e.getMessage());
+                throw new RemoteServiceException(HttpStatus.BAD_GATEWAY.value(),
+                        "ms-transacciones no aceptó el débito de la reserva " + reservaId + ": " + e.getMessage());
             }
 
+            if (debito != null && debito.getEstado() == EstadoTransaccion.PENDIENTE) {
+                log.warn("Pago pendiente: reserva={} ticket={} el débito {} sigue PENDIENTE en ms-transacciones",
+                        reservaId, cobro.ticketId(), debito.getId());
+                return reservaPagoService.consultar(reservaId);
+            }
             if (debito != null && debito.getEstado() == EstadoTransaccion.COMPLETA) {
                 aprobados.add(cobro);
                 transacciones.put(cobro.ticketId(), debito.getId());
