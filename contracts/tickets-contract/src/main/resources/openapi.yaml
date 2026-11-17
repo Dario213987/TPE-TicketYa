@@ -425,9 +425,9 @@ paths:
       summary: Valida el ingreso de una entrada por QR
       description: |
         Solo el rol PERSONAL_ACCESO puede validar accesos. Marca la entrada como USADA de forma
-        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Responde
-        404 si el QR no existe y 409 si pertenece a otro evento, ya fue usado, fue devuelto o
-        no esta vendido.
+        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Ante un
+        rechazo devuelve un ProblemDetail con el campo codigo: NO_EXISTE (404), OTRO_EVENTO,
+        YA_USADA o DEVUELTA (409).
       parameters:
         - name: eventoId
           in: path
@@ -829,6 +829,10 @@ components:
         eventoId: { type: integer, format: int64 }
         estadoTicket:
           $ref: '#/components/schemas/EstadoTicket'
+    CodigoRechazoAcceso:
+      type: string
+      description: Motivo por el que se rechaza el acceso
+      enum: [NO_EXISTE, OTRO_EVENTO, YA_USADA, DEVUELTA]
     EstadoTicket:
       type: string
       enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
@@ -973,6 +977,8 @@ components:
         status: { type: integer }
         detail: { type: string }
         correlationId: { type: string }
+        codigo:
+          $ref: '#/components/schemas/CodigoRechazoAcceso'
         errors:
           type: array
           items:
