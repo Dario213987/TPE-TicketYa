@@ -82,8 +82,8 @@ class NotificacionServiceTest {
         when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
         when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
-        when(plantillaEmailService.asunto(any(), any(), any())).thenReturn("asunto");
-        when(plantillaEmailService.renderizar(any(), any(), any(), any())).thenReturn("cuerpo");
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
 
         java.util.List<EstadoNotificacion> estados = new java.util.ArrayList<>();
         doAnswer(inv -> {
@@ -104,8 +104,8 @@ class NotificacionServiceTest {
         when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
         when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
-        when(plantillaEmailService.asunto(any(), any(), any())).thenReturn("asunto");
-        when(plantillaEmailService.renderizar(any(), any(), any(), any())).thenReturn("cuerpo");
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
 
         java.util.List<EstadoNotificacion> estados = new java.util.ArrayList<>();
         doAnswer(inv -> {
@@ -127,8 +127,8 @@ class NotificacionServiceTest {
         when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
         when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
-        when(plantillaEmailService.asunto(any(), any(), any())).thenReturn("asunto");
-        when(plantillaEmailService.renderizar(any(), any(), any(), any())).thenReturn("cuerpo");
+        when(plantillaEmailService.asunto(any(), any())).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(any(), any(), any())).thenReturn("cuerpo");
         doThrow(new RuntimeException("SMTP down")).when(emailService).enviar(any(), any(), any());
 
         assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
@@ -181,13 +181,14 @@ class NotificacionServiceTest {
         when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
         when(eventoClient.obtenerEvento(10L)).thenReturn(evento);
         when(usuarioClient.obtenerUsuario(20L)).thenReturn(usuario);
-        when(plantillaEmailService.asunto(MotivoNotificacion.CONFIRMACION_COMPRA, evento, detalle)).thenReturn("asunto");
-        when(plantillaEmailService.renderizar(MotivoNotificacion.CONFIRMACION_COMPRA, evento, usuario, detalle)).thenReturn("cuerpo");
+        when(plantillaEmailService.asunto(entrante, evento)).thenReturn("asunto");
+        when(plantillaEmailService.renderizar(entrante, evento, usuario)).thenReturn("cuerpo");
 
         service.procesarNotificacionEntrante(entrante);
 
-        verify(plantillaEmailService).asunto(MotivoNotificacion.CONFIRMACION_COMPRA, evento, detalle);
-        verify(plantillaEmailService).renderizar(MotivoNotificacion.CONFIRMACION_COMPRA, evento, usuario, detalle);
+        assertThat(entrante.getDetalle()).isSameAs(detalle);
+        verify(plantillaEmailService).asunto(entrante, evento);
+        verify(plantillaEmailService).renderizar(entrante, evento, usuario);
         verify(emailService).enviar("ana@test.com", "asunto", "cuerpo");
     }
 

@@ -1,6 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8" /><title>Notificación</title></head>
+<head th:replace="~{mail/fragments/layout :: head('Notificación')}"></head>
 <body>
   <h2 th:text="${motivo}">MOTIVO</h2>
   <p>Hola <span th:text="${usuarioNombre}">Usuario</span>,</p>

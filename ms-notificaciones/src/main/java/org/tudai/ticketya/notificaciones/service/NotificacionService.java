@@ -6,7 +6,6 @@ import org.slf4j.LoggerFactory;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.tudai.ticketya.contract.notificaciones.messaging.DetalleConfirmacionCompra;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.EventoClient;
 import org.tudai.ticketya.notificaciones.client.UsuarioClient;
@@ -69,9 +68,8 @@ public class NotificacionService {
                 return;
             }
 
-            DetalleConfirmacionCompra detalle = entrante.getDetalle() instanceof DetalleConfirmacionCompra d ? d : null;
-            String asunto = plantillaEmailService.asunto(entrante.getMotivo(), evento, detalle);
-            String cuerpo = plantillaEmailService.renderizar(entrante.getMotivo(), evento, usuario, detalle);
+            String asunto = plantillaEmailService.asunto(entrante, evento);
+            String cuerpo = plantillaEmailService.renderizar(entrante, evento, usuario);
 
             marcarEnviando(notificacion.getId());
             emailService.enviar(email, asunto, cuerpo);

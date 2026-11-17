@@ -3,96 +3,84 @@ package org.tudai.ticketya.notificaciones.service;
 import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
-import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
-import org.tudai.ticketya.contract.notificaciones.messaging.DetalleConfirmacionCompra;
 import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
-import org.tudai.ticketya.notificaciones.client.dto.SectorClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
+import org.tudai.ticketya.notificaciones.service.plantilla.DatosPlantilla;
+import org.tudai.ticketya.notificaciones.service.plantilla.PlantillaNotificacion;
 
+import java.util.EnumMap;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
+import java.util.Map;
 
 @Service
 public class PlantillaEmailService {
 
     private final SpringTemplateEngine templateEngine;
+    private final Map<MotivoNotificacion, PlantillaNotificacion> plantillas;
 
-    public PlantillaEmailService(SpringTemplateEngine templateEngine) {
+    public PlantillaEmailService(SpringTemplateEngine templateEngine, List<PlantillaNotificacion> plantillas) {
         this.templateEngine = templateEngine;
+        this.plantillas = registrar(plantillas);
     }
 
-    public String asunto(MotivoNotificacion motivo, EventoClientDTO evento) {
-        return asunto(motivo, evento, null);
+    public String asunto(NotificacionEntranteDTO entrante, EventoClientDTO evento) {
+        MotivoNotificacion motivo = requerirMotivo(entrante);
+        DatosPlantilla datos = new DatosPlantilla(motivo, evento, null, entrante.getDetalle());
+        return plantilla(motivo).asunto(datos);
     }
 
-    public String asunto(MotivoNotificacion motivo, EventoClientDTO evento, DetalleConfirmacionCompra detalle) {
-        String nombreEvento = evento != null && evento.getNombre() != null ? evento.getNombre() : "evento";
-        if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA) {
-            return "Confirmación de compra - " + nombreEvento;
-        }
-        return "Notificación " + motivo + " - " + nombreEvento;
+    public String renderizar(NotificacionEntranteDTO entrante, EventoClientDTO evento, UsuarioClientDTO usuario) {
+        MotivoNotificacion motivo = requerirMotivo(entrante);
+        DatosPlantilla datos = new DatosPlantilla(motivo, evento, usuario, entrante.getDetalle());
+        Context contexto = contextoComun(datos);
+        plantilla(motivo).completar(contexto, datos);
+        return templateEngine.process("mail/" + motivo.name(), contexto);
     }
 
-    public String renderizar(MotivoNotificacion motivo, EventoClientDTO evento, UsuarioClientDTO usuario) {
-        return renderizar(motivo, evento, usuario, null);
-    }
-
-    public String renderizar(MotivoNotificacion motivo, EventoClientDTO evento, UsuarioClientDTO usuario, DetalleConfirmacionCompra detalle) {
-        Context context = new Context();
-        context.setVariable("motivo", motivo != null ? motivo.name() : "");
-        context.setVariable("eventoNombre", evento != null && evento.getNombre() != null ? evento.getNombre() : "");
-        context.setVariable("eventoFecha", evento != null && evento.getFecha() != null ? evento.getFecha().toString() : "");
-        context.setVariable("eventoLugar", evento != null && evento.getNombreLugar() != null ? evento.getNombreLugar() : "");
-        context.setVariable("usuarioNombre", usuario != null && usuario.getNombre() != null ? usuario.getNombre() : "");
-
-        if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA && detalle != null) {
-            context.setVariable("sectorNombre", resolverSectorNombre(evento, detalle));
-            context.setVariable("asientosTexto", formatearAsientos(detalle));
-            context.setVariable("esGeneral", esGeneral(detalle));
-            context.setVariable("cantidad", detalle.getCantidad());
-            context.setVariable("monto", detalle.getMonto());
-            context.setVariable("moneda", detalle.getMoneda());
-        } else {
-            context.setVariable("sectorNombre", "");
-            context.setVariable("asientosTexto", "");
-            context.setVariable("esGeneral", false);
-            context.setVariable("cantidad", null);
-            context.setVariable("monto", null);
-            context.setVariable("moneda", null);
-        }
-
-        return templateEngine.process("mail/" + (motivo != null ? motivo.name() : ""), context);
-    }
-
-    private String resolverSectorNombre(EventoClientDTO evento, DetalleConfirmacionCompra detalle) {
-        if (detalle.getSectorId() == null) {
-            return "";
-        }
-        if (evento != null && evento.getSectores() != null) {
-            for (SectorClientDTO sector : evento.getSectores()) {
-                if (sector != null && Objects.equals(sector.getId(), detalle.getSectorId())) {
-                    return sector.getNombre() != null ? sector.getNombre() : String.valueOf(detalle.getSectorId());
+    private Map<MotivoNotificacion, PlantillaNotificacion> registrar(List<PlantillaNotificacion> estrategias) {
+        Map<MotivoNotificacion, PlantillaNotificacion> porMotivo = new EnumMap<>(MotivoNotificacion.class);
+        for (PlantillaNotificacion estrategia : estrategias) {
+            for (MotivoNotificacion motivo : estrategia.motivos()) {
+                if (porMotivo.putIfAbsent(motivo, estrategia) != null) {
+                    throw new IllegalStateException("Hay mas de una plantilla para el motivo " + motivo);
                 }
             }
         }
-        return String.valueOf(detalle.getSectorId());
-    }
-
-    private String formatearAsientos(DetalleConfirmacionCompra detalle) {
-        List<AsientoNotificacion> asientos = detalle.getAsientos();
-        if (asientos == null || asientos.isEmpty()) {
-            return "";
+        for (MotivoNotificacion motivo : MotivoNotificacion.values()) {
+            if (!porMotivo.containsKey(motivo)) {
+                throw new IllegalStateException("No hay plantilla para el motivo " + motivo);
+            }
         }
-        return asientos.stream()
-                .filter(Objects::nonNull)
-                .map(a -> a.getFila() + "-" + a.getNumero())
-                .collect(Collectors.joining(", "));
+        return porMotivo;
     }
 
-    private boolean esGeneral(DetalleConfirmacionCompra detalle) {
-        List<AsientoNotificacion> asientos = detalle.getAsientos();
-        return asientos == null || asientos.isEmpty();
+    private PlantillaNotificacion plantilla(MotivoNotificacion motivo) {
+        PlantillaNotificacion plantilla = plantillas.get(motivo);
+        if (plantilla == null) {
+            throw new IllegalArgumentException("No hay plantilla para el motivo " + motivo);
+        }
+        return plantilla;
+    }
+
+    private MotivoNotificacion requerirMotivo(NotificacionEntranteDTO entrante) {
+        if (entrante == null || entrante.getMotivo() == null) {
+            throw new IllegalArgumentException("motivo es obligatorio para armar la notificacion");
+        }
+        return entrante.getMotivo();
+    }
+
+    private Context contextoComun(DatosPlantilla datos) {
+        Context contexto = new Context();
+        EventoClientDTO evento = datos.evento();
+        UsuarioClientDTO usuario = datos.usuario();
+
+        contexto.setVariable("motivo", datos.motivo().name());
+        contexto.setVariable("eventoNombre", evento != null && evento.getNombre() != null ? evento.getNombre() : "");
+        contexto.setVariable("eventoFecha", evento != null && evento.getFecha() != null ? evento.getFecha().toString() : "");
+        contexto.setVariable("eventoLugar", evento != null && evento.getNombreLugar() != null ? evento.getNombreLugar() : "");
+        contexto.setVariable("usuarioNombre", usuario != null && usuario.getNombre() != null ? usuario.getNombre() : "");
+        return contexto;
     }
 }

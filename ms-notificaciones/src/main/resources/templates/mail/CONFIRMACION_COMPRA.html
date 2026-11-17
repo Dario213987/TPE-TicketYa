@@ -1,9 +1,6 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head>
-  <meta charset="UTF-8" />
-  <title>Confirmación de compra</title>
-</head>
+<head th:replace="~{mail/fragments/layout :: head('Confirmación de compra')}"></head>
 <body>
   <h2>Confirmación de compra</h2>
   <p>Hola <span th:text="${usuarioNombre}">Usuario</span>,</p>
