@@ -9,7 +9,9 @@ import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.core.Authorize;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
-import org.tudai.ticketya.tickets.dto.ReporteEntradasVendidasDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteEntradasVendidasDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteOcupacionDTO;
+import org.tudai.ticketya.tickets.dto.reporte.ReporteRecaudacionDTO;
 import org.tudai.ticketya.tickets.service.ReporteService;
 
 @RestController
@@ -20,8 +22,6 @@ public class ReporteController {
     private final ReporteService service;
     private final UserContext userContext;
 
-
-    /** Entradas vendidas y devueltas por evento*/
     @GetMapping("/eventos/{id}/entradas")
     @Authorize("hasAnyRole('ADMINISTRADOR','ORGANIZADOR')")
     public ResponseEntity<ReporteEntradasVendidasDTO> obtenerReporteEntradasVendidas(
@@ -32,7 +32,23 @@ public class ReporteController {
         return ResponseEntity.ok(service.obtenerReporteEntradasVendidas(id, solicitanteId, esAdmin));
     }
 
+    @GetMapping("/eventos/{id}/ocupacion")
+    @Authorize("hasAnyRole('ADMINISTRADOR','ORGANIZADOR')")
+    public ResponseEntity<ReporteOcupacionDTO> obtenerReporteOcupacion(
+            @PathVariable long id) {
+        Long solicitanteId = userContext.userId();
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
 
+        return ResponseEntity.ok(service.obtenerReporteOcupacion(id, solicitanteId, esAdmin));
+    }
 
+    @GetMapping("/eventos/{id}/recaudacion")
+    @Authorize("hasAnyRole('ADMINISTRADOR','ORGANIZADOR')")
+    public ResponseEntity<ReporteRecaudacionDTO> obtenerReporteRecaudacion(
+            @PathVariable long id) {
+        Long solicitanteId = userContext.userId();
+        boolean esAdmin = userContext.role() == Role.ADMINISTRADOR;
 
+        return ResponseEntity.ok(service.obtenerReporteRecaudacion(id, solicitanteId, esAdmin));
+    }
 }
