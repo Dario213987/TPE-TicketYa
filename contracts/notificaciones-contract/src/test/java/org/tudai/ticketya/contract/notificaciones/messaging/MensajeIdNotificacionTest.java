@@ -30,4 +30,33 @@ class MensajeIdNotificacionTest {
         assertThrows(IllegalArgumentException.class, () -> MensajeIdNotificacion.generar(""));
         assertThrows(IllegalArgumentException.class, () -> MensajeIdNotificacion.generar("   "));
     }
+
+    @Test
+    void generarDerivadoEsEstableParaMismoMotivoYEvento() {
+        String a = MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.CANCELACION, 10L);
+        String b = MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.CANCELACION, 10L);
+
+        assertEquals(a, b);
+        assertEquals("MSE-CANCELACION-10", a);
+    }
+
+    @Test
+    void generarDerivadoCambiaConMotivoOEvento() {
+        String base = MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.CANCELACION, 10L);
+        String otroMotivo = MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.SUSPENSION, 10L);
+        String otroEvento = MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.CANCELACION, 11L);
+
+        assertNotEquals(base, otroMotivo);
+        assertNotEquals(base, otroEvento);
+    }
+
+    @Test
+    void generarDerivadoValidaArgumentos() {
+        assertThrows(IllegalArgumentException.class,
+                () -> MensajeIdNotificacion.generarDerivado(null, MotivoNotificacion.CANCELACION, 10L));
+        assertThrows(IllegalArgumentException.class,
+                () -> MensajeIdNotificacion.generarDerivado("MSE", null, 10L));
+        assertThrows(IllegalArgumentException.class,
+                () -> MensajeIdNotificacion.generarDerivado("MSE", MotivoNotificacion.CANCELACION, 0L));
+    }
 }

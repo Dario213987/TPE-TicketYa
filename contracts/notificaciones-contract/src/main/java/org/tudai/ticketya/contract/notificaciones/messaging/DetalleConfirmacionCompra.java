@@ -1,10 +1,13 @@
 package org.tudai.ticketya.contract.notificaciones.messaging;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DetalleConfirmacionCompra {
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class DetalleConfirmacionCompra implements DetalleNotificacion {
 
     private Long sectorId;
     private List<AsientoNotificacion> asientos = new ArrayList<>();

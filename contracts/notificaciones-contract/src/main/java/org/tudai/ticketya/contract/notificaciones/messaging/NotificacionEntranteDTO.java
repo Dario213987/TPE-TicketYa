@@ -1,5 +1,6 @@
 package org.tudai.ticketya.contract.notificaciones.messaging;
 
+import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
@@ -10,8 +11,9 @@ public class NotificacionEntranteDTO {
     private String mensajeId;
     private MotivoNotificacion motivo;
     private long eventoId;
-    private long destinatarioId;
-    private DetalleConfirmacionCompra detalleCompra;
+    private Long destinatarioId;
+    @JsonAlias("detalleCompra")
+    private DetalleNotificacion detalle;
 
     public NotificacionEntranteDTO() {
     }
@@ -40,19 +42,25 @@ public class NotificacionEntranteDTO {
         this.eventoId = eventoId;
     }
 
-    public long getDestinatarioId() {
+    public Long getDestinatarioId() {
         return destinatarioId;
     }
 
-    public void setDestinatarioId(long destinatarioId) {
+    public void setDestinatarioId(Long destinatarioId) {
         this.destinatarioId = destinatarioId;
     }
 
-    public DetalleConfirmacionCompra getDetalleCompra() {
-        return detalleCompra;
+    public DetalleNotificacion getDetalle() {
+        return detalle;
     }
 
-    public void setDetalleCompra(DetalleConfirmacionCompra detalleCompra) {
-        this.detalleCompra = detalleCompra;
+    public void setDetalle(DetalleNotificacion detalle) {
+        this.detalle = detalle;
+    }
+
+    public void validarDestinatario() {
+        if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA && destinatarioId == null) {
+            throw new IllegalArgumentException("CONFIRMACION_COMPRA requiere destinatarioId");
+        }
     }
 }

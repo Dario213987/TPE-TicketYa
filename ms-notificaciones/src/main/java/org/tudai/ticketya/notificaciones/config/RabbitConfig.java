@@ -17,14 +17,13 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+
 @Configuration
 @EnableRabbit
 public class RabbitConfig {
-
-    public static final String COLA_ENVIAR = "enviar";
-    public static final String EXCHANGE_DLX = "enviar.dlx";
-    public static final String COLA_DLQ = "enviar.dlq";
-    public static final String ROUTING_DLQ = "enviar.dlq";
 
     @Bean
     public DirectExchange enviarDlx() {
@@ -33,7 +32,7 @@ public class RabbitConfig {
 
     @Bean
     public Queue colaDlq() {
-        return QueueBuilder.durable(COLA_DLQ).build();
+        return QueueBuilder.durable(ROUTING_DLQ).build();
     }
 
     @Bean

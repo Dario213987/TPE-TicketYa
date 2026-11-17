@@ -175,7 +175,7 @@ class NotificacionServiceTest {
         detalle.setSectorId(3L);
         detalle.setCantidad(2);
         entrante.setMotivo(MotivoNotificacion.CONFIRMACION_COMPRA);
-        entrante.setDetalleCompra(detalle);
+        entrante.setDetalle(detalle);
         Notificacion n = notificacion(EstadoNotificacion.PENDIENTE);
         when(notificacionRepository.findByMensajeId("MST-1-u")).thenReturn(Optional.of(n));
         when(notificacionRepository.findById(1L)).thenReturn(Optional.of(n));
@@ -197,6 +197,17 @@ class NotificacionServiceTest {
         assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
                 .isInstanceOf(IllegalArgumentException.class);
         verifyNoInteractions(notificacionRepository, eventoClient, usuarioClient, emailService);
+    }
+
+    @Test
+    void avisoMasivoSinDestinatarioLanzaErrorControlado() {
+        entrante.setDestinatarioId(null);
+
+        assertThatThrownBy(() -> service.procesarNotificacionEntrante(entrante))
+                .isInstanceOf(UnsupportedOperationException.class)
+                .hasMessageContaining("masivo");
+
+        verifyNoInteractions(notificacionRepository, eventoClient, usuarioClient, plantillaEmailService, emailService);
     }
 
     private Notificacion notificacion(EstadoNotificacion estado) {

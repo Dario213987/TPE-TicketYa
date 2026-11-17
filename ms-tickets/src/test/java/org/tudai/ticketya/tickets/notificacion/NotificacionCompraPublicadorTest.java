@@ -8,9 +8,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
-import org.tudai.ticketya.tickets.config.RabbitNotificacionesConfig;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -44,7 +44,7 @@ class NotificacionCompraPublicadorTest {
         publicador.producirConfirmacionCompra(10L, 20L, 5L, List.of(new AsientoNotificacion(1, 1)), 2, new BigDecimal("100"), "ARS");
 
         ArgumentCaptor<NotificacionEntranteDTO> captor = ArgumentCaptor.forClass(NotificacionEntranteDTO.class);
-        verify(rabbitTemplate).convertAndSend(eq(RabbitNotificacionesConfig.COLA_ENVIAR), captor.capture());
+        verify(rabbitTemplate).convertAndSend(eq(ColasNotificacion.COLA_ENVIAR), captor.capture());
         assertEquals("MST-1-u", captor.getValue().getMensajeId());
         assertEquals(MotivoNotificacion.CONFIRMACION_COMPRA, captor.getValue().getMotivo());
     }
@@ -56,7 +56,7 @@ class NotificacionCompraPublicadorTest {
         dto.setMotivo(MotivoNotificacion.CONFIRMACION_COMPRA);
         when(factory.crear(any(), any(), any(), any(), any(), any(), any())).thenReturn(dto);
         doThrow(new RuntimeException("broker caido")).when(rabbitTemplate)
-                .convertAndSend(eq(RabbitNotificacionesConfig.COLA_ENVIAR), any(Object.class));
+                .convertAndSend(eq(ColasNotificacion.COLA_ENVIAR), any(Object.class));
 
         assertDoesNotThrow(() -> publicador.producirConfirmacionCompra(1L, 2L, 3L, List.of(), 1, null, null));
     }

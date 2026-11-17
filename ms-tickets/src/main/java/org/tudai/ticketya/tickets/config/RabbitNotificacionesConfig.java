@@ -10,16 +10,16 @@ import org.springframework.amqp.support.converter.MessageConverter;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+
 /**
  * Configuración RabbitMQ productora de notificaciones. Declara la cola "enviar" con los mismos
  * argumentos DLX que el consumidor (ms-notificaciones) para compatibilidad idempotente.
  */
 @Configuration
 public class RabbitNotificacionesConfig {
-
-    public static final String COLA_ENVIAR = "enviar";
-    public static final String EXCHANGE_DLX = "enviar.dlx";
-    public static final String ROUTING_DLQ = "enviar.dlq";
 
     @Bean
     public Queue colaEnviarNotificaciones() {

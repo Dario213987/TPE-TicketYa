@@ -11,6 +11,7 @@ import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.transaction.event.TransactionalEventListenerFactory;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
+import org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 
 import java.lang.reflect.Method;
@@ -54,7 +55,7 @@ class NotificacionCompraEventListenerTest {
             TransactionSynchronizationManager.clearSynchronization();
             TransactionSynchronizationManager.setActualTransactionActive(false);
         }
-        verify(rabbitTemplate, times(1)).convertAndSend(eq("enviar"), any(NotificacionEntranteDTO.class));
+        verify(rabbitTemplate, times(1)).convertAndSend(eq(ColasNotificacion.COLA_ENVIAR), any(NotificacionEntranteDTO.class));
 
         // rollback: no debe publicarse
         reset(rabbitTemplate);
