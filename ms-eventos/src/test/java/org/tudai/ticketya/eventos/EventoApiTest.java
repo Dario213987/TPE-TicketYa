@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -180,7 +181,9 @@ class EventoApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(2))
                 .andExpect(jsonPath("$.content[*].estado",
-                        containsInAnyOrder("PUBLICADO", "AGOTADO")));
+                        containsInAnyOrder("PUBLICADO", "AGOTADO")))
+                .andExpect(jsonPath("$.content[0].ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.content[0].participanteIds", hasSize(0)));
     }
 
     @Test
@@ -217,7 +220,9 @@ class EventoApiTest {
         mvc.perform(get("/api/eventos").param("participante", "CAFE TACVBA"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].nombre").value("Festival Cafe"));
+                .andExpect(jsonPath("$.content[0].nombre").value("Festival Cafe"))
+                .andExpect(jsonPath("$.content[0].ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.content[0].participanteIds", hasSize(2)));
     }
 
     @Test

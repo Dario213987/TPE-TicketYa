@@ -5,6 +5,7 @@ import feign.RetryableException;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.hibernate.Hibernate;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
@@ -106,7 +107,7 @@ public class EventoService {
 
     @Transactional(readOnly = true)
     public Page<Evento> listarPublicados(Pageable pageable) {
-        return eventoRepository.findByEstadoIn(ESTADOS_VISIBLES, pageable);
+        return inicializar(eventoRepository.findByEstadoIn(ESTADOS_VISIBLES, pageable));
     }
 
     /**
@@ -142,20 +143,35 @@ public class EventoService {
         OrdenEvento orden = resolverOrden(filtro.getOrden());
 
         if (orden == OrdenEvento.PRECIO) {
-            return eventoRepository.buscarPorPrecio(specification, sinOrden(pageable));
+            return inicializar(eventoRepository.buscarPorPrecio(specification, sinOrden(pageable)));
         }
 
         if (orden == OrdenEvento.RELEVANCIA) {
-            return eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable));
+            return inicializar(eventoRepository.buscarPorRelevancia(specification, sinOrden(pageable)));
         }
 
         if (orden == OrdenEvento.FECHA || !pageable.getSort().isSorted()) {
-            return eventoRepository.findAll(specification, aplicarOrdenFecha(pageable));
+            return inicializar(eventoRepository.findAll(specification, aplicarOrdenFecha(pageable)));
         }
 
         // Compatibilidad con el parámetro legado `sort`: si no se pidió `orden`,
         // se respeta el orden explícito que haya llegado en el Pageable.
-        return eventoRepository.findAll(specification, pageable);
+        return inicializar(eventoRepository.findAll(specification, pageable));
+    }
+
+    /**
+     * Inicializa las relaciones que usa el resumen del listado (ciudad del lugar e
+     * ids de participantes) mientras la transacción está abierta. El mapeo a
+     * {@code EventoResumen} lo hace el controller después del service y, con
+     * {@code open-in-view} desactivado, sin esto las relaciones lazy darían
+     * {@code LazyInitializationException}.
+     */
+    private Page<Evento> inicializar(Page<Evento> page) {
+        page.getContent().forEach(evento -> {
+            Hibernate.initialize(evento.getLugar());
+            Hibernate.initialize(evento.getParticipantes());
+        });
+        return page;
     }
 
     /**

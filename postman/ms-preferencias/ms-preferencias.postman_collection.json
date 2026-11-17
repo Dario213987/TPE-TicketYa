@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "a7c4e2d1-58b3-4f6a-9c02-7d1e5b8f2a63",
     "name": "ms-preferencias",
-    "description": "Preferencias del cliente (US-09.01). Requiere X-User-Id (numerico) y X-User-Role: CLIENTE. Las rutas se exponen a traves del gateway bajo /api/preferencias. El cliente sale del header, no del cuerpo.",
+    "description": "Preferencias del cliente (US-09.01), historial (US-09.02) y recomendaciones (US-09.04). Requiere X-User-Id (numerico) y X-User-Role: CLIENTE. Las rutas se exponen a traves del gateway bajo /api/preferencias y /api/recomendaciones. El cliente sale del header, no del cuerpo.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -536,6 +536,131 @@
                 "api",
                 "preferencias",
                 "historial"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Recomendaciones",
+      "item": [
+        {
+          "name": "Recomendaciones del cliente (200)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"devuelve un array de hasta 10 eventos\", () => { pm.expect(j).to.be.an(\"array\"); pm.expect(j.length).to.be.at.most(10); });",
+                  "pm.test(\"cada sugerencia trae evento, motivo y puntaje\", () => {",
+                  "  const motivos = [\"ARTISTA\", \"TIPO\", \"CO_COMPRA\", \"CIUDAD\", \"PROXIMO\"];",
+                  "  j.forEach((r) => {",
+                  "    pm.expect(r.eventoId).to.be.a(\"number\");",
+                  "    pm.expect(r.puntaje).to.be.a(\"number\");",
+                  "    pm.expect(motivos).to.include(r.motivo);",
+                  "  });",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "401 sin X-User-Id",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 401\", () => pm.response.to.have.status(401));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol ORGANIZADOR",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "ORGANIZADOR"
+              }
+            ],
+            "url": {
+              "raw": "{{baseUrl}}/api/recomendaciones",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "recomendaciones"
               ]
             }
           },

@@ -86,9 +86,9 @@ Estos endpoints son servicio-a-servicio, no requieren headers de usuario y son i
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/finalizar` | Pasa la venta a `FINALIZADA`. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/alta-demanda?altaDemanda={bool}` | Sincroniza el flag de alta demanda mientras el evento no está publicado. |
 | `PUT` | `/api/tickets/internal/eventos/{eventoId}/habilitacion` | Ajusta `habilitada`, `tamanoTanda`, `intervaloSegundos` y `ttlPaseSegundos` de la habilitación por tandas. |
-| `GET` | `/api/tickets/internal/eventos/{eventoId}/compradores` | Devuelve los `usuarioId` distintos que compraron entradas: `EMITIDO`, `USADO` o `DEVUELTO`. |
+| `GET` | `/api/tickets/internal/eventos/{eventoId}/compradores` | Devuelve los `usuarioId` distintos que compraron entradas: `EMITIDO`, `VENDIDO`, `USADO` o `DEVUELTO`. |
 
-Los endpoints `PUT` responden `204 No Content`. Si el evento no tiene disponibilidad publicada responden `404`. El endpoint de compradores responde `200 OK` con una lista de ids ordenada de menor a mayor; si el evento no tiene compras devuelve `[]` (no `404`). No incluye tickets `RESERVADO`, `CANCELADO`, `EXPIRADO` ni `LIBERADO`, y descarta tickets sin `clienteId`.
+Los endpoints `PUT` responden `204 No Content`. Si el evento no tiene disponibilidad publicada responden `404`. El endpoint de compradores responde `200 OK` con una lista de ids ordenada de menor a mayor; si el evento no tiene compras devuelve `[]` (no `404`). No incluye tickets `RESERVADO`, `CANCELADO`, `EXPIRADO` ni `LIBERADO`, y descarta tickets sin `clienteId`. `DEVUELTO` se incluye a propósito para que los avisos de cancelación y edición, que también informan el reintegro, lleguen a quien ya solicitó la devolución.
 
 ## Endpoint
 

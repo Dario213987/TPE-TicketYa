@@ -5,7 +5,8 @@ info:
   description: |
     Preferencias declaradas por el cliente: tipos de evento favoritos, artistas favoritos
     y ciudad. Requiere los headers X-User-Id (numerico) y X-User-Role: CLIENTE. El gateway
-    expone estas rutas bajo /api/preferencias.
+    expone las rutas de preferencias bajo /api/preferencias y las de recomendaciones bajo
+    /api/recomendaciones.
 
     El cliente sale siempre de X-User-Id, nunca del path ni del cuerpo, asi que un cliente
     solo puede leer y reemplazar sus propias preferencias.
@@ -14,6 +15,7 @@ info:
     el id del cliente como _id. El PUT es un reemplazo total del documento.
 tags:
   - name: preferencias
+  - name: recomendaciones
 paths:
   /api/preferencias/internal/destinatarios:
     get:
@@ -140,6 +142,31 @@ paths:
                   $ref: '#/components/schemas/HistorialCompraDTO'
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
+  /api/recomendaciones:
+    get:
+      tags: [recomendaciones]
+      operationId: recomendar
+      summary: Eventos sugeridos para el cliente autenticado
+      description: |
+        Devuelve hasta 10 eventos publicados y futuros, ordenados por el puntaje del
+        recomendador (artista, tipo, co-ocurrencia y ciudad). Excluye los eventos para
+        los que el cliente ya tiene entradas. Sin preferencias ni historial devuelve
+        los proximos eventos de su ciudad (o generales). Si ms-eventos no responde,
+        responde 200 con una lista vacia.
+      parameters:
+        - $ref: '#/components/parameters/UserId'
+        - $ref: '#/components/parameters/UserRole'
+      responses:
+        '200':
+          description: Eventos sugeridos; vacio si no hay coincidencias o ms-eventos no responde
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/RecomendacionResponseDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
 components:
   parameters:
     UserId:
@@ -240,6 +267,26 @@ components:
         fecha: { type: string, format: date-time, nullable: true }
         comprado: { type: boolean }
         usado: { type: boolean }
+    MotivoRecomendacion:
+      type: string
+      enum: [ARTISTA, TIPO, CO_COMPRA, CIUDAD, PROXIMO]
+      description: |
+        Motivo principal de la sugerencia. PROXIMO y CIUDAD tambien se usan en el
+        fallback cuando el cliente no tiene preferencias ni historial.
+    RecomendacionResponseDTO:
+      type: object
+      required: [eventoId, nombre, tipo, fecha, estado, motivo, puntaje]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        nombre: { type: string }
+        tipo:
+          $ref: '#/components/schemas/TipoEvento'
+        fecha: { type: string, format: date-time }
+        estado: { type: string }
+        ciudad: { type: string, nullable: true }
+        motivo:
+          $ref: '#/components/schemas/MotivoRecomendacion'
+        puntaje: { type: integer }
     Problema:
       type: object
       properties:
