@@ -51,17 +51,21 @@ class LiquibaseMigrationTest {
                         "disponibilidad_asientos",
                         "tickets",
                         "reservas",
-                        "bloqueos_job");
+                        "bloqueos_job",
+                        "ventas",
+                        "venta_items",
+                        "habilitacion_eventos");
     }
 
     @Test
     void creaLasColumnasEsperadasEnCadaTabla() throws Exception {
         assertThat(columnas("disponibilidad_eventos"))
-                .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente");
+                .containsExactlyInAnyOrder("evento_id", "creado_el", "limite_entradas_por_cliente",
+                        "organizador_id", "alta_demanda", "estado_venta");
 
         assertThat(columnas("disponibilidad_sectores"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id_externo", "tipo",
-                        "capacidad_total", "disponibles");
+                        "capacidad_total", "disponibles", "precio");
 
         assertThat(columnas("disponibilidad_asientos"))
                 .containsExactlyInAnyOrder("id", "evento_id", "sector_id", "fila", "numero",
@@ -70,11 +74,25 @@ class LiquibaseMigrationTest {
         assertThat(columnas("tickets"))
                 .containsExactlyInAnyOrder("id", "codigo_qr", "estado_ticket", "precio",
                         "fecha_emision", "cliente_id", "expira_el", "evento_id", "sector_id",
-                        "asiento_id", "reserva_id", "pago_en_curso");
+                        "asiento_id", "reserva_id", "venta_id", "pago_en_curso");
+
+        assertThat(columnas("ventas"))
+                .containsExactlyInAnyOrder("id", "reserva_id", "cliente_id", "evento_id", "total",
+                        "medio_pago", "creado_el");
+
+        assertThat(columnas("venta_items"))
+                .containsExactlyInAnyOrder("id", "venta_id", "ticket_id", "sector_id_externo", "fila",
+                        "numero", "precio", "transaccion_id");
 
         assertThat(columnas("reservas"))
                 .containsExactlyInAnyOrder("id", "evento_id", "cliente_id", "sector_id_externo",
-                        "expira_el", "creado_el", "pago_en_curso");
+                        "expira_el", "creado_el", "idempotency_key", "medio_pago", "estado_pago",
+                        "motivo_rechazo", "pagado_el", "pago_en_curso");
+
+        assertThat(columnas("habilitacion_eventos"))
+                .containsExactlyInAnyOrder("evento_id", "habilitada", "tamano_tanda",
+                        "intervalo_segundos", "ttl_pase_segundos", "proxima_tanda_el",
+                        "ultima_tanda_el", "total_habilitados");
     }
 
     @Test
@@ -86,6 +104,8 @@ class LiquibaseMigrationTest {
         assertThat(indices("tickets"))
                 .contains("idx_tickets_evento_cliente_estado", "idx_tickets_estado_expira");
         assertThat(indices("reservas")).contains("idx_reservas_evento_cliente");
+        assertThat(indices("habilitacion_eventos"))
+                .contains("idx_habilitacion_proxima_tanda");
 
         assertThat(restricciones("disponibilidad_sectores"))
                 .contains("pk_disponibilidad_sectores",
@@ -106,6 +126,8 @@ class LiquibaseMigrationTest {
                         "fk_tickets_reserva");
         assertThat(restricciones("reservas"))
                 .contains("pk_reservas", "fk_reservas_evento");
+        assertThat(restricciones("habilitacion_eventos"))
+                .contains("pk_habilitacion_eventos", "fk_habilitacion_eventos_evento");
     }
 
     @Test
@@ -113,8 +135,9 @@ class LiquibaseMigrationTest {
         liquibase.update(new Contexts());
 
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
-                "bloqueos_job");
-        assertThat(contarCambiosAplicados()).isEqualTo(6);
+                "bloqueos_job",
+                "habilitacion_eventos");
+        assertThat(contarCambiosAplicados()).isEqualTo(11);
     }
 
     @Test

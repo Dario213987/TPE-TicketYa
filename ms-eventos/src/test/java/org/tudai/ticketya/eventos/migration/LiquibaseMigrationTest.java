@@ -41,6 +41,8 @@ class LiquibaseMigrationTest {
     void elChangelogCompletoSeAplicaSobrePostgresql() {
         assertThat(tipoColumna(jdbcTemplate, "eventos", "fecha"))
                 .isEqualTo("timestamp without time zone");
+        assertThat(tipoColumna(jdbcTemplate, "eventos", "alta_demanda"))
+                .isEqualTo("boolean");
         assertThat(tipoColumna(jdbcTemplate, "evento_notificacion", "proximo_intento"))
                 .isEqualTo("timestamp with time zone");
         assertThat(tipoColumna(jdbcTemplate, "evento_notificacion", "creado_el"))

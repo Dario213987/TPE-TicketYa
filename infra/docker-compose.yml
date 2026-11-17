@@ -61,6 +61,27 @@ services:
     ports: ["127.0.0.1:5436:5432"]
     volumes: [devoluciones-data:/var/lib/postgresql]
 
+  db-notificaciones:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: notificaciones
+      POSTGRES_USER: notificaciones
+      POSTGRES_PASSWORD: ${NOTIFICACIONES_DB_PASSWORD}
+    ports: ["127.0.0.1:5437:5432"]
+    volumes: [notificaciones-data:/var/lib/postgresql]
+
+  # ms-preferencias usa MongoDB (un documento por cliente).
+  db-preferencias:
+    image: mongo:7
+    restart: unless-stopped
+    ports: ["127.0.0.1:5438:27017"]
+    volumes: [preferencias-data:/data/db]
+    healthcheck:
+      test: ["CMD", "mongosh", "--quiet", "--eval", "db.adminCommand('ping').ok"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # MySQL (plantilla). Para pasar un servicio a MySQL:
   #   1. Comentar su bloque db-* de PostgreSQL y descomentar este, cambiando
   #      nombre, base, usuario y contraseña. Mantener el MISMO puerto del host y
@@ -82,22 +103,58 @@ services:
   #   ports: ["127.0.0.1:5433:3306"]
   #   volumes: [eventos-data:/var/lib/mysql]
 
-  # Redis: por ahora desactivado. Cuando se necesite, copiar este bloque UNA VEZ
-  # POR SERVICIO que lo use, con su propio nombre y puerto (redis-tickets,
-  # redis-eventos, ...), igual que las bases de datos.
-  #
-  # redis-tickets:
-  #   image: redis:7-alpine
-  #   restart: unless-stopped
-  #   ports: ["127.0.0.1:6380:6379"]
-  #   healthcheck:
-  #     test: ["CMD", "redis-cli", "ping"]
-  #     interval: 5s
-  #     timeout: 3s
-  #     retries: 10
+  # Redis: una instancia por servicio que lo use, igual que las bases de datos.
+  # ms-tickets lo usa para la fila virtual de eventos de alta demanda.
+  redis-tickets:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:6380:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
+  # ms-preferencias usa Redis Streams para el historial de compras y asistencias.
+  redis-preferencias:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:6381:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:4-management
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD}
+      RABBITMQ_DEFAULT_VHOST: ${RABBITMQ_VHOST}
+    ports:
+      - "127.0.0.1:5672:5672"
+      - "127.0.0.1:15672:15672"
+    volumes:
+      - rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  mailhog:
+    image: mailhog/mailhog
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:1025:1025"
+      - "127.0.0.1:8025:8025"
 volumes:
   eventos-data:
   tickets-data:
   transacciones-data:
   devoluciones-data:
+  notificaciones-data:
+  preferencias-data:
+  rabbitmq-data:

@@ -59,6 +59,7 @@ public class ModelMapperConfig {
                     destination.setFecha(source.getFecha());
                     destination.setEstado(source.getEstado());
                     destination.setOrganizadorId(source.getOrganizadorId());
+                    destination.setAltaDemanda(source.isAltaDemanda());
                     destination.setLugar(source.getLugar() == null
                             ? null
                             : modelMapper.map(source.getLugar(), LugarResponse.class));
