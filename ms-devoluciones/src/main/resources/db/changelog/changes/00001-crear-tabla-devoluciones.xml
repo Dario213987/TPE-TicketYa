@@ -40,10 +40,9 @@
             <column name="cliente_id"/>
         </createIndex>
 
-        <addUniqueConstraint
-                tableName="devoluciones"
-                columnNames="ticket_id, estado"
-                constraintName="uk_devoluciones_ticket_estado"/>
+        <sql dbms="postgresql,h2">
+            CREATE UNIQUE INDEX uq_devoluciones_ticket_pendiente ON devoluciones (ticket_id) WHERE estado = 'PENDIENTE';
+        </sql>
     </changeSet>
 
 </databaseChangeLog>

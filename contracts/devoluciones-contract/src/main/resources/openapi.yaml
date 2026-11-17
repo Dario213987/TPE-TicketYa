@@ -15,7 +15,7 @@ paths:
       operationId: solicitarDevolucion
       summary: Solicita la devolución de una entrada
       description: |
-        Crea una solicitud de devolución en estado PENDIENTE si el ticket está VENDIDO,
+        Crea una solicitud de devolución en estado PENDIENTE si el ticket está EMITIDO,
         no fue utilizado, pertenece al cliente autenticado y faltan al menos 72 horas para el evento.
       requestBody:
         required: true
@@ -35,46 +35,6 @@ paths:
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
         '409': { $ref: '#/components/responses/Error' }
-  /api/devoluciones/{id}:
-    get:
-      tags: [devoluciones]
-      operationId: obtenerDevolucion
-      summary: Obtiene una devolución por ID
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema: { type: integer, format: int64 }
-      responses:
-        '200':
-          description: La devolución
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DevolucionResponse'
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
-  /api/devoluciones/ticket/{ticketId}:
-    get:
-      tags: [devoluciones]
-      operationId: obtenerDevolucionPorTicket
-      summary: Obtiene la devolución de un ticket
-      parameters:
-        - name: ticketId
-          in: path
-          required: true
-          schema: { type: integer, format: int64 }
-      responses:
-        '200':
-          description: La devolución del ticket
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/DevolucionResponse'
-        '401': { $ref: '#/components/responses/Error' }
-        '403': { $ref: '#/components/responses/Error' }
-        '404': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
@@ -99,6 +59,7 @@ components:
           format: int64
         motivo:
           type: string
+          maxLength: 255
     DevolucionResponse:
       type: object
       required: [id, clienteId, ticketId, fecha, estado]
@@ -123,6 +84,7 @@ components:
           nullable: true
         motivo:
           type: string
+          maxLength: 255
           nullable: true
     Problema:
       type: object
