@@ -15,6 +15,50 @@ info:
 tags:
   - name: preferencias
 paths:
+  /api/preferencias/internal/destinatarios:
+    get:
+      tags: [preferencias]
+      operationId: obtenerDestinatariosPorPreferencias
+      summary: Clientes con algun participante favorito y la ciudad coincidente
+      description: |
+        Endpoint interno servicio-a-servicio. El gateway bloquea /api/preferencias/internal/**.
+        No requiere X-User-Id ni X-User-Role.
+
+        participanteIds son ids de participantes de ms-eventos y se comparan contra los artistas
+        favoritos guardados. La ciudad se compara sin distinguir mayusculas ni tildes. Si no se
+        envian participantes se devuelve [] sin error. No hay paginacion ni detalle de coincidencia.
+      parameters:
+        - name: participanteIds
+          in: query
+          required: false
+          style: form
+          explode: true
+          schema:
+            type: array
+            maxItems: 100
+            items:
+              type: integer
+              format: int64
+              minimum: 1
+        - name: ciudad
+          in: query
+          required: true
+          schema:
+            type: string
+            minLength: 1
+            maxLength: 100
+            pattern: '.*\S.*'
+      responses:
+        '200':
+          description: usuarioIds distintos, ordenados ascendentemente
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
+        '400': { $ref: '#/components/responses/Error' }
   /api/preferencias/mias:
     get:
       tags: [preferencias]

@@ -71,6 +71,30 @@ Devuelve las preferencias guardadas, con el mismo formato que el `GET`.
 - `401`: faltan `X-User-Id` o `X-User-Role`.
 - `403`: el rol no es `CLIENTE`.
 
+## Destinatarios por artista y ciudad (TKY-105)
+
+`GET /api/preferencias/internal/destinatarios` es un endpoint interno servicio-a-servicio. Devuelve los
+`usuarioId` que tienen como favorito alguno de los participantes recibidos **y** cuya ciudad coincide.
+
+```http
+GET /api/preferencias/internal/destinatarios?participanteIds=15&participanteIds=20&ciudad=T%C3%A1ndil
+```
+
+```json
+[7, 12]
+```
+
+- `participanteIds`: query array repetido, ids de participante de `ms-eventos`, hasta 100 y mayores a 0.
+  Si se omite, devuelve `[]`.
+- `ciudad`: obligatoria, entre 1 y 100 caracteres. Se compara sin distinguir mayúsculas ni tildes, con
+  la misma normalización del filtro del listado de eventos.
+- La respuesta es un array plano de ids distintos, ordenados ascendentemente. No hay paginación ni
+  detalle de qué artista coincidió.
+- No requiere `X-User-Id` ni `X-User-Role`.
+- El gateway bloquea `/api/preferencias/internal/**` con `404`, así que debe llamarse por Eureka o
+  directo a `ms-preferencias`.
+- Un id de participante inválido o una ciudad vacía responde `400`.
+
 ## Modelo documental (MongoDB)
 
 Colección `preferencias` en la base `ticketya_preferencias`, un documento por cliente con el id del
