@@ -1,4 +1,4 @@
-﻿package org.tudai.ticketya.notificaciones.service;
+package org.tudai.ticketya.notificaciones.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;

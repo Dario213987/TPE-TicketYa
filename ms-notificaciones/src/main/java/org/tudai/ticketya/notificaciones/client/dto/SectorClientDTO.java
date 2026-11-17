@@ -1,4 +1,4 @@
-﻿package org.tudai.ticketya.notificaciones.client.dto;
+package org.tudai.ticketya.notificaciones.client.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;

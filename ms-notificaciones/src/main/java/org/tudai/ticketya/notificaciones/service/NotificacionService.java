@@ -1,4 +1,4 @@
-﻿package org.tudai.ticketya.notificaciones.service;
+package org.tudai.ticketya.notificaciones.service;
 
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;

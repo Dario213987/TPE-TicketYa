@@ -1,4 +1,4 @@
-﻿package org.tudai.ticketya.notificaciones.client.dto;
+package org.tudai.ticketya.notificaciones.client.dto;
 
 import lombok.Getter;
 import lombok.NoArgsConstructor;
