@@ -1,4 +1,4 @@
-package org.tudai.ticketya.notificaciones.service;
+﻿package org.tudai.ticketya.notificaciones.service;
 
 import org.springframework.stereotype.Service;
 import org.thymeleaf.context.Context;
@@ -27,30 +27,18 @@ public class PlantillaEmailService {
         return asunto(motivo, evento, null);
     }
 
-    /**
-     * Genera el asunto del email. Para CONFIRMACION_COMPRA usa "Confirmación de compra - {evento}",
-     * para el resto "Notificación {motivo} - {evento}" (con fallback "evento" si falta nombre).
-     */
     public String asunto(MotivoNotificacion motivo, EventoClientDTO evento, DetalleConfirmacionCompra detalle) {
         String nombreEvento = evento != null && evento.getNombre() != null ? evento.getNombre() : "evento";
-
         if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA) {
-            return "Confirmación de compra - " + nombreEvento;
-
+            return "Confirmacion de compra - " + nombreEvento;
         }
-        return "Notificación " + motivo + " - " + nombreEvento;
+        return "Notificacion " + motivo + " - " + nombreEvento;
     }
 
     public String renderizar(MotivoNotificacion motivo, EventoClientDTO evento, UsuarioClientDTO usuario) {
         return renderizar(motivo, evento, usuario, null);
     }
 
-    /**
-     * Renderiza mail/{motivo}.html con contexto de evento/usuario (enriquecidos por Feign) y,
-     * si es CONFIRMACION_COMPRA con detalle, agrega sector resuelto, asientos, cantidad y monto/moneda.
-     * Sector no numerado: asientos vacíos => esGeneral=true (plantilla muestra "General x N").
-     * Monto/moneda pueden ser null y se exponen tal cual para que la plantilla los tolere.
-     */
     public String renderizar(MotivoNotificacion motivo, EventoClientDTO evento, UsuarioClientDTO usuario, DetalleConfirmacionCompra detalle) {
         Context context = new Context();
         context.setVariable("motivo", motivo != null ? motivo.name() : "");
@@ -66,7 +54,6 @@ public class PlantillaEmailService {
             context.setVariable("cantidad", detalle.getCantidad());
             context.setVariable("monto", detalle.getMonto());
             context.setVariable("moneda", detalle.getMoneda());
-
         } else {
             context.setVariable("sectorNombre", "");
             context.setVariable("asientosTexto", "");
@@ -79,10 +66,6 @@ public class PlantillaEmailService {
         return templateEngine.process("mail/" + (motivo != null ? motivo.name() : ""), context);
     }
 
-    /**
-     * Resuelve el nombre del sector cruzando detalle.sectorId con evento.sectores; si no hay match
-     * o faltan datos devuelve el sectorId como string (o vacío si es null).
-     */
     private String resolverSectorNombre(EventoClientDTO evento, DetalleConfirmacionCompra detalle) {
         if (detalle.getSectorId() == null) {
             return "";
@@ -97,9 +80,6 @@ public class PlantillaEmailService {
         return String.valueOf(detalle.getSectorId());
     }
 
-    /**
-     * Formatea asientos numerados como "fila-numero, ..." (omitiendo nulos); lista vacía/null => "".
-     */
     private String formatearAsientos(DetalleConfirmacionCompra detalle) {
         List<AsientoNotificacion> asientos = detalle.getAsientos();
         if (asientos == null || asientos.isEmpty()) {
@@ -111,9 +91,6 @@ public class PlantillaEmailService {
                 .collect(Collectors.joining(", "));
     }
 
-    /**
-     * Considera sector general/no numerado cuando no hay asientos específicos en el detalle.
-     */
     private boolean esGeneral(DetalleConfirmacionCompra detalle) {
         List<AsientoNotificacion> asientos = detalle.getAsientos();
         return asientos == null || asientos.isEmpty();

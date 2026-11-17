@@ -31,6 +31,7 @@ public class DisponibilidadService {
     private final DisponibilidadAsientoBatchRepository asientoBatchRepository;
     private final ReservaProperties reservaProperties;
     private final ReservaVencidaService reservaVencidaService;
+    private final HabilitacionTandaService habilitacionTandaService;
 
     @Value("${tickets.disponibilidad.batch-size:1000}")
     private int batchSize;
@@ -118,6 +119,8 @@ public class DisponibilidadService {
             }
         }
 
+        habilitacionTandaService.sincronizar(request.getEventoId(), altaDemandaFinal);
+
         return DisponibilidadResponseDTO.builder()
                 .eventoId(request.getEventoId())
                 .yaExistia(yaExistia)
@@ -153,6 +156,10 @@ public class DisponibilidadService {
 
         evento.setEstadoVenta(estado);
         eventoRepository.save(evento);
+
+        if (estado == EstadoVenta.ABIERTA) {
+            habilitacionTandaService.reactivar(eventoId);
+        }
     }
 
     /**
@@ -174,6 +181,7 @@ public class DisponibilidadService {
             }
             evento.setAltaDemanda(altaDemanda);
             eventoRepository.save(evento);
+            habilitacionTandaService.sincronizar(eventoId, altaDemanda);
         });
     }
 

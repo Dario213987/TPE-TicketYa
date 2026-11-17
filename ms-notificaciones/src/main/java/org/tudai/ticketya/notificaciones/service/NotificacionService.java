@@ -1,4 +1,4 @@
-package org.tudai.ticketya.notificaciones.service;
+﻿package org.tudai.ticketya.notificaciones.service;
 
 import lombok.RequiredArgsConstructor;
 import org.slf4j.Logger;
@@ -31,34 +31,46 @@ public class NotificacionService {
     private final NotificacionRepository notificacionRepository;
 
     /**
-     * Procesa un mensaje entrante de la cola: valida mensajeId, aplica idempotencia por mensajeId
-     * (si ya está ENVIADO/ENVIANDO descarta y registra warn), enriquece con datos de evento/usuario
-     * vía Feign, renderiza la plantilla según motivo pasando detalleCompra (si aplica) y envía el email.
-     * No persiste detalleCompra; ante fallos propaga la excepción para activar reintentos/DLQ.
+     * Procesa un mensaje entrante de la cola: valida mensajeId, aplica idempotencia (ENVIADO/NO_ENTREGABLE
+     * se descartan), permite reintentar mensajes ENVIANDO/FALLIDO, enriquece con evento/usuario via Feign,
+     * arma la plantilla y marca ENVIANDO justo antes del envio SMTP. Ante fallo reintentable persiste
+     * FALLIDO y relanza para activar reintentos/DLQ; si no hay email marca NO_ENTREGABLE y no reintenta.
+     * No persiste detalleCompra.
      */
     public void procesarNotificacionEntrante(NotificacionEntranteDTO entrante) {
         if (entrante == null || entrante.getMensajeId() == null || entrante.getMensajeId().isBlank()) {
-            throw new IllegalArgumentException("mensajeId es obligatorio para procesar la notificación");
+            throw new IllegalArgumentException("mensajeId es obligatorio para procesar la notificacion");
         }
 
         Notificacion notificacion = obtenerOCrearPendiente(entrante);
-        if (notificacion.getEstado() == EstadoNotificacion.ENVIADO
-                || notificacion.getEstado() == EstadoNotificacion.ENVIANDO) {
+        EstadoNotificacion estadoActual = notificacion.getEstado();
+        if (estadoActual == EstadoNotificacion.ENVIADO || estadoActual == EstadoNotificacion.NO_ENTREGABLE) {
             log.warn("Mensaje duplicado descartado: {}", entrante.getMensajeId());
             return;
         }
 
-        marcarEnviando(notificacion.getId());
+        try {
+            EventoClientDTO evento = eventoClient.obtenerEvento(entrante.getEventoId());
+            UsuarioClientDTO usuario = usuarioClient.obtenerUsuario(entrante.getDestinatarioId());
 
-        EventoClientDTO evento = eventoClient.obtenerEvento(entrante.getEventoId());
-        UsuarioClientDTO usuario = usuarioClient.obtenerUsuario(entrante.getDestinatarioId());
+            String email = usuario != null ? usuario.getEmail() : null;
+            if (email == null || email.isBlank()) {
+                log.warn("Notificacion no entregable (sin email): mensajeId={}, destinatarioId={}",
+                        entrante.getMensajeId(), entrante.getDestinatarioId());
+                marcarNoEntregable(notificacion.getId());
+                return;
+            }
 
-        String asunto = plantillaEmailService.asunto(entrante.getMotivo(), evento, entrante.getDetalleCompra());
-        String cuerpo = plantillaEmailService.renderizar(entrante.getMotivo(), evento, usuario, entrante.getDetalleCompra());
+            String asunto = plantillaEmailService.asunto(entrante.getMotivo(), evento, entrante.getDetalleCompra());
+            String cuerpo = plantillaEmailService.renderizar(entrante.getMotivo(), evento, usuario, entrante.getDetalleCompra());
 
-        emailService.enviar(usuario != null ? usuario.getEmail() : null, asunto, cuerpo);
-
-        marcarEnviada(notificacion.getId());
+            marcarEnviando(notificacion.getId());
+            emailService.enviar(email, asunto, cuerpo);
+            marcarEnviada(notificacion.getId());
+        } catch (Exception e) {
+            marcarFallida(notificacion.getId());
+            throw e;
+        }
     }
 
     @Transactional
@@ -99,8 +111,22 @@ public class NotificacionService {
         notificacionRepository.save(notificacion);
     }
 
+    @Transactional
+    public void marcarFallida(Long id) {
+        Notificacion notificacion = obtenerPorId(id);
+        notificacion.setEstado(EstadoNotificacion.FALLIDO);
+        notificacionRepository.save(notificacion);
+    }
+
+    @Transactional
+    public void marcarNoEntregable(Long id) {
+        Notificacion notificacion = obtenerPorId(id);
+        notificacion.setEstado(EstadoNotificacion.NO_ENTREGABLE);
+        notificacionRepository.save(notificacion);
+    }
+
     private Notificacion obtenerPorId(Long id) {
         return notificacionRepository.findById(id)
-                .orElseThrow(() -> new IllegalArgumentException("Notificación no encontrada: " + id));
+                .orElseThrow(() -> new IllegalArgumentException("Notificacion no encontrada: " + id));
     }
 }
