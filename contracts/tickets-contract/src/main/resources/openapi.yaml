@@ -92,12 +92,14 @@ paths:
 
         Idempotencia: un reintento con el mismo Idempotency-Key devuelve el resultado original
         (la compra o el rechazo) sin volver a cobrar ni emitir. Si la reserva ya fue procesada
-        con otra clave responde 409.
+        con otra clave responde 409. La misma clave con otro payload tambien responde 409: con
+        otro medioPago para la misma reserva, o para pagar otra reserva del mismo cliente (la
+        clave es unica por cliente).
 
         Compensacion (ver ms-tickets/docs/estados-compra.md): si ms-transacciones no responde
         (timeout o 5xx) o el debito sigue PENDIENTE, la reserva queda PENDIENTE_PAGO, no se
         libera y responde 202; el reintento con la misma clave consulta el estado real y
-        conserva el medioPago del primer intento. Si ms-transacciones rechaza el pedido (4xx)
+        exige el mismo medioPago del primer intento. Si ms-transacciones rechaza el pedido (4xx)
         es un error de integracion: la reserva queda PENDIENTE_PAGO, no se compensa y responde
         502. Si un debito se rechaza (FALLIDA), se reintegran los aprobados. Si falla la
         emision despues de cobrar, se reintegra todo, se libera la reserva y responde 409.

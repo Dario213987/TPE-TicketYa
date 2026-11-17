@@ -189,6 +189,21 @@ class TransaccionApiTest {
     }
 
     @Test
+    void repetirElRequestConOtroMonto_responde409SinTocarLaOriginal() throws Exception {
+        long id = idDe(mvc.perform(debito(10)).andReturn());
+
+        mvc.perform(generar("debitos", "1", "ORGANIZADOR", 10, 7, 250.0))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("otro monto")));
+
+        assertThat(repository.findAll()).singleElement().satisfies(t -> {
+            assertThat(t.getId()).isEqualTo(id);
+            assertThat(t.getMonto()).isEqualTo(100.0);
+        });
+        verify(gateway, times(1)).debitar(any());
+    }
+
+    @Test
     void requestsSimultaneasDelMismoTicket_dejanUnaSolaTransaccion() throws Exception {
         CountDownLatch largada = new CountDownLatch(1);
         ExecutorService pool = Executors.newFixedThreadPool(6);

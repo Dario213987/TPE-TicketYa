@@ -49,6 +49,17 @@ Un reintento con la misma `Idempotency-Key` sobre un estado final devuelve el mi
 sin volver a cobrar. Un reintento sobre `PENDIENTE_PAGO` conserva el medio de pago del primer
 intento.
 
+**Misma clave con otro payload (TKY-88):** responde 409 sin devolver el resultado guardado.
+
+| Caso | Respuesta |
+|---|---|
+| Misma clave y misma reserva, con otro `medioPago` | 409 "ya se usó … con otro medio de pago" |
+| Misma clave para pagar otra reserva del mismo cliente | 409 "ya se usó para pagar otra reserva" |
+| Dos pagos simultáneos de reservas distintas con la misma clave | 409 (índice único `uk_reservas_cliente_idempotency_key` sobre `cliente_id, idempotency_key`) |
+| ms-transacciones: mismo ticket, cliente, organizador y tipo, con otro monto | 409 "con otro monto" |
+
+La clave es única por cliente: otro cliente puede usar la misma.
+
 Un 4xx de ms-transacciones (headers, monto u organizador inválidos) no es un rechazo del pago:
 se reintenta con la misma clave cuando se corrige la integración.
 

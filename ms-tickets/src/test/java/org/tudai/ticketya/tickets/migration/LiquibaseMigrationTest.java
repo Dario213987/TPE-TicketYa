@@ -137,7 +137,7 @@ class LiquibaseMigrationTest {
         assertThat(tablas()).contains("disponibilidad_eventos", "tickets", "reservas",
                 "bloqueos_job",
                 "habilitacion_eventos");
-        assertThat(contarCambiosAplicados()).isEqualTo(11);
+        assertThat(contarCambiosAplicados()).isEqualTo(12);
     }
 
     @Test
@@ -190,6 +190,28 @@ class LiquibaseMigrationTest {
                     (codigo_qr, estado_ticket, fecha_emision, evento_id, sector_id, asiento_id)
                 values ('qr-2', 'EMITIDO', current_timestamp, 1, %d, %d)
                 """.formatted(sectorId, asientoId))).isInstanceOf(SQLException.class);
+    }
+
+    @Test
+    void laIdempotencyKeyEsUnicaPorCliente() throws Exception {
+        ejecutar("""
+                insert into disponibilidad_eventos
+                    (evento_id, creado_el, limite_entradas_por_cliente)
+                values (1, current_timestamp, 4)
+                """);
+        String reserva = """
+                insert into reservas
+                    (evento_id, cliente_id, sector_id_externo, expira_el, creado_el, idempotency_key)
+                values (1, %d, 10, current_timestamp, current_timestamp, %s)
+                """;
+        ejecutar(reserva.formatted(7, "'clave-1'"));
+        // Otro cliente puede usar la misma clave, y las reservas sin pagar no tienen clave.
+        ejecutar(reserva.formatted(8, "'clave-1'"));
+        ejecutar(reserva.formatted(7, "null"));
+        ejecutar(reserva.formatted(7, "null"));
+
+        assertThatThrownBy(() -> ejecutar(reserva.formatted(7, "'clave-1'")))
+                .isInstanceOf(SQLException.class);
     }
 
     private Set<String> tablas() throws SQLException {

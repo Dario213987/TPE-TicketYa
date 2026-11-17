@@ -14,4 +14,7 @@ public interface ReservaRepository extends JpaRepository<Reserva, Long> {
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select r from Reserva r where r.id = :id")
     Optional<Reserva> findByIdForUpdate(@Param("id") Long id);
+
+    /** Si el cliente ya usó esa Idempotency-Key para pagar otra reserva (TKY-88). */
+    boolean existsByClienteIdAndIdempotencyKeyAndIdNot(Long clienteId, String idempotencyKey, Long id);
 }

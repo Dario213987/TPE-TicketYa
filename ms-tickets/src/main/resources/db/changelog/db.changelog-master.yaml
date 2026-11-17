@@ -20,3 +20,6 @@ databaseChangeLog:
   - include:
       file: 00003-crear-tablas-ventas.xml
       relativeToChangelogFile: true
+  - include:
+      file: 00006-reservas-clave-unica-por-cliente.xml
+      relativeToChangelogFile: true
