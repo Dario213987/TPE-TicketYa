@@ -207,8 +207,8 @@ La `fecha` del historial se devuelve en UTC, sin offset.
   mensaje entregado. Si el servicio está caído, el stream conserva los mensajes y se procesan al
   volver.
 - **Límites conocidos**: no hay reintento de un mensaje que falla al procesarse (se loguea y se
-  confirma); hay un solo consumidor, así que no se garantiza orden entre los dos streams; la
-  co-ocurrencia (`co_compras`) queda para US-13.04.
+  confirma); hay un solo consumidor, así que no se garantiza orden entre los dos streams. La
+  co-ocurrencia (`co_compras`) se calcula en US-13.03 y el endpoint de sugerencias es US-13.04.
 
 ### Configuración
 
@@ -252,6 +252,78 @@ curl.exe -H "X-User-Id: 7" -H "X-User-Role: CLIENTE" http://localhost:8080/api/p
 Repetir el `XADD` de `venta.pagada` no duplica la entrada: el primer mensaje se procesa y el segundo
 actualiza el mismo evento (o se ignora si es el mismo id de mensaje). El test de integración
 `HistorialStreamIntegrationTest` hace esto mismo con Redis y MongoDB en Testcontainers.
+
+## Recomendaciones simplificadas (US-09.03)
+
+Esta sección cubre el **algoritmo y la co-ocurrencia**; el endpoint `GET /api/recomendaciones`
+(con el cliente de `ms-eventos` y el fallback) es la US-09.04. Acá se explica cómo se calcula el
+puntaje de un evento candidato para que la recomendación sea simple y justificable.
+
+### Co-ocurrencia de compras (`co_compras`)
+
+Un documento por evento con los eventos que compraron sus mismos clientes y cuántos clientes compraron
+ambos:
+
+```json
+{
+  "_id": 5,
+  "relacionados": [
+    { "eventoId": 6, "cantidad": 2 },
+    { "eventoId": 9, "cantidad": 1 }
+  ]
+}
+```
+
+Reglas:
+
+- Se actualiza cuando llega un `venta.pagada` de un evento **nuevo** para el cliente (la entrada no
+  estaba `comprado`). Una segunda compra del mismo evento no vuelve a contar.
+- Por cada evento `X` que el cliente ya había comprado se incrementa el par `(E, X)` y `(X, E)`, así
+  la consulta funciona en las dos direcciones.
+- La `cantidad` cuenta **clientes**, no compras: si dos clientes compraron 5 y 6, `cantidad` es 2.
+- La actualización va después de guardar el historial. Si falla, se registra un warning y el mensaje
+  se confirma igual; no se pierde el historial. La deduplicación por id de mensaje (US-09.02) evita
+  procesar dos veces el mismo evento.
+- La actualización es read-modify-write sobre la lista porque el modelo documentado es
+  `relacionados[{eventoId, cantidad}]`. El consumidor procesa los mensajes de forma secuencial; con
+  varias instancias de `ms-preferencias` habría que pasar a un `$inc` atómico o a un lock por evento.
+
+### Puntaje
+
+El puntaje es **lineal**, sin aprendizaje automático. Se suman los criterios que coinciden:
+
+| Criterio | Peso | Cuándo suma |
+|---|---|---|
+| **Artista** | **+5** | un participante del candidato está en `artistasFavoritos`, o participó de un evento del historial con `usado = true` (al que el cliente asistió) |
+| **Tipo** | **+3** | el tipo está en `tiposFavoritos`, o aparece al menos una vez en el historial (comprado o asistido) |
+| **Co-ocurrencia** | **+1 a +3** | `min(3, cantidad)` de clientes que compraron alguno de los eventos del historial junto con el candidato |
+| **Ciudad** | **+1** | la ciudad del candidato coincide con la del cliente (sin distinguir mayúsculas ni espacios) |
+
+Reglas adicionales:
+
+- Se **excluyen** los eventos para los que el cliente ya tiene entradas (historial con `comprado` o
+  `usado`), así no se recomienda algo que ya compró.
+- Se ordena por **puntaje descendente**, luego por **fecha ascendente** y luego por **id**.
+- El endpoint devuelve hasta 10 eventos; el servicio recibe el límite.
+- `motivo` es el criterio de mayor peso que explica la sugerencia, con esta prioridad:
+  `ARTISTA` (5) > `TIPO` (3) > `CO_COMPRA` (hasta 3) > `CIUDAD` (1). Si empatan `TIPO` y `CO_COMPRA`,
+  queda `TIPO`.
+- Si el cliente **no tiene historial**, se puntúa solo con `tiposFavoritos`, `artistasFavoritos` y
+  `ciudad`. Si tampoco tiene preferencias, no hay coincidencias y la lista queda vacía: el fallback de
+  "próximos eventos de mi ciudad" y el `200` con lista vacía cuando `ms-eventos` está caído son parte
+  del endpoint (US-09.04).
+
+### Simplificaciones documentadas
+
+- No hay motor externo ni aprendizaje automático: es una suma de coincidencias con pesos fijos.
+- No hay recomendación por cercanía geográfica; solo se compara la ciudad declarada.
+- La co-ocurrencia se precalcula con las compras (`venta.pagada`); el uso (`ticket.utilizado`) solo
+  pondera el historial para el criterio de artista asistido, no cambia los pares.
+- Los pares cuentan clientes únicos por evento, no la cantidad de entradas ni de compras repetidas.
+- No se explica cada recomendación más allá del `motivo` principal; el detalle completo queda en el
+  informe tecnológico.
+- Los candidatos (eventos publicados y futuros) los arma el endpoint de US-09.04 con `ms-eventos`; el
+  algoritmo de esta card solo puntúa los que recibe.
 
 ## Pendientes
 

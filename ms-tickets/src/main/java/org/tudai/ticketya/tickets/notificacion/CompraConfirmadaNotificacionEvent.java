@@ -22,6 +22,12 @@ public class CompraConfirmadaNotificacionEvent {
 
     public CompraConfirmadaNotificacionEvent(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                              List<AsientoNotificacion> asientos, Integer cantidad,
+                                             BigDecimal monto) {
+        this(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad, monto, "ARS");
+    }
+
+    public CompraConfirmadaNotificacionEvent(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
+                                             List<AsientoNotificacion> asientos, Integer cantidad,
                                              BigDecimal monto, String moneda) {
         this.reservaId = reservaId;
         this.eventoId = eventoId;

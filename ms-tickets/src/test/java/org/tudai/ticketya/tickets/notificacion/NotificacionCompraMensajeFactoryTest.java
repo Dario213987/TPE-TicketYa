@@ -41,4 +41,11 @@ class NotificacionCompraMensajeFactoryTest {
         NotificacionEntranteDTO b = factory.crear(7L, 1L, 2L, 3L, List.of(), 0, null, null);
         assertEquals(a.getMensajeId(), b.getMensajeId());
     }
+
+    @Test
+    void reservasDistintasGeneranMensajesIdsDistintos() {
+        NotificacionEntranteDTO a = factory.crear(1L, 10L, 20L, 5L, List.of(), 1, null, "ARS");
+        NotificacionEntranteDTO b = factory.crear(2L, 10L, 20L, 5L, List.of(), 1, null, "ARS");
+        assertNotEquals(a.getMensajeId(), b.getMensajeId());
+    }
 }

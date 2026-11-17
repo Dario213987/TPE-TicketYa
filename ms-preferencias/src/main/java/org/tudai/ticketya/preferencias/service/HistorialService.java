@@ -1,6 +1,7 @@
 package org.tudai.ticketya.preferencias.service;
 
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.modelmapper.ModelMapper;
 import org.springframework.stereotype.Service;
 import org.tudai.ticketya.contract.preferencias.model.HistorialCompraDTO;
@@ -22,22 +23,32 @@ import java.util.Objects;
  * del mismo evento actualiza la entrada existente en lugar de duplicarla, y un
  * uso solo prende {@code usado} para que la recomendación lo pondere más.
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class HistorialService {
 
     private final PreferenciaRepository preferenciaRepository;
+    private final CoCompraService coCompraService;
     private final ModelMapper modelMapper;
 
     /**
      * Registra una compra confirmada. Si el evento ya estaba en el historial
      * (por ejemplo, por un reintento del mismo mensaje), completa los datos sin
      * duplicar la entrada y conserva el flag de uso.
+     * <p>
+     * Cuando la compra es nueva para el cliente, además actualiza la
+     * co-ocurrencia con los eventos que ya había comprado (US-09.03). Si la
+     * actualización de co-ocurrencia falla, se registra y no se propaga: el
+     * historial ya quedó guardado y el mensaje se confirma igual.
      *
      * @param evento datos publicados en {@code venta.pagada}
      */
     public void registrarCompra(EventoVentaPagada evento) {
         Preferencia preferencia = buscarOCrear(evento.clienteId());
+        boolean compraNueva = !yaComprado(preferencia, evento.eventoId());
+        List<Long> eventosPrevios = eventosComprados(preferencia, evento.eventoId());
+
         HistorialCompra entrada = entradaDe(preferencia, evento.eventoId());
 
         entrada.setComprado(true);
@@ -55,6 +66,15 @@ public class HistorialService {
         }
 
         preferenciaRepository.save(preferencia);
+
+        if (compraNueva && !eventosPrevios.isEmpty()) {
+            try {
+                coCompraService.registrarCompra(evento.eventoId(), eventosPrevios);
+            } catch (RuntimeException e) {
+                log.warn("No se pudo actualizar la co-ocurrencia del evento {}: {}",
+                        evento.eventoId(), e.getMessage());
+            }
+        }
     }
 
     /**
@@ -90,6 +110,26 @@ public class HistorialService {
     private Preferencia buscarOCrear(Long clienteId) {
         return preferenciaRepository.findById(clienteId)
                 .orElseGet(() -> Preferencia.builder().clienteId(clienteId).build());
+    }
+
+    private boolean yaComprado(Preferencia preferencia, Long eventoId) {
+        return historialDe(preferencia).stream()
+                .anyMatch(entrada -> Objects.equals(entrada.getEventoId(), eventoId)
+                        && entrada.isComprado());
+    }
+
+    private List<Long> eventosComprados(Preferencia preferencia, Long eventoId) {
+        return historialDe(preferencia).stream()
+                .filter(HistorialCompra::isComprado)
+                .filter(entrada -> !Objects.equals(entrada.getEventoId(), eventoId))
+                .map(HistorialCompra::getEventoId)
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+    }
+
+    private static List<HistorialCompra> historialDe(Preferencia preferencia) {
+        return preferencia.getHistorial() == null ? List.of() : preferencia.getHistorial();
     }
 
     private HistorialCompra entradaDe(Preferencia preferencia, Long eventoId) {

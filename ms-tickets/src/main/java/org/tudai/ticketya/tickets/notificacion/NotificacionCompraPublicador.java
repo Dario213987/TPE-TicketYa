@@ -19,6 +19,7 @@ import java.util.List;
 public class NotificacionCompraPublicador {
 
     private static final Logger log = LoggerFactory.getLogger(NotificacionCompraPublicador.class);
+    private static final String MONEDA_COMPRA = "ARS";
 
     private final NotificacionCompraMensajeFactory factory;
     private final RabbitTemplate rabbitTemplate;
@@ -33,6 +34,13 @@ public class NotificacionCompraPublicador {
      * Arma el mensaje de confirmación y lo publica en la cola de envío. Ante fallos (ej. broker caído)
      * registra el error y no relanza, preservando la compra ya confirmada.
      */
+    public void producirConfirmacionCompra(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
+                                           List<AsientoNotificacion> asientos, Integer cantidad,
+                                           BigDecimal monto) {
+        producirConfirmacionCompra(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad,
+                monto, MONEDA_COMPRA);
+    }
+
     public void producirConfirmacionCompra(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                            List<AsientoNotificacion> asientos, Integer cantidad,
                                            BigDecimal monto, String moneda) {

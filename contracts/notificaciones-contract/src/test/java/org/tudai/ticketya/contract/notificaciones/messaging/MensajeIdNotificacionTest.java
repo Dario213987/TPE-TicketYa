@@ -71,4 +71,18 @@ class MensajeIdNotificacionTest {
         assertEquals(MensajeIdNotificacion.generarDerivado("MST", "RESERVA", 77L),
                 MensajeIdNotificacion.generarDerivado("MST", "RESERVA", 77L));
     }
+
+    @Test
+    void generarDerivadoDevuelveIdEstablePorEntidad() {
+        assertEquals("MST-RESERVA-99", MensajeIdNotificacion.generarDerivado("MST", "RESERVA", 99L));
+        assertEquals(MensajeIdNotificacion.generarDerivado("MST", "RESERVA", 99L),
+                MensajeIdNotificacion.generarDerivado("MST", "RESERVA", 99L));
+    }
+
+    @Test
+    void generarDerivadoConDatosInvalidosLanzaExcepcion() {
+        assertThrows(IllegalArgumentException.class, () -> MensajeIdNotificacion.generarDerivado(null, "RESERVA", 1L));
+        assertThrows(IllegalArgumentException.class, () -> MensajeIdNotificacion.generarDerivado("MST", " ", 1L));
+        assertThrows(IllegalArgumentException.class, () -> MensajeIdNotificacion.generarDerivado("MST", "RESERVA", null));
+    }
 }
