@@ -6,6 +6,12 @@ import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
+/**
+ * Detalle de una compra usado para renderizar la confirmacion.
+ * <p>
+ * Viaja dentro de {@link NotificacionEntranteDTO#getDetalle()} y no se persiste. Los
+ * asientos vacios indican entradas generales de un sector no numerado.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class DetalleConfirmacionCompra implements DetalleNotificacion {
 

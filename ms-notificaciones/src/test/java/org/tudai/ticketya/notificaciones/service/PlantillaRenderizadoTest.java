@@ -70,6 +70,16 @@ class PlantillaRenderizadoTest {
         assertTrue(html.contains("CANCELACION"));
         assertTrue(html.contains("Show"));
         assertTrue(html.contains("Ana"));
+        assertTrue(html.contains("El reintegro de tu compra ya fue solicitado."));
+    }
+
+    @Test
+    void renderizaEdicionConAvisoDeCambio() {
+        String html = service.renderizar(entrante(MotivoNotificacion.EDICION, null), eventoBase(), usuarioBase());
+
+        assertTrue(html.contains("EDICION"));
+        assertTrue(html.contains("Show"));
+        assertTrue(html.contains("La fecha o el lugar del evento fueron actualizados."));
     }
 
     private EventoClientDTO eventoBase() {

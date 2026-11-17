@@ -1,5 +1,8 @@
 package org.tudai.ticketya.contract.notificaciones.messaging;
 
+/**
+ * Asiento numerado incluido en el detalle de una confirmacion de compra.
+ */
 public class AsientoNotificacion {
 
     private Integer fila;

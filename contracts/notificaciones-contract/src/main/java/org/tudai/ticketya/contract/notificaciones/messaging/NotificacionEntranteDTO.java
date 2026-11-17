@@ -4,6 +4,13 @@ import com.fasterxml.jackson.annotation.JsonAlias;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import com.fasterxml.jackson.annotation.JsonInclude;
 
+/**
+ * Mensaje compartido entre productores y {@code ms-notificaciones}.
+ * <p>
+ * {@code mensajeId} es la clave de idempotencia. {@code destinatarioId} es obligatorio
+ * para {@code CONFIRMACION_COMPRA} y puede ser nulo en avisos masivos. {@code detalle}
+ * es polimorfico y acepta el nombre anterior {@code detalleCompra} por compatibilidad.
+ */
 @JsonIgnoreProperties(ignoreUnknown = true)
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public class NotificacionEntranteDTO {
@@ -58,6 +65,11 @@ public class NotificacionEntranteDTO {
         this.detalle = detalle;
     }
 
+    /**
+     * Valida que las confirmaciones de compra tengan destinatario.
+     *
+     * @throws IllegalArgumentException si falta el destinatario en una confirmacion
+     */
     public void validarDestinatario() {
         if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA && destinatarioId == null) {
             throw new IllegalArgumentException("CONFIRMACION_COMPRA requiere destinatarioId");

@@ -8,6 +8,9 @@ import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 
 import java.time.LocalDateTime;
 
+/**
+ * Vista de una notificacion con los datos principales de su procesamiento.
+ */
 @Getter
 @Setter
 @AllArgsConstructor
