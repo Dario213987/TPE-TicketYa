@@ -23,6 +23,16 @@ x-mysql: &mysql
     timeout: 3s
     retries: 20
 
+# Configuración común de los servicios de la aplicación.
+# Los logs se escriben en el volumen compartido que lee Alloy.
+x-app: &app
+  restart: unless-stopped
+  environment: &app-env
+    EUREKA_URL: http://eureka-server:8761/eureka
+    TICKETYA_LOGGING_DIR: /app/logs
+  volumes:
+    - app-logs:/app/logs
+
 services:
   db-eventos:
     <<: *postgres
@@ -115,6 +125,41 @@ services:
       timeout: 3s
       retries: 10
 
+  # Logs centralizados: Alloy lee los *.json.log que escribe cada servicio
+  # (logs/<servicio>/ dentro de la carpeta desde donde se lanzó), los manda a
+  # Loki y se consultan en Grafana (http://localhost:3000).
+  loki:
+    image: grafana/loki:3.4.2
+    restart: unless-stopped
+    command: ["-config.file=/etc/loki/local-config.yaml"]
+    ports: ["127.0.0.1:3100:3100"]
+    volumes: [loki-data:/loki]
+
+  alloy:
+    image: grafana/alloy:v1.8.3
+    restart: unless-stopped
+    command: ["run", "--server.http.listen-addr=0.0.0.0:12345", "--storage.path=/var/lib/alloy/data", "/etc/alloy/config.alloy"]
+    ports: ["127.0.0.1:12345:12345"]
+    volumes:
+      - ./alloy/config.alloy:/etc/alloy/config.alloy:ro
+      - ..:/ticketya:ro
+      - app-logs:/ticketya/container-logs:ro
+      - alloy-data:/var/lib/alloy/data
+    depends_on: [loki]
+
+  grafana:
+    image: grafana/grafana:11.6.0
+    restart: unless-stopped
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+    ports: ["127.0.0.1:3000:3000"]
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - grafana-data:/var/lib/grafana
+    depends_on: [loki]
+
   # ms-preferencias usa Redis Streams para el historial de compras y asistencias.
   redis-preferencias:
     image: redis:7-alpine
@@ -150,11 +195,175 @@ services:
     ports:
       - "127.0.0.1:1025:1025"
       - "127.0.0.1:8025:8025"
+
+  # ---------------------------------------------------------------------------
+  # Servicios de la aplicación (TKY-112 / US-16.02)
+  # ---------------------------------------------------------------------------
+  eureka-server:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: eureka-server/Dockerfile
+    image: ticketya/eureka-server:local
+    ports: ["127.0.0.1:8761:8761"]
+
+  api-gateway:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: api-gateway/Dockerfile
+    image: ticketya/api-gateway:local
+    ports: ["127.0.0.1:8080:8080"]
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+
+  ms-eventos:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-eventos/Dockerfile
+    image: ticketya/ms-eventos:local
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://db-eventos:5432/eventos
+      DB_USER: eventos
+      DB_PASSWORD: ${EVENTOS_DB_PASSWORD}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-eventos:
+        condition: service_healthy
+
+  ms-tickets:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-tickets/Dockerfile
+    image: ticketya/ms-tickets:local
+    # Con réplicas, cada instancia escribe en su propio subdirectorio de logs.
+    entrypoint: ["sh", "-c", "TICKETYA_LOGGING_DIR=/app/logs/ms-tickets-$${HOSTNAME:-replica} exec java -jar /app/app.jar"]
+    deploy:
+      replicas: 2
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://db-tickets:5432/tickets
+      DB_USER: tickets
+      DB_PASSWORD: ${TICKETS_DB_PASSWORD}
+      REDIS_HOST: redis-tickets
+      REDIS_PORT: "6379"
+      TICKETS_PREFERENCIAS_REDIS_HOST: redis-preferencias
+      TICKETS_PREFERENCIAS_REDIS_PORT: "6379"
+      TICKETS_QR_SECRET: ${TICKETS_QR_SECRET:-dev-secret-cambiar}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-tickets:
+        condition: service_healthy
+      redis-tickets:
+        condition: service_healthy
+      redis-preferencias:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  ms-transacciones:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-transacciones/Dockerfile
+    image: ticketya/ms-transacciones:local
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:mysql://db-transacciones:3306/transacciones
+      DB_USER: transacciones
+      DB_PASSWORD: ${TRANSACCIONES_DB_PASSWORD}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-transacciones:
+        condition: service_healthy
+
+  ms-devoluciones:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-devoluciones/Dockerfile
+    image: ticketya/ms-devoluciones:local
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://db-devoluciones:5432/devoluciones
+      DB_USER: devoluciones
+      DB_PASSWORD: ${DEVOLUCIONES_DB_PASSWORD}
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-devoluciones:
+        condition: service_healthy
+
+  ms-notificaciones:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-notificaciones/Dockerfile
+    image: ticketya/ms-notificaciones:local
+    environment:
+      <<: *app-env
+      DB_URL: jdbc:postgresql://db-notificaciones:5432/notificaciones
+      DB_USER: notificaciones
+      DB_PASSWORD: ${NOTIFICACIONES_DB_PASSWORD}
+      RABBITMQ_HOST: rabbitmq
+      RABBITMQ_PORT: "5672"
+      RABBITMQ_USER: ${RABBITMQ_USER}
+      RABBITMQ_PASSWORD: ${RABBITMQ_PASSWORD}
+      RABBITMQ_VHOST: ${RABBITMQ_VHOST:-/}
+      MAIL_HOST: mailhog
+      MAIL_PORT: "1025"
+      MAIL_FROM: no-reply@ticketya.local
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-notificaciones:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      mailhog:
+        condition: service_started
+
+  ms-preferencias:
+    <<: *app
+    build:
+      context: ..
+      dockerfile: ms-preferencias/Dockerfile
+    image: ticketya/ms-preferencias:local
+    environment:
+      <<: *app-env
+      MONGODB_URI: mongodb://db-preferencias:27017/ticketya_preferencias
+      REDIS_HOST: redis-preferencias
+      REDIS_PORT: "6379"
+      EVENTOS_SERVICE_NAME: ms-eventos
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      db-preferencias:
+        condition: service_healthy
+      redis-preferencias:
+        condition: service_healthy
+
 volumes:
   eventos-data:
   tickets-data:
   transacciones-data:
   devoluciones-data:
+  loki-data:
+  alloy-data:
+  grafana-data:
   notificaciones-data:
   preferencias-data:
   rabbitmq-data:
+  app-logs:

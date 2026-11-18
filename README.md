@@ -41,15 +41,33 @@ desde la raíz del monorepo:
     docker build -f ms-eventos/Dockerfile -t ticketya/ms-eventos:local .
 
 La lista completa de módulos, variables de entorno, puertos y comandos de ejecución está
-en [docs/deploy/docker.md](docs/deploy/docker.md). El compose completo del sistema es
-US-16.02.
+en [docs/deploy/docker.md](docs/deploy/docker.md). El compose completo del sistema está en
+[`infra/docker-compose.yml`](infra/docker-compose.yml) (TKY-112).
 
 ## Ejecución
 
-### 1. Infraestructura
+### 1. Sistema completo con Docker
 
     cp infra/.env.example infra/.env   # completar contraseñas
-    docker compose -f infra/docker-compose.yml up -d
+    docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build
+
+El primer `up --build` compila las 8 imágenes (Maven + JRE 25); los siguientes arranques reutilizan la caché.
+
+Levanta las bases, MongoDB, Redis, RabbitMQ, MailHog, Eureka, el gateway, los microservicios y el stack de logs, con healthchecks y orden de arranque. `ms-tickets` arranca con **2 réplicas** detrás del balanceo de Eureka; se puede cambiar con `--scale`, por ejemplo `--scale ms-tickets=3`.
+
+| Servicio | URL |
+|---|---|
+| Gateway | http://localhost:8080 |
+| Eureka | http://localhost:8761 |
+| Grafana | http://localhost:3000 |
+| MailHog | http://localhost:8025 |
+
+Los servicios escriben los logs JSON en el volumen compartido `app-logs`; Alloy lo lee, lo envía a Loki y se consulta en Grafana. Cada réplica de `ms-tickets` escribe en su propio subdirectorio para no mezclar archivos.
+
+Para ver el estado o bajar todo:
+
+    docker compose -f infra/docker-compose.yml ps
+    docker compose -f infra/docker-compose.yml down
 
 Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto, MongoDB en `ms-preferencias`):
 
@@ -90,6 +108,12 @@ Primero Eureka y después lo demás:
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
 
+`ms-tickets` firma los códigos QR con HMAC usando `TICKETS_QR_SECRET`. En desarrollo hay un valor por defecto (`dev-secret-cambiar`), pero en producción hay que definir un secreto propio y largo (también está en `infra/.env.example`):
+
+    env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
+
+La firma se comprueba en `AccesoService.validar` antes de consultar la base de datos: un QR con firma inválida responde 400 sin acceder al repositorio. Esto aplica a los QRs emitidos con firma; los tickets anteriores tienen un `codigo_qr` sin firma y serán rechazados con 400, así que hay que re-firmarlos (`firmar(codigo_qr)`) antes de desplegar si existen datos previos.
+
 ### 4. Levantar dos instancias del mismo servicio
 
 Los `ms-*` usan puerto aleatorio (`server.port=0`) y un id de instancia único, así que alcanza con ejecutar el mismo comando en dos terminales:
@@ -114,6 +138,18 @@ Todos los servicios dependen de `ticketya-logging`, que define el formato: conso
 Para loguear se usa `@Slf4j` (Lombok) o `LoggerFactory.getLogger(...)`.
 
 Propiedades opcionales: `ticketya.logging.dir` (`logs`), `ticketya.logging.max-file-size` (`10MB`), `ticketya.logging.max-history` (`7` días) y `ticketya.logging.total-size-cap` (`500MB`).
+
+### Logs centralizados (Loki + Alloy + Grafana)
+
+El compose de `infra/` también levanta Loki, Alloy y Grafana. Alloy lee los `*.json.log` de `logs/` y de `<módulo>/logs/` (según desde dónde se lanzó el servicio), etiqueta cada línea con `service` y la manda a Loki.
+
+En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargado. En **Explore** se consulta por servicio:
+
+    {service="ms-eventos"}
+
+Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
+
+El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
 ## Correlation id
 

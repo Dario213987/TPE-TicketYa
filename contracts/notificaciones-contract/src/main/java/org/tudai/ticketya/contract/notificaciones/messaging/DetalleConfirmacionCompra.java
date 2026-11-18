@@ -1,10 +1,19 @@
 package org.tudai.ticketya.contract.notificaciones.messaging;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+
 import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.List;
 
-public class DetalleConfirmacionCompra {
+/**
+ * Detalle de una compra usado para renderizar la confirmacion.
+ * <p>
+ * Viaja dentro de {@link NotificacionEntranteDTO#getDetalle()} y no se persiste. Los
+ * asientos vacios indican entradas generales de un sector no numerado.
+ */
+@JsonIgnoreProperties(ignoreUnknown = true)
+public class DetalleConfirmacionCompra implements DetalleNotificacion {
 
     private Long sectorId;
     private List<AsientoNotificacion> asientos = new ArrayList<>();

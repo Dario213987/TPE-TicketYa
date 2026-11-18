@@ -1,0 +1,493 @@
+{
+	"info": {
+		"_postman_id": "c1f7a18e-49b2-4d29-b690-36b1d4c798e1",
+		"name": "ms-devoluciones",
+		"description": "Colección de pruebas para el microservicio ms-devoluciones de TicketYa (US-06.08 / TKY-65). Requiere headers X-User-Id y X-User-Role.",
+		"schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+	},
+	"item": [
+		{
+			"name": "1. Solicitar devolución exitosa (201)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 201 Created\", function () {",
+							"    pm.response.to.have.status(201);",
+							"});",
+							"pm.test(\"Estado es PENDIENTE\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.estado).to.eql(\"PENDIENTE\");",
+							"    pm.expect(jsonData.ticketId).to.eql(100);",
+							"    pm.expect(jsonData.clienteId).to.eql(10);",
+							"    pm.expect(jsonData.id).to.be.a(\"number\");",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 100,\n  \"motivo\": \"No podré asistir por motivos personales\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "2. Solicitar devolución con menos de 72 hs (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 101,\n  \"motivo\": \"Evento en menos de 72 horas\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "3. Solicitar devolución ticket ya usado (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 102,\n  \"motivo\": \"Entrada ya utilizada\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "4. Solicitar devolución ticket ya devuelto (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 103,\n  \"motivo\": \"Entrada ya devuelta\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "5. Solicitar devolución con solicitud pendiente duplicada (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 100,\n  \"motivo\": \"Segunda solicitud para el mismo ticket\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "6. Solicitar devolución ticket de otro cliente (403)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 403 Forbidden\", function () {",
+							"    pm.response.to.have.status(403);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 200,\n  \"motivo\": \"Ticket de otro titular\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "7. Solicitar devolución con clienteId no coincidente en body (403)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 403 Forbidden\", function () {",
+							"    pm.response.to.have.status(403);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 100,\n  \"clienteId\": 99,\n  \"motivo\": \"ClienteId no coincide con X-User-Id\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "8. Solicitar devolución ticket inexistente (404)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 404 Not Found\", function () {",
+							"    pm.response.to.have.status(404);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 99999,\n  \"motivo\": \"Ticket no existe\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "9. Solicitar devolución sin autenticación (401)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 401 Unauthorized\", function () {",
+							"    pm.response.to.have.status(401);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 100,\n  \"motivo\": \"Sin headers de auth\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		},
+		{
+			"name": "10. Solicitar devolución con motivo mayor a 255 caracteres (400)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 400 Bad Request\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "{{userId}}"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "{{role}}"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"ticketId\": 100,\n  \"motivo\": \"Lorem ipsum dolor sit amet, consectetur adipiscing elit. Sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident.\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones"
+					]
+				}
+			}
+		}
+	],
+	"variable": [
+		{
+			"key": "baseUrl",
+			"value": "http://localhost:8080"
+		},
+		{
+			"key": "userId",
+			"value": "10"
+		},
+		{
+			"key": "role",
+			"value": "CLIENTE"
+		}
+	]
+}

@@ -249,9 +249,9 @@ esperado hasta que el compose levante las dependencias.
   se agregan cuando mergeen. El Jira de TKY-111 dice “Depende de EP-01”, mientras que la
   spec EP-16 dice “Depende de: —”; hay que confirmar si “todos” incluye esos servicios
   para cerrar la card.
-- El **docker-compose completo**, las réplicas de `ms-tickets`, la espera por health de
-  las bases, los volúmenes de logs y Loki/Alloy/Grafana/Mailpit son **US-16.02**, no esta
-  card.
+- El **docker-compose completo** está en `infra/docker-compose.yml` (TKY-112): réplicas de
+  `ms-tickets`, espera por health de las bases, volumen de logs compartido con Alloy y
+  Loki/Grafana/MailHog.
 - No se agrega build de imágenes a CI/CD: EP-16 lo deja fuera de alcance.
 - Las imágenes se construyen desde la raíz del monorepo; el `-f` es obligatorio para
   cada Dockerfile.
