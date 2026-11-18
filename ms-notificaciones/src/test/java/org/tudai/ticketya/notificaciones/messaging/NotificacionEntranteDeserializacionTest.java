@@ -2,6 +2,7 @@ package org.tudai.ticketya.notificaciones.messaging;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.Test;
+import org.tudai.ticketya.contract.notificaciones.messaging.DetalleConfirmacionCompra;
 import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 
@@ -23,10 +24,11 @@ class NotificacionEntranteDeserializacionTest {
         NotificacionEntranteDTO dto = mapper.readValue(json, NotificacionEntranteDTO.class);
 
         assertEquals(MotivoNotificacion.CONFIRMACION_COMPRA, dto.getMotivo());
-        assertNotNull(dto.getDetalleCompra());
-        assertEquals(5L, dto.getDetalleCompra().getSectorId());
-        assertEquals(1, dto.getDetalleCompra().getAsientos().size());
-        assertEquals(1, dto.getDetalleCompra().getAsientos().get(0).getFila());
+        assertInstanceOf(DetalleConfirmacionCompra.class, dto.getDetalle());
+        DetalleConfirmacionCompra detalle = (DetalleConfirmacionCompra) dto.getDetalle();
+        assertEquals(5L, detalle.getSectorId());
+        assertEquals(1, detalle.getAsientos().size());
+        assertEquals(1, detalle.getAsientos().get(0).getFila());
     }
 
     @Test
@@ -40,6 +42,6 @@ class NotificacionEntranteDeserializacionTest {
         NotificacionEntranteDTO dto = mapper.readValue(json, NotificacionEntranteDTO.class);
 
         assertEquals(MotivoNotificacion.CANCELACION, dto.getMotivo());
-        assertNull(dto.getDetalleCompra());
+        assertNull(dto.getDetalle());
     }
 }

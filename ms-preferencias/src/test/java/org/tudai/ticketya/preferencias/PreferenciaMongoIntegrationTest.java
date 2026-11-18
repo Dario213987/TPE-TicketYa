@@ -13,6 +13,7 @@ import org.tudai.ticketya.contract.preferencias.model.PreferenciaRequestDTO;
 import org.tudai.ticketya.contract.preferencias.model.PreferenciaResponseDTO;
 import org.tudai.ticketya.contract.preferencias.model.TipoEvento;
 import org.tudai.ticketya.preferencias.repository.PreferenciaRepository;
+import org.tudai.ticketya.preferencias.service.DestinatariosService;
 import org.tudai.ticketya.preferencias.service.PreferenciaService;
 
 import java.util.List;
@@ -45,6 +46,9 @@ class PreferenciaMongoIntegrationTest {
 
     @Autowired
     private PreferenciaRepository preferenciaRepository;
+
+    @Autowired
+    private DestinatariosService destinatariosService;
 
     @BeforeEach
     void limpiarColeccion() {
@@ -94,6 +98,17 @@ class PreferenciaMongoIntegrationTest {
                 .containsExactly(TipoEvento.RECITAL);
         assertThat(preferenciaService.obtener(8L).getTiposFavoritos())
                 .containsExactly(TipoEvento.FESTIVAL);
+    }
+
+    @Test
+    void obtenerDestinatarios_filtraPorFavoritosYCiudadNormalizada() {
+        preferenciaService.guardar(7L, request(List.of(), List.of(15L, 20L), "Tándil"));
+        preferenciaService.guardar(8L, request(List.of(), List.of(15L), "Rauch"));
+        preferenciaService.guardar(9L, request(List.of(), List.of(99L), "Tandil"));
+
+        assertThat(destinatariosService.obtenerDestinatarios(List.of(15L, 20L), "TANDIL"))
+                .containsExactly(7L);
+        assertThat(destinatariosService.obtenerDestinatarios(List.of(), "Tandil")).isEmpty();
     }
 
     private PreferenciaRequestDTO request(List<TipoEvento> tipos, List<Long> artistas, String ciudad) {

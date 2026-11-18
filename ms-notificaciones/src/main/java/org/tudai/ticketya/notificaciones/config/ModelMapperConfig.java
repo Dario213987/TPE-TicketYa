@@ -10,8 +10,20 @@ import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 
+/**
+ * Configuracion del {@link ModelMapper} usado para mapear entidades y DTOs.
+ * <p>
+ * Usa coincidencia estricta, ignora valores nulos y convierte {@link Instant} a
+ * {@link OffsetDateTime} en UTC.
+ */
 @org.springframework.context.annotation.Configuration
 public class ModelMapperConfig {
+
+    /**
+     * Crea el mapper con la configuracion comun del servicio.
+     *
+     * @return mapper configurado
+     */
     @Bean
     public ModelMapper modelMapper() {
         ModelMapper modelMapper = new ModelMapper();
@@ -22,6 +34,12 @@ public class ModelMapperConfig {
                 .setFieldAccessLevel(Configuration.AccessLevel.PRIVATE);
 
         modelMapper.addConverter(new AbstractConverter<Instant, OffsetDateTime>() {
+            /**
+             * Convierte un instante a la misma marca de tiempo en UTC.
+             *
+             * @param source instante de origen
+             * @return fecha con offset UTC o {@code null}
+             */
             @Override
             protected OffsetDateTime convert(Instant source) {
                 return source == null ? null : source.atOffset(ZoneOffset.UTC);

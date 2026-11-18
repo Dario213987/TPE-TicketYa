@@ -73,4 +73,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             """)
     List<Long> findEventosConReservasVencidas(@Param("estado") EstadoTicket estado,
                                               @Param("ahora") Instant ahora);
+
+    /**
+     * Devuelve los ids de usuario distintos que tienen al menos un ticket del evento
+     * en alguno de los estados indicados.
+     * <p>
+     * Excluye tickets sin {@code clienteId} y ordena los ids de menor a mayor para que
+     * la respuesta sea determinista. No valida la existencia del evento: si no hay
+     * tickets, devuelve una lista vacia.
+     *
+     * @param eventoId id del evento
+     * @param estados  estados de ticket que se consideran una compra
+     * @return ids de usuario distintos, ordenados ascendentemente
+     */
+    @Query("""
+            select distinct t.clienteId from Ticket t
+            where t.evento.eventoId = :eventoId
+              and t.clienteId is not null
+              and t.estadoTicket in :estados
+            order by t.clienteId asc
+            """)
+    List<Long> findClienteIdsDistintosPorEvento(@Param("eventoId") Long eventoId,
+                                                @Param("estados") Collection<EstadoTicket> estados);
 }
