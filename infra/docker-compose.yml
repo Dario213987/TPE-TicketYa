@@ -115,6 +115,17 @@ services:
       timeout: 3s
       retries: 10
 
+  # ms-eventos lo usa como cache (Redisson, TKY-81). Si está caído, ms-eventos consulta la base.
+  redis-eventos:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports: ["127.0.0.1:6382:6379"]
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
   # Logs centralizados: Alloy lee los *.json.log que escribe cada servicio
   # (logs/<servicio>/ dentro de la carpeta desde donde se lanzó), los manda a
   # Loki y se consultan en Grafana (http://localhost:3000).
