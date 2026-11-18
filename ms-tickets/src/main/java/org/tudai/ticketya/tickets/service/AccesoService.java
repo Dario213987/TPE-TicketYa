@@ -26,6 +26,7 @@ public class AccesoService {
 
     private final TicketRepository ticketRepository;
     private final TicketUtilizadoPublisher ticketUtilizadoPublisher;
+    private final QrFirmaService qrFirmaService;
 
     @Transactional
     public ResultadoAccesoDTO validar(Long eventoId, String codigoQr) {
@@ -34,6 +35,7 @@ public class AccesoService {
         }
 
         String qr = normalizar(codigoQr);
+        qrFirmaService.verificar(qr);
 
         int actualizados = ticketRepository.marcarComoUsado(
                 qr, eventoId, EstadoTicket.VENDIDO, EstadoTicket.USADO);

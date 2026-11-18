@@ -78,6 +78,12 @@ Primero Eureka y después lo demás:
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
 
+`ms-tickets` firma los códigos QR con HMAC usando `TICKETS_QR_SECRET`. En desarrollo hay un valor por defecto (`dev-secret-cambiar`), pero en producción hay que definir un secreto propio y largo (también está en `infra/.env.example`):
+
+    env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
+
+La firma se comprueba en `AccesoService.validar` antes de consultar la base de datos: un QR con firma inválida responde 400 sin acceder al repositorio. Esto aplica a los QRs emitidos con firma; los tickets anteriores tienen un `codigo_qr` sin firma y serán rechazados con 400, así que hay que re-firmarlos (`firmar(codigo_qr)`) antes de desplegar si existen datos previos.
+
 ### 4. Levantar dos instancias del mismo servicio
 
 Los `ms-*` usan puerto aleatorio (`server.port=0`) y un id de instancia único, así que alcanza con ejecutar el mismo comando en dos terminales:

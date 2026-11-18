@@ -1,13 +1,18 @@
 package org.tudai.ticketya.devoluciones.service;
 
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
+import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
@@ -122,6 +127,7 @@ public class DevolucionService {
         Devolucion devolucion = Devolucion.builder()
                 .clienteId(clienteId)
                 .ticketId(ticket.getId())
+                .eventoId(ticket.getEventoId())
                 .fecha(Instant.now(clock))
                 .estado(EstadoDevolucion.PENDIENTE)
                 .motivo(request.getMotivo())
@@ -166,5 +172,58 @@ public class DevolucionService {
             }
         }
         return null;
+    }
+
+    @Transactional(readOnly = true)
+    public Page<Devolucion> listarDevoluciones(EstadoDevolucion estado, Long clienteId, Long eventoId, Pageable pageable) {
+        Role role = userContext.role();
+        if (role == Role.CLIENTE) {
+            Long authenticatedClientId = userContext.userId();
+            if (clienteId != null && !clienteId.equals(authenticatedClientId)) {
+                throw new ForbiddenException("Un cliente solo puede ver sus propias solicitudes");
+            }
+            clienteId = authenticatedClientId;
+        } else if (role != Role.ADMINISTRADOR) {
+            throw new ForbiddenException("No tenés permisos para realizar esta operación.");
+        }
+
+        final Long finalClienteId = clienteId;
+        Specification<Devolucion> spec = (root, query, cb) -> {
+            java.util.List<Predicate> predicates = new java.util.ArrayList<>();
+            if (finalClienteId != null) {
+                predicates.add(cb.equal(root.get("clienteId"), finalClienteId));
+            }
+            if (estado != null) {
+                predicates.add(cb.equal(root.get("estado"), estado));
+            }
+            if (eventoId != null) {
+                predicates.add(cb.equal(root.get("eventoId"), eventoId));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return devolucionRepository.findAll(spec, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public Devolucion findById(Long id) {
+        Devolucion devolucion = devolucionRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("La devolución " + id + " no existe"));
+
+        if (userContext.role() == Role.CLIENTE && !devolucion.getClienteId().equals(userContext.userId())) {
+            throw new NotFoundException("La devolución " + id + " no existe");
+        }
+        return devolucion;
+    }
+
+    @Transactional(readOnly = true)
+    public Devolucion findByTicketId(Long ticketId) {
+        Devolucion devolucion = devolucionRepository.findFirstByTicketIdOrderByIdDesc(ticketId)
+                .orElseThrow(() -> new NotFoundException("No existe devolución para el ticket " + ticketId));
+
+        if (userContext.role() == Role.CLIENTE && !devolucion.getClienteId().equals(userContext.userId())) {
+            throw new NotFoundException("No existe devolución para el ticket " + ticketId);
+        }
+        return devolucion;
     }
 }
