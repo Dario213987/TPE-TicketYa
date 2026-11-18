@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00012-cambiar-fecha-evento-a-timestamp-postgresql" author="ticketya" dbms="postgresql">
+        <sql>ALTER TABLE eventos ALTER COLUMN fecha TYPE timestamp USING (fecha + TIME '23:59:59')</sql>
+    </changeSet>
+
+    <changeSet id="00012-cambiar-fecha-evento-a-datetime-mysql" author="ticketya" dbms="mysql">
+        <sql>ALTER TABLE eventos MODIFY fecha datetime(6) NULL</sql>
+        <sql>UPDATE eventos SET fecha = TIMESTAMP(DATE(fecha), '23:59:59') WHERE fecha IS NOT NULL</sql>
+    </changeSet>
+</databaseChangeLog>

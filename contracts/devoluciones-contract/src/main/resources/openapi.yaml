@@ -15,7 +15,7 @@ paths:
       operationId: solicitarDevolucion
       summary: Solicita la devolución de una entrada
       description: |
-        Crea una solicitud de devolución en estado PENDIENTE si el ticket está VENDIDO,
+        Crea una solicitud de devolución en estado PENDIENTE si el ticket está EMITIDO,
         no fue utilizado, pertenece al cliente autenticado y faltan al menos 72 horas para el evento.
       requestBody:
         required: true
@@ -147,6 +147,7 @@ components:
           format: int64
         motivo:
           type: string
+          maxLength: 255
     DevolucionResponse:
       type: object
       required: [id, clienteId, ticketId, fecha, estado]
@@ -171,6 +172,7 @@ components:
           nullable: true
         motivo:
           type: string
+          maxLength: 255
           nullable: true
     PagedModel:
       type: object

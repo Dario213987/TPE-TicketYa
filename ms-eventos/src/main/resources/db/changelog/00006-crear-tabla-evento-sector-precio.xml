@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+                   xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+                   xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+                   https://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00006-crear-tabla-evento-sector-precio" author="maxi">
+        <createTable tableName="evento_sector_precios">
+            <column name="evento_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="sector_id" type="bigint">
+                <constraints nullable="false"/>
+            </column>
+            <column name="precio" type="double">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <addPrimaryKey tableName="evento_sector_precios"
+                       columnNames="evento_id, sector_id"
+                       constraintName="pk_evento_sector_precios"/>
+
+        <addForeignKeyConstraint baseTableName="evento_sector_precios"
+                                 baseColumnNames="evento_id"
+                                 constraintName="fk_evento_sector_precios_evento"
+                                 referencedTableName="eventos"
+                                 referencedColumnNames="id"/>
+
+        <addForeignKeyConstraint baseTableName="evento_sector_precios"
+                                 baseColumnNames="sector_id"
+                                 constraintName="fk_evento_sector_precios_sector"
+                                 referencedTableName="sectores"
+                                 referencedColumnNames="id"/>
+
+        <createIndex tableName="evento_sector_precios" indexName="idx_evento_sector_precios_sector">
+            <column name="sector_id"/>
+        </createIndex>
+
+        <sql>ALTER TABLE evento_sector_precios ADD CONSTRAINT chk_evento_sector_precios_precio CHECK (precio &gt; 0)</sql>
+    </changeSet>
+</databaseChangeLog>

@@ -17,11 +17,18 @@ public class TicketDTO {
     private Double precio;
     private Long usuarioId;
     private Long clienteId;
+    private Long transaccionId;
     private Long idAsiento;
     private Long idSector;
     private String estado;
     private Boolean utilizado;
     private LocalDateTime fechaEvento;
 
-    public Long getUsuarioId() { return usuarioId != null ? usuarioId : clienteId; }
+    public Long getClienteId() {
+        return clienteId != null ? clienteId : usuarioId;
+    }
+
+    public Long getUsuarioId() {
+        return getClienteId();
+    }
 }

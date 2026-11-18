@@ -12,9 +12,11 @@ import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.devoluciones.client.EventoClient;
 import org.tudai.ticketya.devoluciones.client.EventoDTO;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
@@ -29,7 +31,6 @@ import java.time.LocalDateTime;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Transactional
 public class DevolucionService {
 
     private final DevolucionRepository devolucionRepository;
@@ -41,23 +42,40 @@ public class DevolucionService {
     private Clock clock = Clock.systemDefaultZone();
 
     public Devolucion solicitarDevolucion(SolicitudDevolucionRequest request) {
-        Long clienteId = userContext.isPresent() ? userContext.userId() : request.getClienteId();
-        if (request.getClienteId() != null && clienteId != null && !clienteId.equals(request.getClienteId())) {
+        if (!userContext.isPresent() || userContext.userId() == null) {
+            throw new ForbiddenException("Usuario no autenticado");
+        }
+
+        Long clienteAutenticadoId = userContext.userId();
+        if (request.getClienteId() != null && !request.getClienteId().equals(clienteAutenticadoId)) {
             throw new ForbiddenException("El cliente indicado no coincide con el usuario autenticado");
         }
 
-        TicketDTO ticket = ticketClient.obtenerTicket(request.getTicketId());
+        if (request.getMotivo() != null && request.getMotivo().length() > 255) {
+            throw new BadRequestException("El motivo no puede superar los 255 caracteres");
+        }
+
+        TicketDTO ticket;
+        try {
+            ticket = ticketClient.obtenerTicket(request.getTicketId());
+        } catch (feign.FeignException.NotFound | NotFoundException e) {
+            ticket = null;
+        }
+
         if (ticket == null) {
             throw new NotFoundException("El ticket " + request.getTicketId() + " no fue encontrado");
         }
 
-        return solicitarDevolucion(request, ticket, clienteId);
+        return solicitarDevolucion(request, ticket, clienteAutenticadoId);
     }
 
     public Devolucion solicitarDevolucion(SolicitudDevolucionRequest request, TicketDTO ticket, Long clienteId) {
-
         if (clienteId == null) {
             throw new ForbiddenException("El ID del cliente no es valido");
+        }
+
+        if (request.getMotivo() != null && request.getMotivo().length() > 255) {
+            throw new BadRequestException("El motivo no puede superar los 255 caracteres");
         }
 
         if (ticket.getUsuarioId() == null) {
@@ -68,7 +86,7 @@ public class DevolucionService {
             throw new ForbiddenException("El ticket no pertenece al cliente solicitante");
         }
 
-        if (Boolean.TRUE.equals(ticket.getUtilizado())) {
+        if (Boolean.TRUE.equals(ticket.getUtilizado()) || "USADO".equalsIgnoreCase(ticket.getEstado())) {
             throw new ConflictException("El ticket ya ha sido utilizado");
         }
 
@@ -76,8 +94,14 @@ public class DevolucionService {
             throw new ConflictException("El ticket ya fue devuelto");
         }
 
-        if (!"VENDIDO".equalsIgnoreCase(ticket.getEstado())) {
-            throw new ConflictException("El ticket no se encuentra en estado VENDIDO");
+        if (!"EMITIDO".equalsIgnoreCase(ticket.getEstado()) && !"VENDIDO".equalsIgnoreCase(ticket.getEstado())) {
+            if ("RESERVADO".equalsIgnoreCase(ticket.getEstado())) {
+                throw new ConflictException("El ticket se encuentra reservado y no ha sido emitido");
+            }
+            if ("CANCELADO".equalsIgnoreCase(ticket.getEstado())) {
+                throw new ConflictException("El ticket se encuentra cancelado");
+            }
+            throw new ConflictException("El ticket no se encuentra emitido (estado actual: " + ticket.getEstado() + ")");
         }
 
         boolean tieneSolicitudPendiente = devolucionRepository.existsByTicketIdAndEstado(
@@ -104,13 +128,23 @@ public class DevolucionService {
                 .fecha(Instant.now(clock))
                 .estado(EstadoDevolucion.PENDIENTE)
                 .motivo(request.getMotivo())
+                .transaccionId(ticket.getTransaccionId())
                 .build();
 
         try {
-            return devolucionRepository.saveAndFlush(devolucion);
+            return persistirDevolucion(devolucion);
         } catch (DataIntegrityViolationException e) {
-            throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
+            String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
+            if (message.contains("uq_devoluciones") || message.contains("ticket_pendiente") || message.contains("unique") || message.contains("duplicate")) {
+                throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
+            }
+            throw e;
         }
+    }
+
+    @Transactional
+    public Devolucion persistirDevolucion(Devolucion devolucion) {
+        return devolucionRepository.saveAndFlush(devolucion);
     }
 
     private LocalDateTime obtenerFechaEvento(TicketDTO ticket) {
@@ -121,10 +155,17 @@ public class DevolucionService {
             try {
                 EventoDTO evento = eventoClient.obtenerEvento(ticket.getEventoId());
                 if (evento != null && evento.getFecha() != null) {
-                    return evento.getFecha().atStartOfDay();
+                    return evento.getFecha();
                 }
-            } catch (Exception e) {
-                log.warn("No se pudo obtener información del evento con id {}", ticket.getEventoId(), e);
+            } catch (feign.FeignException.NotFound | NotFoundException e) {
+                log.warn("Evento {} no encontrado", ticket.getEventoId());
+                return null;
+            } catch (RemoteServiceException e) {
+                if (e.getRemoteStatus() == 404) {
+                    log.warn("Evento {} no encontrado en servicio remoto", ticket.getEventoId());
+                    return null;
+                }
+                throw e;
             }
         }
         return null;

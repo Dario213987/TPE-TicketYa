@@ -7,6 +7,6 @@ import org.springframework.web.bind.annotation.PathVariable;
 @FeignClient(name = "${tickets.service.name:ms-tickets}")
 public interface TicketClient {
 
-    @GetMapping("/api/tickets/{id}")
+    @GetMapping("${tickets.internal.entrada-path:/api/tickets/internal/entradas/{id}}")
     TicketDTO obtenerTicket(@PathVariable("id") Long id);
 }
