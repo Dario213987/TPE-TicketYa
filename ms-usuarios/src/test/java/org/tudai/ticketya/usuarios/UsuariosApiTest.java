@@ -34,11 +34,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.datasource.password=ignored",
-        "ticketya.logging.dir=target/test-logs"
+        "ticketya.logging.dir=target/test-logs",
+        "ticketya.jwt.secret=" + AuthApiTest.SECRETO
 })
 @AutoConfigureMockMvc
 @Testcontainers
 class UsuariosApiTest {
+
+    static final String SECRETO = "Aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
 
     @Container
     @ServiceConnection
