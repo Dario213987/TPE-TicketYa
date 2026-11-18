@@ -55,6 +55,10 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
                 "Ocurrió un error inesperado. Intente nuevamente más tarde.", request);
     }
 
+    @ExceptionHandler(UnauthorizedException.class)
+    ResponseEntity<Object> handleUnauthorized(UnauthorizedException ex, WebRequest request) {
+        return respond(ex, HttpStatus.UNAUTHORIZED, "No autenticado", ex.getMessage(), request);
+    }
     @Override
     protected ResponseEntity<Object> handleMethodArgumentNotValid(MethodArgumentNotValidException ex,
                                                                   HttpHeaders headers,

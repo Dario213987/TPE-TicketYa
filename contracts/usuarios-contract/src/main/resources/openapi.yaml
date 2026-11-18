@@ -3,10 +3,13 @@ info:
     title: ms-usuarios
     version: 1.0.0
     description: |
-        Gestión de usuarios y roles. Solo el rol ADMINISTRADOR accede a estos endpoints.
+        Gestión de usuarios y roles, y autenticación.
+        Los endpoints de /api/usuarios son solo para el rol ADMINISTRADOR.
+        Los de /api/auth son públicos.
         Un usuario tiene un correo único, un nombre, una contraseña y uno o más roles.
 tags:
     - name: usuarios
+    - name: auth
 paths:
     /api/usuarios:
         post:
@@ -97,6 +100,48 @@ paths:
                 '401': { $ref: '#/components/responses/Error' }
                 '403': { $ref: '#/components/responses/Error' }
                 '404': { $ref: '#/components/responses/Error' }
+    /api/auth/registro:
+        post:
+            tags: [auth]
+            operationId: registrar
+            summary: Registro público de un cliente
+            description: Crea un usuario con el rol CLIENTE. Un correo ya registrado responde 409.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/RegistroRequest'
+            responses:
+                '201':
+                    description: El usuario creado
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/UsuarioResponse'
+                '400': { $ref: '#/components/responses/Error' }
+                '409': { $ref: '#/components/responses/Error' }
+    /api/auth/login:
+        post:
+            tags: [auth]
+            operationId: login
+            summary: Inicia sesión y devuelve un JWT
+            description: Credenciales inválidas responden 401 sin indicar si el correo existe.
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/LoginRequest'
+            responses:
+                '200':
+                    description: Token de acceso
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/TokenResponse'
+                '400': { $ref: '#/components/responses/Error' }
+                '401': { $ref: '#/components/responses/Error' }
 components:
     parameters:
         Page:
@@ -149,6 +194,26 @@ components:
                     uniqueItems: true
                     items:
                         $ref: '#/components/schemas/Role'
+        RegistroRequest:
+            type: object
+            required: [email, nombre, password]
+            properties:
+                email: { type: string, format: email, maxLength: 254 }
+                nombre: { type: string, minLength: 1, maxLength: 100 }
+                password: { type: string, minLength: 8, maxLength: 72 }
+        LoginRequest:
+            type: object
+            required: [email, password]
+            properties:
+                email: { type: string }
+                password: { type: string }
+        TokenResponse:
+            type: object
+            required: [accessToken, tokenType, expiresIn]
+            properties:
+                accessToken: { type: string }
+                tokenType: { type: string, example: Bearer }
+                expiresIn: { type: integer, format: int64, description: Segundos hasta que expira }
         UsuarioResponse:
             type: object
             required: [id, email, nombre, roles, creadaEn, actualizadaEn]
