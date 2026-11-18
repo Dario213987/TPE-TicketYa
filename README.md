@@ -32,6 +32,18 @@ Verificá con `mvn -v` que Maven use Java 25.
     mvn verify                          # todo el proyecto
     mvn -pl ms-eventos -am package      # un servicio y lo que necesita
 
+## Docker
+
+Cada módulo runtime tiene un `Dockerfile` multi-stage: compila con Maven + JDK 25 y la
+imagen final corre con JRE 25, usuario no root y healthcheck de Actuator. Se construyen
+desde la raíz del monorepo:
+
+    docker build -f ms-eventos/Dockerfile -t ticketya/ms-eventos:local .
+
+La lista completa de módulos, variables de entorno, puertos y comandos de ejecución está
+en [docs/deploy/docker.md](docs/deploy/docker.md). El compose completo del sistema es
+US-16.02.
+
 ## Ejecución
 
 ### 1. Infraestructura

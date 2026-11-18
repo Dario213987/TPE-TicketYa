@@ -1,0 +1,24 @@
+# Contexto de build de las imágenes (se construyen desde la raíz del monorepo).
+.git
+.gitignore
+.github
+.idea
+.vscode
+
+# Artefactos locales y logs
+**/target
+**/*.log
+logs
+**/logs
+
+# Archivos que no forman parte del build de Maven
+docs
+postman
+infra
+README.md
+
+# Secretos locales: nunca se copian al contexto de build
+.env
+**/.env
+**/.env.*
+!**/.env.example
