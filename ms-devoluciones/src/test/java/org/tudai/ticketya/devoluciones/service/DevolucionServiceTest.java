@@ -21,6 +21,7 @@ import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.devoluciones.client.DevolucionTicketDTO;
 import org.tudai.ticketya.devoluciones.client.EventoClient;
 import org.tudai.ticketya.devoluciones.client.EventoDTO;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
@@ -644,6 +645,159 @@ class DevolucionServiceTest {
             assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, req))
                     .isInstanceOf(ConflictException.class)
                     .hasMessageContaining("ya fue resuelta");
+        }
+    }
+
+    @Nested
+    @DisplayName("Criterio: Aprobar devolución (US-07.03 / TKY-67)")
+    class AprobarDevolucion {
+
+        @Test
+        @DisplayName("Aprobación exitosa: ticket pasa a DEVUELTO, guarda transacción y reintegro completado")
+        void aprobacionExitosa_guardaTransaccionYReintegroNoPendiente() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+            when(userContext.userId()).thenReturn(999L);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .clienteId(10L)
+                    .ticketId(100L)
+                    .estado(EstadoDevolucion.PENDIENTE)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+            when(devolucionRepository.saveAndFlush(any(Devolucion.class))).thenAnswer(i -> i.getArgument(0));
+
+            DevolucionTicketDTO ticketDevuelto = DevolucionTicketDTO.builder()
+                    .ticketId(100L)
+                    .estado("DEVUELTO")
+                    .transaccionId(888L)
+                    .reintegroPendiente(false)
+                    .build();
+            when(ticketClient.devolverTicket(100L)).thenReturn(ticketDevuelto);
+
+            Devolucion res = devolucionService.aprobarDevolucion(1L);
+
+            assertThat(res.getEstado()).isEqualTo(EstadoDevolucion.APROBADA);
+            assertThat(res.getTransaccionId()).isEqualTo(888L);
+            assertThat(res.getReintegroPendiente()).isFalse();
+            assertThat(res.getResueltaPor()).isEqualTo(999L);
+            assertThat(res.getFechaResolucion()).isNotNull();
+
+            verify(ticketClient).devolverTicket(100L);
+            verify(devolucionRepository).saveAndFlush(dev);
+        }
+
+        @Test
+        @DisplayName("Reintegro falla en pasarela: queda aprobada con reintegro pendiente de reintento")
+        void aprobacionReintegroFalla_quedaAprobadaConReintegroPendiente() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+            when(userContext.userId()).thenReturn(999L);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .clienteId(10L)
+                    .ticketId(100L)
+                    .estado(EstadoDevolucion.PENDIENTE)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+            when(devolucionRepository.saveAndFlush(any(Devolucion.class))).thenAnswer(i -> i.getArgument(0));
+
+            DevolucionTicketDTO ticketDevuelto = DevolucionTicketDTO.builder()
+                    .ticketId(100L)
+                    .estado("DEVUELTO")
+                    .transaccionId(777L)
+                    .reintegroPendiente(true)
+                    .build();
+            when(ticketClient.devolverTicket(100L)).thenReturn(ticketDevuelto);
+
+            Devolucion res = devolucionService.aprobarDevolucion(1L);
+
+            assertThat(res.getEstado()).isEqualTo(EstadoDevolucion.APROBADA);
+            assertThat(res.getTransaccionId()).isEqualTo(777L);
+            assertThat(res.getReintegroPendiente()).isTrue();
+            assertThat(res.getResueltaPor()).isEqualTo(999L);
+        }
+
+        @Test
+        @DisplayName("Aprobación de devolución ya resuelta (APROBADA) responde 409")
+        void aprobacionDevolucionYaAprobada_lanzaConflict() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .estado(EstadoDevolucion.APROBADA)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+
+            assertThatThrownBy(() -> devolucionService.aprobarDevolucion(1L))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessageContaining("ya fue resuelta");
+        }
+
+        @Test
+        @DisplayName("Aprobación de devolución ya resuelta (DENEGADA) responde 409")
+        void aprobacionDevolucionYaDenegada_lanzaConflict() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .estado(EstadoDevolucion.DENEGADA)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+
+            assertThatThrownBy(() -> devolucionService.aprobarDevolucion(1L))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessageContaining("ya fue resuelta");
+        }
+
+        @Test
+        @DisplayName("Aprobación por usuario no administrador responde 403")
+        void aprobacionUsuarioNoAdmin_lanzaForbidden() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.CLIENTE);
+
+            assertThatThrownBy(() -> devolucionService.aprobarDevolucion(1L))
+                    .isInstanceOf(ForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("Aprobación de devolución inexistente responde 404")
+        void aprobacionDevolucionInexistente_lanzaNotFound() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+            when(devolucionRepository.findByIdForUpdate(99L)).thenReturn(java.util.Optional.empty());
+
+            assertThatThrownBy(() -> devolucionService.aprobarDevolucion(99L))
+                    .isInstanceOf(NotFoundException.class)
+                    .hasMessageContaining("no existe");
+        }
+
+        @Test
+        @DisplayName("Ticket no existe en ms-tickets responde 404")
+        void aprobacionTicketNoExisteEnTickets_lanzaNotFound() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .ticketId(999L)
+                    .estado(EstadoDevolucion.PENDIENTE)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+            when(ticketClient.devolverTicket(999L)).thenThrow(new NotFoundException("No existe"));
+
+            assertThatThrownBy(() -> devolucionService.aprobarDevolucion(1L))
+                    .isInstanceOf(NotFoundException.class)
+                    .hasMessageContaining("no fue encontrado");
         }
     }
 }

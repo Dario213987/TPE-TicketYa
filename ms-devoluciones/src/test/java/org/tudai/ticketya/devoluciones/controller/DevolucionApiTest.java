@@ -14,6 +14,7 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
 import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
+import org.tudai.ticketya.devoluciones.client.DevolucionTicketDTO;
 import org.tudai.ticketya.devoluciones.client.EventoClient;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
 import org.tudai.ticketya.devoluciones.client.TicketDTO;
@@ -539,5 +540,97 @@ class DevolucionApiTest {
                 .andExpect(jsonPath("$.estado").value("DENEGADA"))
                 .andExpect(jsonPath("$.motivo").value("Segundo pedido con más detalles"))
                 .andExpect(jsonPath("$.motivoRechazo").value("Segundo rechazo definitivo"));
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución con reintegro exitoso responde 200 OK")
+    void aprobarDevolucion_conReintegroExitoso_responde200() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 100L, 500L, EstadoDevolucion.PENDIENTE);
+
+        DevolucionTicketDTO ticketDevuelto = DevolucionTicketDTO.builder()
+                .ticketId(100L)
+                .estado("DEVUELTO")
+                .transaccionId(888L)
+                .reintegroPendiente(false)
+                .build();
+        when(ticketClient.devolverTicket(100L)).thenReturn(ticketDevuelto);
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/aprobar", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dev.getId()))
+                .andExpect(jsonPath("$.estado").value("APROBADA"))
+                .andExpect(jsonPath("$.transaccionId").value(888))
+                .andExpect(jsonPath("$.reintegroPendiente").value(false))
+                .andExpect(jsonPath("$.resueltaPor").value(1))
+                .andExpect(jsonPath("$.fechaResolucion").isNotEmpty());
+
+        Devolucion persistida = devolucionRepository.findById(dev.getId()).orElseThrow();
+        assertThat(persistida.getEstado()).isEqualTo(EstadoDevolucion.APROBADA);
+        assertThat(persistida.getTransaccionId()).isEqualTo(888L);
+        assertThat(persistida.getReintegroPendiente()).isFalse();
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución cuando reintegro falla responde 200 OK con reintegro pendiente")
+    void aprobarDevolucion_conReintegroFallido_responde200ConReintegroPendiente() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 100L, 500L, EstadoDevolucion.PENDIENTE);
+
+        DevolucionTicketDTO ticketDevuelto = DevolucionTicketDTO.builder()
+                .ticketId(100L)
+                .estado("DEVUELTO")
+                .transaccionId(777L)
+                .reintegroPendiente(true)
+                .build();
+        when(ticketClient.devolverTicket(100L)).thenReturn(ticketDevuelto);
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/aprobar", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dev.getId()))
+                .andExpect(jsonPath("$.estado").value("APROBADA"))
+                .andExpect(jsonPath("$.transaccionId").value(777))
+                .andExpect(jsonPath("$.reintegroPendiente").value(true));
+
+        Devolucion persistida = devolucionRepository.findById(dev.getId()).orElseThrow();
+        assertThat(persistida.getEstado()).isEqualTo(EstadoDevolucion.APROBADA);
+        assertThat(persistida.getReintegroPendiente()).isTrue();
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución ya resuelta responde 409 Conflict (idempotente)")
+    void aprobarDevolucion_yaResuelta_responde409() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 100L, 500L, EstadoDevolucion.APROBADA);
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/aprobar", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isConflict());
+
+        Devolucion devDenegada = persistirDevolucion(10L, 101L, 500L, EstadoDevolucion.DENEGADA);
+        mvc.perform(postWithUser("/api/devoluciones/" + devDenegada.getId() + "/aprobar", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución sin autenticación responde 401 Unauthorized")
+    void aprobarDevolucion_sinAutenticacion_responde401() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 100L, 500L, EstadoDevolucion.PENDIENTE);
+
+        mvc.perform(post("/api/devoluciones/" + dev.getId() + "/aprobar")
+                        .accept(MediaType.APPLICATION_JSON))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución sin rol administrador responde 403 Forbidden")
+    void aprobarDevolucion_sinRolAdmin_responde403() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 100L, 500L, EstadoDevolucion.PENDIENTE);
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/aprobar", 10L, "CLIENTE"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("Aprobar devolución que no existe responde 404 Not Found")
+    void aprobarDevolucion_noExiste_responde404() throws Exception {
+        mvc.perform(postWithUser("/api/devoluciones/99999/aprobar", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isNotFound());
     }
 }

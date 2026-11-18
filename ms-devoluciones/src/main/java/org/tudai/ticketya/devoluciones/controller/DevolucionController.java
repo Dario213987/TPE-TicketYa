@@ -82,6 +82,14 @@ public class DevolucionController {
         return toResponseDTO(devolucion);
     }
 
+    @PostMapping("/{id}/aprobar")
+    @ResponseStatus(HttpStatus.OK)
+    @Authorize("hasRole('ADMINISTRADOR')")
+    public DevolucionResponse aprobarDevolucion(@PathVariable Long id) {
+        Devolucion devolucion = devolucionService.aprobarDevolucion(id);
+        return toResponseDTO(devolucion);
+    }
+
     private static Pageable ordenable(Pageable pageable) {
         pageable.getSort().forEach(orden -> {
             if (!ORDENABLES.contains(orden.getProperty())) {

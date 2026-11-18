@@ -726,6 +726,135 @@
 					]
 				}
 			}
+		},
+		{
+			"name": "17. Aprobar devolución exitosa (200)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Devolución aprobada con ticket devuelto\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.estado).to.eql(\"APROBADA\");",
+							"    pm.expect(jsonData.resueltaPor).to.be.a(\"number\");",
+							"    pm.expect(jsonData.fechaResolucion).to.not.be.null;",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/aprobar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"aprobar"
+					]
+				}
+			}
+		},
+		{
+			"name": "18. Aprobar devolución ya resuelta (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/aprobar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"aprobar"
+					]
+				}
+			}
+		},
+		{
+			"name": "19. Aprobar devolución sin rol admin (403)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 403 Forbidden\", function () {",
+							"    pm.response.to.have.status(403);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "10"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "CLIENTE"
+					}
+				],
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/aprobar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"aprobar"
+					]
+				}
+			}
 		}
 	],
 	"variable": [

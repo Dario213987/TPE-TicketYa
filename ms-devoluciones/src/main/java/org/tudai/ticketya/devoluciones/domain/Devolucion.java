@@ -50,6 +50,9 @@ public class Devolucion extends Auditable {
     @Column(name = "transaccion_id")
     private Long transaccionId;
 
+    @Column(name = "reintegro_pendiente")
+    private Boolean reintegroPendiente;
+
     @Column(name = "motivo", length = 255)
     private String motivo;
 

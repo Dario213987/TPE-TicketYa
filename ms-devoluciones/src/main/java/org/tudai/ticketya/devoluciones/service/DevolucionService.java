@@ -20,6 +20,7 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.devoluciones.client.DevolucionTicketDTO;
 import org.tudai.ticketya.devoluciones.client.EventoClient;
 import org.tudai.ticketya.devoluciones.client.EventoDTO;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
@@ -261,6 +262,44 @@ public class DevolucionService {
         devolucion.setMotivoRechazo(motivo.trim());
         devolucion.setResueltaPor(userContext.userId());
         devolucion.setFechaResolucion(Instant.now(clock));
+
+        return devolucionRepository.saveAndFlush(devolucion);
+    }
+
+    @Transactional
+    public Devolucion aprobarDevolucion(Long id) {
+        if (!userContext.isPresent() || userContext.role() != Role.ADMINISTRADOR) {
+            throw new ForbiddenException("No tenés permisos para realizar esta operación.");
+        }
+
+        Devolucion devolucion = devolucionRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("La devolución " + id + " no existe"));
+
+        if (devolucion.getEstado() != EstadoDevolucion.PENDIENTE) {
+            throw new ConflictException("La solicitud de devolución ya fue resuelta (estado actual: " + devolucion.getEstado() + ")");
+        }
+
+        DevolucionTicketDTO ticketDevuelto;
+        try {
+            ticketDevuelto = ticketClient.devolverTicket(devolucion.getTicketId());
+        } catch (feign.FeignException.NotFound | NotFoundException e) {
+            throw new NotFoundException("El ticket " + devolucion.getTicketId() + " no fue encontrado");
+        } catch (feign.FeignException.Conflict | ConflictException e) {
+            throw new ConflictException("El ticket no puede ser devuelto");
+        }
+
+        devolucion.setEstado(EstadoDevolucion.APROBADA);
+        devolucion.setResueltaPor(userContext.userId());
+        devolucion.setFechaResolucion(Instant.now(clock));
+
+        if (ticketDevuelto != null) {
+            if (ticketDevuelto.getTransaccionId() != null) {
+                devolucion.setTransaccionId(ticketDevuelto.getTransaccionId());
+            }
+            devolucion.setReintegroPendiente(Boolean.TRUE.equals(ticketDevuelto.getReintegroPendiente()));
+        } else {
+            devolucion.setReintegroPendiente(false);
+        }
 
         return devolucionRepository.saveAndFlush(devolucion);
     }

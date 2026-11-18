@@ -575,6 +575,45 @@ paths:
                 items:
                   type: integer
                   format: int64
+  /api/tickets/internal/entradas/{id}:
+    get:
+      tags: [interno]
+      operationId: obtenerDetalleEntradaInterno
+      summary: Obtiene el detalle interno de una entrada
+      description: Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Detalle de la entrada
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/EntradaDetalleDTO'
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/entradas/{id}/devolver:
+    post:
+      tags: [interno]
+      operationId: devolverTicketInterno
+      summary: Devuelve una entrada liberando el lugar y solicitando el reintegro
+      description: Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Resultado de la devolución del ticket
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DevolucionTicketResponseDTO'
+        '404': { $ref: '#/components/responses/Error' }
+        '409': { $ref: '#/components/responses/Error' }
 components:
   responses:
     Error:
@@ -1008,6 +1047,27 @@ components:
           $ref: '#/components/schemas/EstadoFila'
         pase:
           $ref: '#/components/schemas/PaseDTO'
+    EntradaDetalleDTO:
+      type: object
+      properties:
+        id: { type: integer, format: int64 }
+        eventoId: { type: integer, format: int64 }
+        precio: { type: number, format: double }
+        usuarioId: { type: integer, format: int64 }
+        clienteId: { type: integer, format: int64 }
+        transaccionId: { type: integer, format: int64, nullable: true }
+        idAsiento: { type: integer, format: int64, nullable: true }
+        idSector: { type: integer, format: int64, nullable: true }
+        estado: { type: string }
+        utilizado: { type: boolean }
+        fechaEvento: { type: string, format: date-time, nullable: true }
+    DevolucionTicketResponseDTO:
+      type: object
+      properties:
+        ticketId: { type: integer, format: int64 }
+        estado: { type: string }
+        transaccionId: { type: integer, format: int64, nullable: true }
+        reintegroPendiente: { type: boolean }
     Problema:
       type: object
       properties:
