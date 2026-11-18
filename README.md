@@ -58,7 +58,7 @@ Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`r
 
 Redis Streams se usan en `ms-preferencias` para el historial de compras y asistencias (`redis-preferencias`, puerto 6381 en el host). Ver [`docs/api/ms-preferencias.md`](docs/api/ms-preferencias.md).
 
-RabbitMQ se usa como broker de mensajería (`rabbitmq`, AMQP `5672`, UI `15672`, credenciales `RABBITMQ_USER`/`RABBITMQ_PASSWORD`/`RABBITMQ_VHOST` en `infra/.env`). MailHog provee un SMTP de pruebas para `ms-notificaciones` (SMTP `1025`, UI `8025`). Para levantar `ms-notificaciones` se requieren `DB_PASSWORD`, `RABBITMQ_*` y el broker/MailHog en ejecución.
+RabbitMQ se usa como broker de mensajería (`rabbitmq`, AMQP `5672`, UI `15672`, credenciales `RABBITMQ_USER`/`RABBITMQ_PASSWORD`/`RABBITMQ_VHOST` en `infra/.env`). MailHog provee un SMTP de pruebas para `ms-notificaciones` (SMTP `1025`, UI `8025`). Para levantar `ms-notificaciones` se requieren `DB_PASSWORD`, `RABBITMQ_*` y el broker/MailHog en ejecución. El listener reintenta 3 veces con backoff y DLQ; el envío SMTP corta a los 2 s de conexión y 5 s de lectura/escritura (`MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_READ_TIMEOUT_MS`, `MAIL_WRITE_TIMEOUT_MS`).
 
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 
@@ -118,6 +118,8 @@ En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargad
     {service="ms-eventos"}
 
 Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
+
+El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
 ## Correlation id
 

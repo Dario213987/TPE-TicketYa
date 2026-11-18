@@ -12,6 +12,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
+import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
 import org.tudai.ticketya.devoluciones.client.EventoClient;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
@@ -61,8 +62,22 @@ class DevolucionApiTest {
     private MockHttpServletRequestBuilder postWithUser(String uri, Long userId, String role, Object body) throws Exception {
         var builder = post(uri)
                 .contentType(MediaType.APPLICATION_JSON)
-                .accept(MediaType.APPLICATION_JSON)
-                .content(objectMapper.writeValueAsString(body));
+                .accept(MediaType.APPLICATION_JSON);
+        if (body != null) {
+            builder.content(objectMapper.writeValueAsString(body));
+        }
+        if (userId != null) {
+            builder.header("X-User-Id", userId);
+        }
+        if (role != null) {
+            builder.header("X-User-Role", role);
+        }
+        return builder;
+    }
+
+    private MockHttpServletRequestBuilder postWithUser(String uri, Long userId, String role) {
+        var builder = post(uri)
+                .accept(MediaType.APPLICATION_JSON);
         if (userId != null) {
             builder.header("X-User-Id", userId);
         }
@@ -353,5 +368,176 @@ class DevolucionApiTest {
                 .andExpect(jsonPath("$.content[0].eventoId").value(42))
                 .andExpect(jsonPath("$.content[1].eventoId").value(42))
                 .andExpect(jsonPath("$.page.totalElements").value(2));
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar con motivo válido -> 200 OK y estado DENEGADA")
+    void rechazarDevolucion_exitoso_responde200() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("No cumple condiciones");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(dev.getId()))
+                .andExpect(jsonPath("$.estado").value("DENEGADA"))
+                .andExpect(jsonPath("$.motivoRechazo").value("No cumple condiciones"))
+                .andExpect(jsonPath("$.resueltaPor").value(1))
+                .andExpect(jsonPath("$.fechaResolucion").isNotEmpty());
+
+        Devolucion actualizada = devolucionRepository.findById(dev.getId()).orElseThrow();
+        assertThat(actualizada.getEstado()).isEqualTo(EstadoDevolucion.DENEGADA);
+        assertThat(actualizada.getMotivoRechazo()).isEqualTo("No cumple condiciones");
+        assertThat(actualizada.getResueltaPor()).isEqualTo(1L);
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar por rol CLIENTE -> 403 Forbidden")
+    void rechazarDevolucion_rolCliente_responde403() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("Rechazo no permitido");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/rechazar", 10L, "CLIENTE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar sin autenticación -> 401 Unauthorized")
+    void rechazarDevolucion_sinAuth_responde401() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("Rechazo sin auth");
+
+        mvc.perform(post("/api/devoluciones/" + dev.getId() + "/rechazar")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar con motivo vacío o en blanco -> 400 Bad Request")
+    void rechazarDevolucion_motivoVacio_responde400() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("   ");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar con motivo > 255 caracteres -> 400 Bad Request")
+    void rechazarDevolucion_motivo256Caracteres_responde400() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("A".repeat(256));
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar devolución inexistente -> 404 Not Found")
+    void rechazarDevolucion_inexistente_responde404() throws Exception {
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("Devolución que no existe");
+
+        mvc.perform(postWithUser("/api/devoluciones/99999/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    @DisplayName("POST /api/devoluciones/{id}/rechazar si ya está resuelta -> 409 Conflict")
+    void rechazarDevolucion_yaResuelta_responde409() throws Exception {
+        Devolucion dev = persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.DENEGADA);
+
+        RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+        req.setMotivo("Intento denegar de nuevo");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + dev.getId() + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(req)))
+                .andExpect(status().isConflict());
+    }
+
+    @Test
+    @DisplayName("Flujo completo: Rechazo exitoso y re-rechazo tras nueva solicitud -> ambos 200 OK")
+    void rechazarDevolucion_flujoRechazoYReRechazo_responde200() throws Exception {
+        TicketDTO ticket = TicketDTO.builder()
+                .id(500L)
+                .usuarioId(10L)
+                .estado("EMITIDO")
+                .utilizado(false)
+                .fechaEvento(LocalDateTime.now().plusDays(10))
+                .transaccionId(1234L)
+                .build();
+        when(ticketClient.obtenerTicket(500L)).thenReturn(ticket);
+
+        // 1. Crear primera solicitud
+        SolicitudDevolucionRequest sol1 = new SolicitudDevolucionRequest();
+        sol1.setTicketId(500L);
+        sol1.setMotivo("Primer pedido");
+
+        String resJson1 = mvc.perform(postWithUser("/api/devoluciones", 10L, "CLIENTE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sol1)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        Long id1 = objectMapper.readTree(resJson1).get("id").asLong();
+
+        // 2. Rechazar primera solicitud
+        RechazarDevolucionRequest rechazo1 = new RechazarDevolucionRequest();
+        rechazo1.setMotivo("Primer rechazo");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + id1 + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(rechazo1)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("DENEGADA"))
+                .andExpect(jsonPath("$.motivo").value("Primer pedido"))
+                .andExpect(jsonPath("$.motivoRechazo").value("Primer rechazo"));
+
+        // 3. Crear segunda solicitud sobre el mismo ticket
+        SolicitudDevolucionRequest sol2 = new SolicitudDevolucionRequest();
+        sol2.setTicketId(500L);
+        sol2.setMotivo("Segundo pedido con más detalles");
+
+        String resJson2 = mvc.perform(postWithUser("/api/devoluciones", 10L, "CLIENTE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(sol2)))
+                .andExpect(status().isCreated())
+                .andReturn().getResponse().getContentAsString();
+
+        Long id2 = objectMapper.readTree(resJson2).get("id").asLong();
+        assertThat(id2).isNotEqualTo(id1);
+
+        // 4. Rechazar segunda solicitud (re-rechazo no debe fallar con 409)
+        RechazarDevolucionRequest rechazo2 = new RechazarDevolucionRequest();
+        rechazo2.setMotivo("Segundo rechazo definitivo");
+
+        mvc.perform(postWithUser("/api/devoluciones/" + id2 + "/rechazar", 1L, "ADMINISTRADOR")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(rechazo2)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.estado").value("DENEGADA"))
+                .andExpect(jsonPath("$.motivo").value("Segundo pedido con más detalles"))
+                .andExpect(jsonPath("$.motivoRechazo").value("Segundo rechazo definitivo"));
     }
 }

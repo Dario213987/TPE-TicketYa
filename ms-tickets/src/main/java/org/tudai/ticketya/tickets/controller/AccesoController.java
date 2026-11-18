@@ -8,8 +8,12 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 import org.tudai.ticketya.core.Authorize;
+import org.tudai.ticketya.core.Operation;
+import org.tudai.ticketya.core.OperationLogger;
+import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
 import org.tudai.ticketya.tickets.dto.ValidarAccesoRequestDTO;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.service.AccesoService;
 
 @RestController
@@ -18,11 +22,21 @@ import org.tudai.ticketya.tickets.service.AccesoService;
 public class AccesoController {
 
     private final AccesoService accesoService;
+    private final UserContext userContext;
 
     @PostMapping("/{eventoId}/accesos/validar")
     @Authorize("hasRole('PERSONAL_ACCESO')")
     public ResultadoAccesoDTO validar(@PathVariable Long eventoId,
                                       @Valid @RequestBody ValidarAccesoRequestDTO request) {
-        return accesoService.validar(eventoId, request.getCodigoQr());
+        Long userId = userContext.userId();
+        try {
+            ResultadoAccesoDTO resultado = accesoService.validar(eventoId, request.getCodigoQr());
+            OperationLogger.ok(Operation.ACCESS, userId, "Ticket", resultado.getTicketId());
+            return resultado;
+        } catch (RuntimeException e) {
+            Long ticketId = e instanceof AccesoRechazadoException rechazo ? rechazo.getTicketId() : null;
+            OperationLogger.failed(Operation.ACCESS, userId, "Ticket", ticketId, e.getMessage());
+            throw e;
+        }
     }
 }

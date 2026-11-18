@@ -7,6 +7,11 @@ public final class MdcKeys {
     public static final String HTTP_PATH = "path";
     public static final String HTTP_STATUS = "status";
     public static final String DURATION_MS = "durationMs";
+    public static final String OPERATION = "operation";
+    public static final String ENTITY = "entity";
+    public static final String ENTITY_ID = "entityId";
+    public static final String RESULT = "result";
+    public static final String REASON = "reason";
 
     private MdcKeys() {}
 }

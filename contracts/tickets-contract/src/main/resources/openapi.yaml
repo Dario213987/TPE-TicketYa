@@ -545,6 +545,36 @@ paths:
         '204': { description: Configuración actualizada }
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/compradores:
+    get:
+      tags: [interno]
+      operationId: listarCompradoresEvento
+      summary: Lista los compradores de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Devuelve los identificadores de usuario distintos que compraron al menos una
+        entrada para el evento. Se consideran compras los tickets en estado EMITIDO,
+        VENDIDO, USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        DEVUELTO se conserva a propósito: los avisos de cancelación y EDICION incluyen el
+        aviso de reintegro y deben llegar también a quien ya solicitó la devolución.
+
+        Un evento sin compras devuelve una lista vacia, no 404. No requiere headers de
+        usuario. Pensado para que otro microservicio arme avisos masivos a los compradores.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Identificadores de usuario distintos, ordenados de menor a mayor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
 components:
   responses:
     Error:
@@ -832,6 +862,11 @@ components:
         eventoId: { type: integer, format: int64 }
         estadoTicket:
           $ref: '#/components/schemas/EstadoTicket'
+        ticketId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id interno del ticket validado (nunca el código QR)
     CodigoRechazoAcceso:
       type: string
       description: Motivo por el que se rechaza el acceso

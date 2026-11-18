@@ -10,6 +10,12 @@ import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 
 import java.time.LocalDateTime;
 
+/**
+ * Registro persistido de cada intento de notificacion.
+ * <p>
+ * La clave de idempotencia es la combinacion {@code (mensajeId, destinatarioId)}: un aviso
+ * masivo puede generar una fila por comprador sin duplicar el envio a cada uno.
+ */
 @Getter
 @Setter
 @AllArgsConstructor
@@ -22,7 +28,7 @@ public class Notificacion {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(name = "mensaje_id", nullable = false, unique = true, updatable = false)
+    @Column(name = "mensaje_id", nullable = false, updatable = false)
     private String mensajeId;
 
     @Enumerated(EnumType.STRING)

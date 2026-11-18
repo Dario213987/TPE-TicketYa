@@ -1,9 +1,11 @@
 package org.tudai.ticketya.devoluciones.repository;
 
+import jakarta.persistence.LockModeType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Lock;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.springframework.stereotype.Repository;
@@ -28,4 +30,7 @@ public interface DevolucionRepository extends JpaRepository<Devolucion, Long>, J
 
     @Query("select distinct d.clienteId from Devolucion d where d.eventoId = :eventoId and d.origen = :origen")
     List<Long> findClientesReintegrados(@Param("eventoId") Long eventoId, @Param("origen") String origen);
+    @Lock(LockModeType.PESSIMISTIC_WRITE)
+    @Query("select d from Devolucion d where d.id = :id")
+    Optional<Devolucion> findByIdForUpdate(@Param("id") Long id);
 }

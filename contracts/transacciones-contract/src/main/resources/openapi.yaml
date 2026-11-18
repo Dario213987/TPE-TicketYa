@@ -10,6 +10,14 @@ info:
         
         Idempotencia: no puede haber dos transacciones con el mismo (ticketId, clienteId, organizadorId, estado).
         Repetir una solicitud devuelve la transacción original sin volver a llamar al procesador de pagos.
+        Si la original quedó PENDIENTE (el procesador no respondió), se vuelve a enviar con la misma
+        clave de idempotencia y se devuelve COMPLETA o FALLIDA.
+
+        Timeouts y reintentos: cada llamada al procesador corta por timeout (ticketya.pasarela.timeout-ms)
+        y los fallos técnicos se reintentan con backoff exponencial (ticketya.pasarela.max-intentos,
+        ticketya.pasarela.backoff-inicial-ms), siempre con la misma clave. Un rechazo del procesador
+        no se reintenta. Si después de los reintentos no hay respuesta, responde 502 y la transacción
+        queda PENDIENTE.
 tags:
     - name: transacciones
 paths:
@@ -36,6 +44,7 @@ paths:
                 '401': { $ref: '#/components/responses/Error' }
                 '403': { $ref: '#/components/responses/Error' }
                 '409': { $ref: '#/components/responses/Error' }
+                '502': { $ref: '#/components/responses/Error' }
     /api/transacciones/creditos:
         post:
             tags: [transacciones]
@@ -59,6 +68,7 @@ paths:
                 '401': { $ref: '#/components/responses/Error' }
                 '403': { $ref: '#/components/responses/Error' }
                 '409': { $ref: '#/components/responses/Error' }
+                '502': { $ref: '#/components/responses/Error' }
     /api/transacciones/{id}:
         get:
             tags: [transacciones]
@@ -152,7 +162,7 @@ components:
             schema: { type: string }
     responses:
         Error:
-            description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe, 409 conflicto)
+            description: Error (400 inválido, 401 sin usuario, 403 sin permiso, 404 no existe, 409 conflicto, 502 el procesador de pagos no respondió)
             content:
                 application/problem+json:
                     schema:
