@@ -131,11 +131,55 @@ Rechaza una solicitud de devolución en estado `PENDIENTE`, pasando su estado a 
 
 ---
 
+### `POST /api/devoluciones/{id}/aprobar` (US-07.03 / TKY-67)
+
+Aprueba una solicitud de devolución en estado `PENDIENTE`.
+- El ticket asociado pasa a `DEVUELTO` en `ms-tickets`.
+- El lugar se libera: si es numerado, el asiento pasa a `LIBRE`; si es por zona/cupo, se recupera el lugar disponible.
+- Se solicita el reintegro (crédito) a la pasarela a través de `ms-transacciones` y se guarda la transacción asociada.
+- Si el reintegro falla en la pasarela o por indisponibilidad, la devolución queda aprobada con `reintegroPendiente: true` para su posterior reintento (no se pierde).
+- Si la solicitud ya fue resuelta previamente (`APROBADA` o `DENEGADA`), responde `409 Conflict` (idempotente).
+
+#### Headers requeridos
+| Header | Tipo | Descripción |
+|---|---|---|
+| `X-User-Id` | Long | ID del administrador autenticado |
+| `X-User-Role` | String | Rol del usuario (`ADMINISTRADOR`) |
+
+#### Respuestas
+- **`200 OK`**: Solicitud aprobada exitosamente.
+```json
+{
+  "id": 1,
+  "clienteId": 10,
+  "ticketId": 100,
+  "eventoId": 1,
+  "fecha": "2026-11-06T12:00:00Z",
+  "estado": "APROBADA",
+  "transaccionId": 888,
+  "reintegroPendiente": false,
+  "motivo": "No podré asistir al evento por motivos personales",
+  "resueltaPor": 1,
+  "fechaResolucion": "2026-11-06T14:30:00Z"
+}
+```
+- **`401 Unauthorized`**: Falta autenticación.
+- **`403 Forbidden`**: El usuario no posee rol `ADMINISTRADOR`.
+- **`404 Not Found`**: La devolución no existe (o el ticket asociado no existe en `ms-tickets`).
+- **`409 Conflict`**: La solicitud ya fue resuelta previamente (estado distinto a `PENDIENTE`).
+
+---
+
 ## Integración con otros servicios
 
 * **`ms-tickets`**:
-  - Endpoint interno: `GET /api/tickets/internal/entradas/{id}`
-  - Proporciona: `clienteId`, `estado`, `utilizado`, `precio`, `eventoId`, `fechaEvento`, `transaccionId`.
+  - Endpoint interno: `GET /api/tickets/internal/entradas/{id}`:
+    Proporciona `clienteId`, `estado`, `utilizado`, `precio`, `eventoId`, `fechaEvento`, `transaccionId`.
+  - Endpoint interno: `POST /api/tickets/internal/entradas/{id}/devolver`:
+    Pasa el ticket a `DEVUELTO`, libera el asiento o cupo en el sector y solicita el crédito a `ms-transacciones`. Devuelve `{ ticketId, estado: "DEVUELTO", transaccionId, reintegroPendiente }`.
+* **`ms-transacciones`**:
+  - Endpoint interno: `POST /api/transacciones/creditos`:
+    Invocado en nombre del organizador para realizar el crédito/reintegro a la pasarela de pagos.
 * **`ms-eventos`**:
   - Endpoint: `GET /api/eventos/{id}`
   - Utilizado como fallback en caso de que el detalle de la entrada no contenga directamente la fecha y hora del evento. La fecha se deserializa como `LocalDateTime` respetando el horario exacto del evento para el cálculo de las 72 hs.
