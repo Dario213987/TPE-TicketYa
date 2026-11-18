@@ -32,12 +32,42 @@ Verificá con `mvn -v` que Maven use Java 25.
     mvn verify                          # todo el proyecto
     mvn -pl ms-eventos -am package      # un servicio y lo que necesita
 
+## Docker
+
+Cada módulo runtime tiene un `Dockerfile` multi-stage: compila con Maven + JDK 25 y la
+imagen final corre con JRE 25, usuario no root y healthcheck de Actuator. Se construyen
+desde la raíz del monorepo:
+
+    docker build -f ms-eventos/Dockerfile -t ticketya/ms-eventos:local .
+
+La lista completa de módulos, variables de entorno, puertos y comandos de ejecución está
+en [docs/deploy/docker.md](docs/deploy/docker.md). El compose completo del sistema está en
+[`infra/docker-compose.yml`](infra/docker-compose.yml) (TKY-112).
+
 ## Ejecución
 
-### 1. Infraestructura
+### 1. Sistema completo con Docker
 
     cp infra/.env.example infra/.env   # completar contraseñas
-    docker compose -f infra/docker-compose.yml up -d
+    docker compose --env-file infra/.env -f infra/docker-compose.yml up -d --build
+
+El primer `up --build` compila las 8 imágenes (Maven + JRE 25); los siguientes arranques reutilizan la caché.
+
+Levanta las bases, MongoDB, Redis, RabbitMQ, MailHog, Eureka, el gateway, los microservicios y el stack de logs, con healthchecks y orden de arranque. `ms-tickets` arranca con **2 réplicas** detrás del balanceo de Eureka; se puede cambiar con `--scale`, por ejemplo `--scale ms-tickets=3`.
+
+| Servicio | URL |
+|---|---|
+| Gateway | http://localhost:8080 |
+| Eureka | http://localhost:8761 |
+| Grafana | http://localhost:3000 |
+| MailHog | http://localhost:8025 |
+
+Los servicios escriben los logs JSON en el volumen compartido `app-logs`; Alloy lo lee, lo envía a Loki y se consulta en Grafana. Cada réplica de `ms-tickets` escribe en su propio subdirectorio para no mezclar archivos.
+
+Para ver el estado o bajar todo:
+
+    docker compose -f infra/docker-compose.yml ps
+    docker compose -f infra/docker-compose.yml down
 
 Levanta una instancia de base de datos por microservicio (PostgreSQL por defecto, MongoDB en `ms-preferencias`):
 

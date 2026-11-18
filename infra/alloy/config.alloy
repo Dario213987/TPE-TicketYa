@@ -1,10 +1,13 @@
 // Busca los archivos JSON de log de cada servicio. Los servicios escriben en
 // logs/<servicio>/<servicio>.json.log relativo a la carpeta desde donde se
 // lanzan: la raíz del repo (java -jar) o la del módulo (spring-boot:run, IntelliJ).
+// En el compose completo, los contenedores escriben en el volumen app-logs,
+// montado en /ticketya/container-logs.
 local.file_match "ticketya" {
   path_targets = [
     {"__path__" = "/ticketya/logs/*/*.json.log"},
     {"__path__" = "/ticketya/*/logs/*/*.json.log"},
+    {"__path__" = "/ticketya/container-logs/*/*.json.log"},
   ]
   sync_period = "5s"
 }
