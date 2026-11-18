@@ -37,7 +37,7 @@ public class NotificacionCompraMensajeFactory {
         detalle.setCantidad(cantidad);
         detalle.setMonto(monto);
         detalle.setMoneda(moneda);
-        dto.setDetalleCompra(detalle);
+        dto.setDetalle(detalle);
         return dto;
     }
 }

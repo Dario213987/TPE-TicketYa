@@ -2,19 +2,20 @@ package org.tudai.ticketya.notificaciones.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
-import org.mockito.Mock;
-import org.mockito.junit.jupiter.MockitoExtension;
 import org.thymeleaf.context.Context;
 import org.thymeleaf.spring6.SpringTemplateEngine;
 import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.DetalleConfirmacionCompra;
+import org.tudai.ticketya.contract.notificaciones.messaging.DetalleNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.LugarClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.SectorClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
+import org.tudai.ticketya.notificaciones.service.plantilla.AvisoGeneralPlantilla;
+import org.tudai.ticketya.notificaciones.service.plantilla.ConfirmacionCompraPlantilla;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -23,21 +24,19 @@ import java.util.List;
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
-import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.*;
 
-@ExtendWith(MockitoExtension.class)
 class PlantillaEmailServiceTest {
 
-    @Mock
     private SpringTemplateEngine templateEngine;
-
     private PlantillaEmailService service;
 
     @BeforeEach
     void setUp() {
-        service = new PlantillaEmailService(templateEngine);
+        templateEngine = mock(SpringTemplateEngine.class);
         when(templateEngine.process(any(String.class), any(Context.class))).thenReturn("html");
+        service = new PlantillaEmailService(templateEngine,
+                List.of(new ConfirmacionCompraPlantilla(), new AvisoGeneralPlantilla()));
     }
 
     @Test
@@ -48,10 +47,13 @@ class PlantillaEmailServiceTest {
         sector.setNombre("Platea");
         evento.setSectores(List.of(sector));
         UsuarioClientDTO usuario = usuarioBase();
-        DetalleConfirmacionCompra detalle = detalle(10L, List.of(new AsientoNotificacion(1, 2), new AsientoNotificacion(1, 3)), 2, new BigDecimal("1500.00"), "ARS");
+        DetalleConfirmacionCompra detalle = detalle(10L,
+                List.of(new AsientoNotificacion(1, 2), new AsientoNotificacion(1, 3)),
+                2, new BigDecimal("1500.00"), "ARS");
+        NotificacionEntranteDTO entrante = entrante(MotivoNotificacion.CONFIRMACION_COMPRA, detalle);
 
-        String asunto = service.asunto(MotivoNotificacion.CONFIRMACION_COMPRA, evento, detalle);
-        service.renderizar(MotivoNotificacion.CONFIRMACION_COMPRA, evento, usuario, detalle);
+        String asunto = service.asunto(entrante, evento);
+        service.renderizar(entrante, evento, usuario);
 
         ArgumentCaptor<Context> captor = ArgumentCaptor.forClass(Context.class);
         verify(templateEngine).process(eq("mail/CONFIRMACION_COMPRA"), captor.capture());
@@ -75,8 +77,9 @@ class PlantillaEmailServiceTest {
         EventoClientDTO evento = eventoBase();
         UsuarioClientDTO usuario = usuarioBase();
         DetalleConfirmacionCompra detalle = detalle(99L, List.of(), 3, new BigDecimal("900"), "ARS");
+        NotificacionEntranteDTO entrante = entrante(MotivoNotificacion.CONFIRMACION_COMPRA, detalle);
 
-        service.renderizar(MotivoNotificacion.CONFIRMACION_COMPRA, evento, usuario, detalle);
+        service.renderizar(entrante, evento, usuario);
 
         ArgumentCaptor<Context> captor = ArgumentCaptor.forClass(Context.class);
         verify(templateEngine).process(eq("mail/CONFIRMACION_COMPRA"), captor.capture());
@@ -93,8 +96,9 @@ class PlantillaEmailServiceTest {
         EventoClientDTO evento = eventoBase();
         UsuarioClientDTO usuario = usuarioBase();
         DetalleConfirmacionCompra detalle = detalle(5L, List.of(new AsientoNotificacion(2, 1)), 1, null, null);
+        NotificacionEntranteDTO entrante = entrante(MotivoNotificacion.CONFIRMACION_COMPRA, detalle);
 
-        assertDoesNotThrow(() -> service.renderizar(MotivoNotificacion.CONFIRMACION_COMPRA, evento, usuario, detalle));
+        assertDoesNotThrow(() -> service.renderizar(entrante, evento, usuario));
 
         ArgumentCaptor<Context> captor = ArgumentCaptor.forClass(Context.class);
         verify(templateEngine).process(eq("mail/CONFIRMACION_COMPRA"), captor.capture());
@@ -106,9 +110,10 @@ class PlantillaEmailServiceTest {
     void otroMotivoMantieneComportamientoSinDetalle() {
         EventoClientDTO evento = eventoBase();
         UsuarioClientDTO usuario = usuarioBase();
+        NotificacionEntranteDTO entrante = entrante(MotivoNotificacion.EDICION, null);
 
-        String asunto = service.asunto(MotivoNotificacion.EDICION, evento);
-        service.renderizar(MotivoNotificacion.EDICION, evento, usuario, null);
+        String asunto = service.asunto(entrante, evento);
+        service.renderizar(entrante, evento, usuario);
 
         ArgumentCaptor<Context> captor = ArgumentCaptor.forClass(Context.class);
         verify(templateEngine).process(eq("mail/EDICION"), captor.capture());
@@ -119,6 +124,36 @@ class PlantillaEmailServiceTest {
         assertEquals("", ctx.getVariable("sectorNombre"));
         assertEquals(false, ctx.getVariable("esGeneral"));
         assertNull(ctx.getVariable("monto"));
+    }
+
+    @Test
+    void registroIncompletoFalla() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new PlantillaEmailService(templateEngine, List.of(new ConfirmacionCompraPlantilla())));
+
+        assertTrue(error.getMessage().contains("No hay plantilla"));
+    }
+
+    @Test
+    void registroDuplicadoFalla() {
+        IllegalStateException error = assertThrows(IllegalStateException.class,
+                () -> new PlantillaEmailService(templateEngine,
+                        List.of(new ConfirmacionCompraPlantilla(), new ConfirmacionCompraPlantilla(),
+                                new AvisoGeneralPlantilla())));
+
+        assertTrue(error.getMessage().contains("mas de una plantilla"));
+    }
+
+    @Test
+    void motivoObligatorio() {
+        NotificacionEntranteDTO entrante = new NotificacionEntranteDTO();
+        entrante.setMensajeId("MSE-1");
+        entrante.setEventoId(1L);
+
+        IllegalArgumentException error = assertThrows(IllegalArgumentException.class,
+                () -> service.asunto(entrante, eventoBase()));
+
+        assertTrue(error.getMessage().contains("motivo"));
     }
 
     private EventoClientDTO eventoBase() {
@@ -140,7 +175,8 @@ class PlantillaEmailServiceTest {
         return usuario;
     }
 
-    private DetalleConfirmacionCompra detalle(Long sectorId, List<AsientoNotificacion> asientos, Integer cantidad, BigDecimal monto, String moneda) {
+    private DetalleConfirmacionCompra detalle(Long sectorId, List<AsientoNotificacion> asientos,
+                                              Integer cantidad, BigDecimal monto, String moneda) {
         DetalleConfirmacionCompra detalle = new DetalleConfirmacionCompra();
         detalle.setSectorId(sectorId);
         detalle.setAsientos(asientos);
@@ -148,5 +184,15 @@ class PlantillaEmailServiceTest {
         detalle.setMonto(monto);
         detalle.setMoneda(moneda);
         return detalle;
+    }
+
+    private NotificacionEntranteDTO entrante(MotivoNotificacion motivo, DetalleNotificacion detalle) {
+        NotificacionEntranteDTO entrante = new NotificacionEntranteDTO();
+        entrante.setMensajeId("MSE-1");
+        entrante.setMotivo(motivo);
+        entrante.setEventoId(1L);
+        entrante.setDestinatarioId(7L);
+        entrante.setDetalle(detalle);
+        return entrante;
     }
 }

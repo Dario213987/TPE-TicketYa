@@ -5,8 +5,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
 import org.springframework.stereotype.Component;
 import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
-import org.tudai.ticketya.tickets.config.RabbitNotificacionesConfig;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -41,7 +41,7 @@ public class NotificacionCompraPublicador {
         try {
             mensaje = factory.crear(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad,
                     monto, MONEDA_COMPRA);
-            rabbitTemplate.convertAndSend(RabbitNotificacionesConfig.COLA_ENVIAR, mensaje);
+            rabbitTemplate.convertAndSend(ColasNotificacion.COLA_ENVIAR, mensaje);
             log.info("Notificación de confirmación de compra publicada: mensajeId={}, reservaId={}, eventoId={}, destinatarioId={}, motivo={}",
                     mensaje.getMensajeId(), reservaId, eventoId, destinatarioId, mensaje.getMotivo());
         } catch (Exception e) {

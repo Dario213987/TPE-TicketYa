@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import org.hibernate.Hibernate;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -31,6 +32,8 @@ import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
+import org.tudai.ticketya.contract.notificaciones.messaging.MensajeIdNotificacion;
+import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
@@ -50,6 +53,7 @@ import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.domain.TipoNotificacionTickets;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
+import org.tudai.ticketya.eventos.notificacion.AvisoEventoEvent;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
@@ -82,6 +86,9 @@ public class EventoService {
             EstadoEvento.AGOTADO,
             EstadoEvento.SUSPENDIDO);
 
+    private static final String PREFIJO_MENSAJE = "MSE";
+    private static final String PREFIJO_EDICION = "MSE-EDICION";
+
     private final EventoRepository eventoRepository;
     private final TicketsClient ticketsClient;
     private final DevolucionesClient devolucionesClient;
@@ -92,6 +99,7 @@ public class EventoService {
     private final ParticipanteService participanteService;
     private final NotificacionTicketsService notificacionTicketsService;
     private final TransactionTemplate transactionTemplate;
+    private final ApplicationEventPublisher applicationEventPublisher;
 
     @Value("${ticketya.eventos.finalizacion.horas-gracia:6}")
     private long horasGraciaFinalizacion = 6;
@@ -678,7 +686,11 @@ public class EventoService {
 
         evento.setEstado(EstadoEvento.CANCELADO);
 
-        return toEstadoDTO(eventoRepository.save(evento));
+        Evento guardado = eventoRepository.save(evento);
+        applicationEventPublisher.publishEvent(new AvisoEventoEvent(
+                MotivoNotificacion.CANCELACION, id,
+                MensajeIdNotificacion.generarDerivado(PREFIJO_MENSAJE, MotivoNotificacion.CANCELACION, id)));
+        return toEstadoDTO(guardado);
     }
 
     private EventoEstadoResponse validarSuspension(Long id) {
@@ -946,10 +958,22 @@ public class EventoService {
         Evento evento = buscarEvento(eventoId);
         verificarPropiedad(evento, organizadorId, esAdmin, "modificar");
 
-        validarCamposEstructurales(evento, dto);
+        validarCamposEstructurales(evento, dto, esAdmin);
+
+        boolean esBorrador = evento.getEstado() == EstadoEvento.BORRADOR;
+        boolean cambioFecha = dto.getFecha() != null && !Objects.equals(dto.getFecha(), evento.getFecha());
+        boolean cambioLugar = dto.getLugarId() != null && (evento.getLugar() == null
+                || !Objects.equals(dto.getLugarId(), evento.getLugar().getId()));
+
         aplicarCambios(evento, dto);
 
-        return toResponse(eventoRepository.save(evento));
+        Evento guardado = eventoRepository.save(evento);
+        if (!esBorrador && (cambioFecha || cambioLugar)) {
+            applicationEventPublisher.publishEvent(new AvisoEventoEvent(
+                    MotivoNotificacion.EDICION, eventoId,
+                    MensajeIdNotificacion.generar(PREFIJO_EDICION)));
+        }
+        return toResponse(guardado);
     }
 
     @Transactional
@@ -975,13 +999,16 @@ public class EventoService {
         }
     }
 
-    private void validarCamposEstructurales(Evento evento, EventoUpdateRequest dto) {
+    private void validarCamposEstructurales(Evento evento, EventoUpdateRequest dto, boolean esAdmin) {
         boolean esBorrador = evento.getEstado() == EstadoEvento.BORRADOR;
 
         if (dto.getFecha() != null && !Objects.equals(dto.getFecha(), evento.getFecha())) {
-            if (!esBorrador) {
+            if (!esBorrador && !esAdmin) {
                 throw new ConflictException(
                         "No se puede modificar la fecha de un evento ya publicado. Cancelalo o reprogramalo.");
+            }
+            if (!esBorrador && !ESTADOS_FINALIZABLES.contains(evento.getEstado())) {
+                throw new ConflictException("No se puede reprogramar un evento cancelado o finalizado");
             }
             if (!dto.getFecha().isAfter(LocalDateTime.now())) {
                 throw new BadRequestException("La fecha del evento debe ser posterior a hoy");
@@ -990,9 +1017,12 @@ public class EventoService {
 
         if (dto.getLugarId() != null && (evento.getLugar() == null
                 || !Objects.equals(dto.getLugarId(), evento.getLugar().getId()))) {
-            if (!esBorrador) {
+            if (!esBorrador && !esAdmin) {
                 throw new ConflictException(
                         "No se puede modificar el lugar de un evento ya publicado. Cancelalo o reprogramalo.");
+            }
+            if (!esBorrador && !ESTADOS_FINALIZABLES.contains(evento.getEstado())) {
+                throw new ConflictException("No se puede reprogramar un evento cancelado o finalizado");
             }
         }
 
