@@ -166,6 +166,26 @@ class PagoServiceTest {
     }
 
     @Test
+    void pagar_pasarelaCaidaYReintegroBloqueado_liberaYQuedaReintegroPendiente() {
+        String motivo = "La pasarela de pagos no está disponible";
+        prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA))
+                .thenReturn(transaccion(EstadoTransaccion.FALLIDA).motivoFallo(motivo));
+        when(transaccionesClient.generarCredito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.FALLIDA).motivoFallo(motivo));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(PagoRechazadoException.class)
+                .hasMessageContaining(motivo);
+
+        verify(transaccionesClient).generarCredito(any());
+        verify(reservaPagoService).liberar(RESERVA_ID, EstadoPago.REINTEGRO_PENDIENTE, motivo);
+        verify(reservaPagoService, never()).emitir(any(), any());
+        assertThat(mensajes()).anyMatch(m -> m.contains("Compensación fallida") && m.contains("ticket=1"));
+    }
+
+    @Test
     void pagar_timeoutDeTransacciones_quedaPendienteSinLiberar() {
         prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
         when(transaccionesClient.generarDebito(any()))

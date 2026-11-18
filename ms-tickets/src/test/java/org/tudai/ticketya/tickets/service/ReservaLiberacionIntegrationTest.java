@@ -37,6 +37,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
         "transacciones.name=transacciones",
+        "tickets.qr.secreto=test-secret-para-firmar-qr-en-liberacion",
         "tickets.reserva.liberacion-cron=0 0 0 1 1 *"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)

@@ -1,13 +1,16 @@
 package org.tudai.ticketya.tickets.service;
 
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.*;
+import org.tudai.ticketya.tickets.notificacion.CompraConfirmadaNotificacionEvent;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
 import org.tudai.ticketya.tickets.dto.TicketEmitidoDTO;
 import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
@@ -16,6 +19,7 @@ import org.tudai.ticketya.tickets.repository.ReservaRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 import org.tudai.ticketya.tickets.repository.VentaRepository;
 
+import java.math.BigDecimal;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
@@ -37,6 +41,7 @@ public class ReservaPagoService {
     private final TicketRepository ticketRepository;
     private final ReservaVencidaService reservaVencidaService;
     private final VentaRepository ventaRepository;
+    private final ApplicationEventPublisher eventPublisher;
 
     /**
      * Débito a generar por un ticket de la reserva.
@@ -163,7 +168,24 @@ public class ReservaPagoService {
         reserva.setPagadoEl(ahora);
         reservaRepository.save(reserva);
 
+        publicarCompraConfirmada(reserva, tickets, venta);
         return toResponse(reserva, tickets);
+    }
+
+    private void publicarCompraConfirmada(Reserva reserva, List<Ticket> tickets, Venta venta) {
+        List<AsientoNotificacion> asientos = tickets.stream()
+                .filter(ticket -> ticket.getAsiento() != null)
+                .map(ticket -> new AsientoNotificacion(
+                        ticket.getAsiento().getFila(), ticket.getAsiento().getNumero()))
+                .toList();
+        eventPublisher.publishEvent(new CompraConfirmadaNotificacionEvent(
+                reserva.getId(),
+                reserva.getEventoId(),
+                reserva.getClienteId(),
+                reserva.getSectorIdExterno(),
+                asientos,
+                tickets.size(),
+                BigDecimal.valueOf(venta.getTotal())));
     }
 
     private Venta registrarVenta(Reserva reserva, List<Ticket> tickets, Map<Long, Long> transacciones,

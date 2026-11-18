@@ -58,7 +58,7 @@ Redis se usa en `ms-tickets` para la fila virtual de eventos de alta demanda (`r
 
 Redis Streams se usan en `ms-preferencias` para el historial de compras y asistencias (`redis-preferencias`, puerto 6381 en el host). Ver [`docs/api/ms-preferencias.md`](docs/api/ms-preferencias.md).
 
-RabbitMQ se usa como broker de mensajería (`rabbitmq`, AMQP `5672`, UI `15672`, credenciales `RABBITMQ_USER`/`RABBITMQ_PASSWORD`/`RABBITMQ_VHOST` en `infra/.env`). MailHog provee un SMTP de pruebas para `ms-notificaciones` (SMTP `1025`, UI `8025`). Para levantar `ms-notificaciones` se requieren `DB_PASSWORD`, `RABBITMQ_*` y el broker/MailHog en ejecución.
+RabbitMQ se usa como broker de mensajería (`rabbitmq`, AMQP `5672`, UI `15672`, credenciales `RABBITMQ_USER`/`RABBITMQ_PASSWORD`/`RABBITMQ_VHOST` en `infra/.env`). MailHog provee un SMTP de pruebas para `ms-notificaciones` (SMTP `1025`, UI `8025`). Para levantar `ms-notificaciones` se requieren `DB_PASSWORD`, `RABBITMQ_*` y el broker/MailHog en ejecución. El listener reintenta 3 veces con backoff y DLQ; el envío SMTP corta a los 2 s de conexión y 5 s de lectura/escritura (`MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_READ_TIMEOUT_MS`, `MAIL_WRITE_TIMEOUT_MS`).
 
 Las variables de usuario y contraseña solo se aplican con el volumen vacío. Para cambiarlas, o para cambiar el motor de un servicio que ya tenía datos, hay que recrear con `docker compose -f infra/docker-compose.yml down -v` (borra los datos).
 
@@ -77,6 +77,12 @@ Primero Eureka y después lo demás:
     env DB_PASSWORD=<contraseña de su base> mvn -pl ms-eventos spring-boot:run
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
+
+`ms-tickets` firma los códigos QR con HMAC usando `TICKETS_QR_SECRET`. En desarrollo hay un valor por defecto (`dev-secret-cambiar`), pero en producción hay que definir un secreto propio y largo (también está en `infra/.env.example`):
+
+    env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
+
+La firma se comprueba en `AccesoService.validar` antes de consultar la base de datos: un QR con firma inválida responde 400 sin acceder al repositorio. Esto aplica a los QRs emitidos con firma; los tickets anteriores tienen un `codigo_qr` sin firma y serán rechazados con 400, así que hay que re-firmarlos (`firmar(codigo_qr)`) antes de desplegar si existen datos previos.
 
 ### 4. Levantar dos instancias del mismo servicio
 
@@ -102,6 +108,18 @@ Todos los servicios dependen de `ticketya-logging`, que define el formato: conso
 Para loguear se usa `@Slf4j` (Lombok) o `LoggerFactory.getLogger(...)`.
 
 Propiedades opcionales: `ticketya.logging.dir` (`logs`), `ticketya.logging.max-file-size` (`10MB`), `ticketya.logging.max-history` (`7` días) y `ticketya.logging.total-size-cap` (`500MB`).
+
+### Logs centralizados (Loki + Alloy + Grafana)
+
+El compose de `infra/` también levanta Loki, Alloy y Grafana. Alloy lee los `*.json.log` de `logs/` y de `<módulo>/logs/` (según desde dónde se lanzó el servicio), etiqueta cada línea con `service` y la manda a Loki.
+
+En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargado. En **Explore** se consulta por servicio:
+
+    {service="ms-eventos"}
+
+Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
+
+El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
 ## Correlation id
 

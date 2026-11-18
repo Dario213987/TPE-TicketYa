@@ -54,6 +54,9 @@ class ReservaServiceTest {
     private ReservaRepository reservaRepository;
 
     @Mock
+    private QrFirmaService qrFirmaService;
+
+    @Mock
     private HabilitacionTandaService habilitacionTandaService;
 
     private ReservaProperties properties;
@@ -67,13 +70,16 @@ class ReservaServiceTest {
         properties.setExpiracion(Duration.ofMinutes(10));
         service = new ReservaService(
                 eventoRepository, sectorRepository, asientoRepository, ticketRepository,
-                reservaVencidaService, properties, reservaRepository, habilitacionTandaService);
+                reservaVencidaService, properties, reservaRepository,
+                qrFirmaService, habilitacionTandaService);
 
         lenient().when(reservaRepository.save(any(Reserva.class))).thenAnswer(invocacion -> {
             Reserva reserva = invocacion.getArgument(0);
             reserva.setId(99L);
             return reserva;
         });
+        lenient().when(qrFirmaService.firmar(any())).thenAnswer(invocacion ->
+                invocacion.getArgument(0) + ".firma");
     }
 
     @Test

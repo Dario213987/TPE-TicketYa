@@ -32,7 +32,8 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.yaml",
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
-        "transacciones.name=transacciones"
+        "transacciones.name=transacciones",
+        "tickets.qr.secreto=test-secret-para-firmar-qr-en-concurrencia"
 })
 @AutoConfigureTestDatabase(replace = AutoConfigureTestDatabase.Replace.NONE)
 class ReservaConcurrenciaTest {

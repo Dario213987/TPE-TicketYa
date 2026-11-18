@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00003-rechazar-devolucion" author="TicketYa">
+        <!-- Reemplazar el indice parcial uq_devoluciones_ticket_pendiente por uno que cubra PENDIENTE y APROBADA -->
+        <sql dbms="postgresql">
+            DROP INDEX IF EXISTS uq_devoluciones_ticket_pendiente;
+            CREATE UNIQUE INDEX uk_devoluciones_ticket_activa ON devoluciones (ticket_id) WHERE estado IN ('PENDIENTE', 'APROBADA');
+        </sql>
+
+        <addColumn tableName="devoluciones">
+            <column name="motivo_rechazo" type="varchar(255)"/>
+            <column name="resuelta_por" type="bigint"/>
+            <column name="fecha_resolucion" type="timestamp"/>
+        </addColumn>
+    </changeSet>
+
+</databaseChangeLog>

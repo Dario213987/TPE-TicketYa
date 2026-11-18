@@ -2,7 +2,7 @@
   "info": {
     "_postman_id": "5d3f9a2e-7c41-4b8e-9f10-2a6c1e8b3d47",
     "name": "ms-tickets",
-    "description": "Gestion de disponibilidad y reservas de entradas. Requiere X-User-Id (numerico) y X-User-Role. Las rutas se exponen a traves del gateway bajo /api/tickets. Ejecutar en orden: la carpeta 1 crea la disponibilidad que usan las demas y marca el evento principal como alta demanda para la carpeta 3.",
+    "description": "Gestion de disponibilidad y reservas de entradas. Requiere X-User-Id (numerico) y X-User-Role. Las rutas se exponen a traves del gateway bajo /api/tickets. Ejecutar en orden: la carpeta 1 crea la disponibilidad que usan las demas y marca el evento principal como alta demanda para la carpeta 4. La validacion de accesos (carpeta 3) registra la operacion (operation=ACCESS) y publica el evento ticket.utilizado en Redis de preferencias (puerto 6381).",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "item": [
@@ -453,7 +453,256 @@
       ]
     },
     {
-      "name": "3. Fila virtual",
+      "name": "3. Accesos",
+      "description": "POST /api/tickets/eventos/{eventoId}/accesos/validar con rol PERSONAL_ACCESO. Un 200 marca el ticket como USADO, registra operation=ACCESS result=OK y publica el evento ticket.utilizado en el stream de Redis de preferencias (localhost:6381) con clienteId, eventoId, ticketId, fechaUso y el traceId de X-Correlation-Id. Los rechazos del controller se registran como result=FAILED sin publicar; el 403 lo corta el interceptor y no se registra. Verificar el stream con: docker exec ticketya-redis-preferencias redis-cli XRANGE ticket.utilizado - +",
+      "item": [
+        {
+          "name": "Validar acceso (OK, publica ticket.utilizado)",
+          "description": "Requiere el QR de un ticket VENDIDO con cliente asociado. Si el ticket no tiene cliente, el acceso se registra pero no se publica el evento.",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const j = pm.response.json();",
+                  "pm.test(\"resultado OK\", () => pm.expect(j.resultado).to.eql(\"OK\"));",
+                  "pm.test(\"valido true\", () => pm.expect(j.valido).to.eql(true));",
+                  "pm.test(\"ticket USADO\", () => pm.expect(j.estadoTicket).to.eql(\"USADO\"));",
+                  "pm.test(\"propaga X-Correlation-Id\", () => pm.expect(pm.response.headers.get(\"X-Correlation-Id\")).to.eql(pm.collectionVariables.get(\"correlationIdAcceso\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{correlationIdAcceso}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "Validar acceso ya usado (409)",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
+                  "pm.test(\"informa que ya fue utilizado\", () => pm.expect(pm.response.json().detail).to.include(\"utilizado\"));",
+                  "pm.test(\"codigo YA_USADA\", () => pm.expect(pm.response.json().codigo).to.eql(\"YA_USADA\"));",
+                  "pm.test(\"propaga X-Correlation-Id\", () => pm.expect(pm.response.headers.get(\"X-Correlation-Id\")).to.eql(pm.collectionVariables.get(\"correlationIdAccesoFallido\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{correlationIdAccesoFallido}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "404 QR inexistente",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"codigo NO_EXISTE\", () => pm.expect(pm.response.json().codigo).to.eql(\"NO_EXISTE\"));",
+                  "pm.test(\"propaga X-Correlation-Id\", () => pm.expect(pm.response.headers.get(\"X-Correlation-Id\")).to.eql(pm.collectionVariables.get(\"correlationIdAccesoFallido\")));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{personalAccesoId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "PERSONAL_ACCESO"
+              },
+              {
+                "key": "X-Correlation-Id",
+                "value": "{{correlationIdAccesoFallido}}"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"QR-INEXISTENTE\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        },
+        {
+          "name": "403 rol CLIENTE al validar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 403\", () => pm.response.to.have.status(403));"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "X-User-Id",
+                "value": "{{clienteId}}"
+              },
+              {
+                "key": "X-User-Role",
+                "value": "CLIENTE"
+              },
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"codigoQr\": \"{{codigoQrAcceso}}\"\n}",
+              "options": {
+                "raw": {
+                  "language": "json"
+                }
+              }
+            },
+            "url": {
+              "raw": "{{baseUrl}}/api/tickets/eventos/{{eventoId}}/accesos/validar",
+              "host": [
+                "{{baseUrl}}"
+              ],
+              "path": [
+                "api",
+                "tickets",
+                "eventos",
+                "{{eventoId}}",
+                "accesos",
+                "validar"
+              ]
+            }
+          },
+          "response": []
+        }
+      ]
+    },
+    {
+      "name": "4. Fila virtual",
       "description": "Requiere que el evento {{eventoId}} tenga disponibilidad publicada con altaDemanda=true (lo hace la carpeta 1). Cada corrida usa un cliente nuevo ({{clienteFila}}) para que el 201 sea repetible sin borrar la clave de Redis.",
       "item": [
         {
@@ -778,7 +1027,7 @@
       ]
     },
     {
-      "name": "4. Habilitación por tandas (interno)",
+      "name": "5. Habilitación por tandas (interno)",
       "description": "Ajusta la habilitación del evento {{eventoId}}. El gateway bloquea /api/tickets/internal/**, así que este request debe apuntar directo a ms-tickets ({{msTicketsBaseUrl}}). Con tanda de 1 cliente y tick de 5 segundos, el primer cliente de la fila pasa a HABILITADO en la próxima corrida del job.",
       "item": [
         {
@@ -831,7 +1080,7 @@
       ]
     },
     {
-      "name": "5. Errores",
+      "name": "6. Errores",
       "item": [
         {
           "name": "400 cantidad invalida",
@@ -1217,6 +1466,22 @@
     {
       "key": "organizadorId",
       "value": "1"
+    },
+    {
+      "key": "personalAccesoId",
+      "value": "7"
+    },
+    {
+      "key": "codigoQrAcceso",
+      "value": "REEMPLAZAR_POR_QR_VENDIDO"
+    },
+    {
+      "key": "correlationIdAcceso",
+      "value": "postman-acceso-ok"
+    },
+    {
+      "key": "correlationIdAccesoFallido",
+      "value": "postman-acceso-fallido"
     },
     {
       "key": "eventoSinAltaDemandaId",
