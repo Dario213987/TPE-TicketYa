@@ -87,6 +87,11 @@
             <artifactId>transacciones-contract</artifactId>
             <version>${project.version}</version>
         </dependency>
+        <dependency>
+            <groupId>org.tudai</groupId>
+            <artifactId>eventos-contract</artifactId>
+            <version>${project.version}</version>
+        </dependency>
     </dependencies>
     <build>
         <plugins>

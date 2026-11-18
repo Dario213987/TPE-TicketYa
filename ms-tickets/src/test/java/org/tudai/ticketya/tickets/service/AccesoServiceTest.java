@@ -7,12 +7,12 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
-import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
 import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
+import org.tudai.ticketya.tickets.exception.CodigoRechazoAcceso;
 import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
@@ -62,52 +62,61 @@ class AccesoServiceTest {
     }
 
     @Test
-    void validar_qrInexistente_lanzaNotFoundException() {
+    void validar_qrInexistente_lanzaRechazoNoExiste() {
         when(ticketRepository.marcarComoUsado(QR, EVENTO_ID, EstadoTicket.VENDIDO, EstadoTicket.USADO))
                 .thenReturn(0);
         when(ticketRepository.buscarPorCodigoQr(QR)).thenReturn(Optional.empty());
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
-                .isInstanceOf(NotFoundException.class)
-                .hasMessageContaining("No existe");
+                .isInstanceOf(AccesoRechazadoException.class)
+                .hasMessageContaining("No existe")
+                .satisfies(ex -> assertThat(((AccesoRechazadoException) ex).getCodigo())
+                        .isEqualTo(CodigoRechazoAcceso.NO_EXISTE));
     }
 
     @Test
-    void validar_ticketDeOtroEvento_lanzaConflictException() {
+    void validar_ticketDeOtroEvento_lanzaRechazoOtroEvento() {
         prepararRechazo(ticket(9L, EstadoTicket.VENDIDO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("evento");
+                .isInstanceOf(AccesoRechazadoException.class)
+                .hasMessageContaining("evento")
+                .satisfies(ex -> assertThat(((AccesoRechazadoException) ex).getCodigo())
+                        .isEqualTo(CodigoRechazoAcceso.OTRO_EVENTO));
     }
 
     @Test
-    void validar_ticketYaUsado_lanzaConflictException() {
+    void validar_ticketYaUsado_lanzaRechazoYaUsada() {
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.USADO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
                 .isInstanceOf(AccesoRechazadoException.class)
                 .hasMessageContaining("ya fue utilizado")
-                .hasFieldOrPropertyWithValue("ticketId", 99L);
+                .hasFieldOrPropertyWithValue("ticketId", 99L)
+                .satisfies(ex -> assertThat(((AccesoRechazadoException) ex).getCodigo())
+                        .isEqualTo(CodigoRechazoAcceso.YA_USADA));
 
         verifyNoInteractions(ticketUtilizadoPublisher);
     }
 
     @Test
-    void validar_ticketDevuelto_lanzaConflictException() {
+    void validar_ticketDevuelto_lanzaRechazoDevuelta() {
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.DEVUELTO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
-                .isInstanceOf(ConflictException.class)
-                .hasMessageContaining("devuelto");
+                .isInstanceOf(AccesoRechazadoException.class)
+                .hasMessageContaining("devuelto")
+                .satisfies(ex -> assertThat(((AccesoRechazadoException) ex).getCodigo())
+                        .isEqualTo(CodigoRechazoAcceso.DEVUELTA));
     }
 
     @Test
-    void validar_ticketNoVendido_lanzaConflictException() {
+    void validar_ticketNoVendido_lanzaConflictExceptionSinCodigo() {
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.EMITIDO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
                 .isInstanceOf(ConflictException.class)
+                .isNotInstanceOf(AccesoRechazadoException.class)
                 .hasMessageContaining("no esta habilitado");
     }
 

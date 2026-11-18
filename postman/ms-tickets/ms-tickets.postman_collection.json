@@ -531,6 +531,7 @@
                 "exec": [
                   "pm.test(\"Status 409\", () => pm.response.to.have.status(409));",
                   "pm.test(\"informa que ya fue utilizado\", () => pm.expect(pm.response.json().detail).to.include(\"utilizado\"));",
+                  "pm.test(\"codigo YA_USADA\", () => pm.expect(pm.response.json().codigo).to.eql(\"YA_USADA\"));",
                   "pm.test(\"propaga X-Correlation-Id\", () => pm.expect(pm.response.headers.get(\"X-Correlation-Id\")).to.eql(pm.collectionVariables.get(\"correlationIdAccesoFallido\")));"
                 ]
               }
@@ -591,6 +592,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 404\", () => pm.response.to.have.status(404));",
+                  "pm.test(\"codigo NO_EXISTE\", () => pm.expect(pm.response.json().codigo).to.eql(\"NO_EXISTE\"));",
                   "pm.test(\"propaga X-Correlation-Id\", () => pm.expect(pm.response.headers.get(\"X-Correlation-Id\")).to.eql(pm.collectionVariables.get(\"correlationIdAccesoFallido\")));"
                 ]
               }

@@ -5,7 +5,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -93,7 +93,7 @@ class AccesoConcurrenciaTest {
                 try {
                     accesoService.validar(EVENTO_ID, CODIGO_QR);
                     return true;
-                } catch (ConflictException e) {
+                } catch (AccesoRechazadoException e) {
                     return false;
                 }
             }));

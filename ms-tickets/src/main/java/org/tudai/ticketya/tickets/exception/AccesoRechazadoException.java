@@ -1,18 +1,27 @@
 package org.tudai.ticketya.tickets.exception;
 
-import org.tudai.ticketya.core.exception.ConflictException;
-
 /**
- * El ticket fue rechazado al validar el acceso. Responde 409 y lleva el id del
- * ticket para registrar la operación sin exponer el código QR en los logs.
+ * El ticket fue rechazado al validar el acceso. Responde 404 o 409 segun el
+ * codigo y lleva el id del ticket para registrar la operacion sin exponer el
+ * codigo QR en los logs.
  */
-public class AccesoRechazadoException extends ConflictException {
+public class AccesoRechazadoException extends RuntimeException {
 
+    private final CodigoRechazoAcceso codigo;
     private final Long ticketId;
 
-    public AccesoRechazadoException(String motivo, Long ticketId) {
-        super(motivo);
+    public AccesoRechazadoException(CodigoRechazoAcceso codigo, String mensaje) {
+        this(codigo, mensaje, null);
+    }
+
+    public AccesoRechazadoException(CodigoRechazoAcceso codigo, String mensaje, Long ticketId) {
+        super(mensaje);
+        this.codigo = codigo;
         this.ticketId = ticketId;
+    }
+
+    public CodigoRechazoAcceso getCodigo() {
+        return codigo;
     }
 
     public Long getTicketId() {

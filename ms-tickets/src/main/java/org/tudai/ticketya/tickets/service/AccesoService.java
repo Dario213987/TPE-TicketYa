@@ -6,11 +6,12 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionSynchronization;
 import org.springframework.transaction.support.TransactionSynchronizationManager;
 import org.tudai.ticketya.core.exception.BadRequestException;
-import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
 import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
+import org.tudai.ticketya.tickets.exception.CodigoRechazoAcceso;
 import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
@@ -51,20 +52,30 @@ public class AccesoService {
         }
 
         Ticket ticket = ticketRepository.buscarPorCodigoQr(qr)
-                .orElseThrow(() -> new NotFoundException("No existe un ticket con ese codigo QR"));
+                .orElseThrow(() -> new AccesoRechazadoException(
+                        CodigoRechazoAcceso.NO_EXISTE,
+                        "No existe un ticket con ese codigo QR"));
 
         if (!Objects.equals(ticket.getEvento().getEventoId(), eventoId)) {
             throw new AccesoRechazadoException(
-                    "El ticket no pertenece al evento indicado", ticket.getId());
+                    CodigoRechazoAcceso.OTRO_EVENTO,
+                    "El ticket no pertenece al evento indicado",
+                    ticket.getId());
         }
         if (ticket.getEstadoTicket() == EstadoTicket.USADO) {
-            throw new AccesoRechazadoException("El ticket ya fue utilizado", ticket.getId());
+            throw new AccesoRechazadoException(
+                    CodigoRechazoAcceso.YA_USADA,
+                    "El ticket ya fue utilizado",
+                    ticket.getId());
         }
         if (ticket.getEstadoTicket() == EstadoTicket.DEVUELTO) {
-            throw new AccesoRechazadoException("El ticket fue devuelto", ticket.getId());
+            throw new AccesoRechazadoException(
+                    CodigoRechazoAcceso.DEVUELTA,
+                    "El ticket fue devuelto",
+                    ticket.getId());
         }
-        throw new AccesoRechazadoException("El ticket no esta habilitado para ingresar (estado "
-                + ticket.getEstadoTicket() + ")", ticket.getId());
+        throw new ConflictException("El ticket no esta habilitado para ingresar (estado "
+                + ticket.getEstadoTicket() + ")");
     }
 
     private void publicarAlConfirmar(Ticket ticket) {
