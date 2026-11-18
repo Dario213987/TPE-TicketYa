@@ -37,6 +37,9 @@ public class Devolucion extends Auditable {
     @Column(name = "ticket_id", nullable = false, updatable = false)
     private Long ticketId;
 
+    @Column(name = "evento_id", updatable = false)
+    private Long eventoId;
+
     @Column(name = "fecha", nullable = false, updatable = false)
     private Instant fecha;
 
