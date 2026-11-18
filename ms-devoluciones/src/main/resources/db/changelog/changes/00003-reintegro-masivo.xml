@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00003-reintegro-masivo" author="TicketYa">
+        <addColumn tableName="devoluciones">
+            <column name="origen" type="varchar(40)">
+                <constraints nullable="true"/>
+            </column>
+        </addColumn>
+
+        <addUniqueConstraint tableName="devoluciones"
+                             columnNames="ticket_id, origen"
+                             constraintName="uq_devoluciones_reintegro_ticket"/>
+
+        <createIndex tableName="devoluciones" indexName="idx_devoluciones_reintegro_evento">
+            <column name="evento_id"/>
+            <column name="origen"/>
+        </createIndex>
+
+        <createTable tableName="reintegros_masivos">
+            <column name="id" type="bigint" autoIncrement="true">
+                <constraints primaryKey="true" nullable="false"/>
+            </column>
+            <column name="evento_id" type="bigint">
+                <constraints nullable="false" unique="true" uniqueConstraintName="uq_reintegros_evento"/>
+            </column>
+            <column name="estado" type="varchar(20)">
+                <constraints nullable="false"/>
+            </column>
+            <column name="ultimo_ticket_id" type="bigint"/>
+            <column name="procesados" type="bigint" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="fallos" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="intentos" type="int" defaultValueNumeric="0">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reservas_liberadas" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="notificado" type="boolean" defaultValueBoolean="false">
+                <constraints nullable="false"/>
+            </column>
+            <column name="reclamado_el" type="timestamp"/>
+            <column name="creado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+            <column name="actualizado_el" type="timestamp">
+                <constraints nullable="false"/>
+            </column>
+        </createTable>
+
+        <createIndex tableName="reintegros_masivos" indexName="idx_reintegros_estado">
+            <column name="estado"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

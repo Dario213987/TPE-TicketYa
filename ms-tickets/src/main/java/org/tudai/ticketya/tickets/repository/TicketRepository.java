@@ -66,6 +66,23 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     List<Ticket> findByReserva_Id(Long reservaId);
 
+    List<Ticket> findByEvento_EventoIdAndEstadoTicketInAndExpiraElGreaterThan(
+            Long eventoId, Collection<EstadoTicket> estados, Instant ahora);
+
+    @Query("""
+            select t.id, t.clienteId, t.precio, t.estadoTicket, t.evento.organizadorId, vi.transaccionId
+            from Ticket t
+            left join VentaItem vi on vi.ticket.id = t.id
+            where t.evento.eventoId = :eventoId
+              and t.id > :desdeId
+              and t.estadoTicket in :estados
+            order by t.id asc
+            """)
+    List<Object[]> findEntradasParaReintegro(@Param("eventoId") Long eventoId,
+                                              @Param("desdeId") Long desdeId,
+                                              @Param("estados") Collection<EstadoTicket> estados,
+                                              Pageable pageable);
+
     @Query("""
             select distinct t.evento.eventoId from Ticket t
             where t.estadoTicket = :estado

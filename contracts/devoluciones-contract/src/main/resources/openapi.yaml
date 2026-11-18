@@ -113,6 +113,22 @@ paths:
         '401': { $ref: '#/components/responses/Error' }
         '403': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/devoluciones/eventos/{eventoId}/reintegro-masivo:
+    put:
+      tags: [devoluciones]
+      operationId: reintegrarEvento
+      summary: Inicia el reintegro automático de todas las entradas de un evento cancelado
+      description: |
+        Endpoint interno servicio-a-servicio, llamado por ms-eventos cuando cancela un evento.
+        Solo registra el proceso y responde 202: las acreditaciones se emiten por lotes desde
+        un job reanudable. Es idempotente si el evento ya tiene un reintegro registrado.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '202': { description: Proceso de reintegro registrado }
 components:
   parameters:
     Page:
