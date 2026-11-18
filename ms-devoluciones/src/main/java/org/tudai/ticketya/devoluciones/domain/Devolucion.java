@@ -53,6 +53,15 @@ public class Devolucion extends Auditable {
     @Column(name = "motivo", length = 255)
     private String motivo;
 
+    @Column(name = "motivo_rechazo", length = 255)
+    private String motivoRechazo;
+
+    @Column(name = "resuelta_por")
+    private Long resueltaPor;
+
+    @Column(name = "fecha_resolucion")
+    private Instant fechaResolucion;
+
     @Override
     protected void onCreate() {
         super.onCreate();

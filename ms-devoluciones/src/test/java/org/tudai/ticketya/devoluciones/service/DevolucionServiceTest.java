@@ -13,7 +13,9 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
+import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
+import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
@@ -35,6 +37,8 @@ import java.util.Collections;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -90,7 +94,7 @@ class DevolucionServiceTest {
 
             TicketDTO ticket = crearTicketValido("EMITIDO");
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
 
             Devolucion devGuardada = Devolucion.builder()
                     .id(1L)
@@ -125,7 +129,7 @@ class DevolucionServiceTest {
 
             TicketDTO ticket = crearTicketValido("VENDIDO");
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
 
             Devolucion devGuardada = Devolucion.builder()
                     .id(1L)
@@ -161,7 +165,7 @@ class DevolucionServiceTest {
                     .fecha(LocalDateTime.now(fixedClock).plusHours(80))
                     .build();
             when(eventoClient.obtenerEvento(500L)).thenReturn(evento);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
 
             Devolucion devGuardada = Devolucion.builder()
                     .id(2L)
@@ -191,7 +195,7 @@ class DevolucionServiceTest {
             TicketDTO ticket = crearTicketValido("EMITIDO");
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
             // No hay solicitud PENDIENTE (la anterior fue DENEGADA)
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
 
             Devolucion nuevaDev = Devolucion.builder()
                     .id(3L)
@@ -226,7 +230,7 @@ class DevolucionServiceTest {
             // Exactamente 72 horas después de now
             ticket.setFechaEvento(LocalDateTime.now(fixedClock).plusHours(72));
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
 
             Devolucion devGuardada = Devolucion.builder()
                     .id(1L)
@@ -386,14 +390,14 @@ class DevolucionServiceTest {
 
             TicketDTO ticket = crearTicketValido("EMITIDO");
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(true);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(true);
 
             SolicitudDevolucionRequest req = new SolicitudDevolucionRequest();
             req.setTicketId(100L);
 
             assertThatThrownBy(() -> devolucionService.solicitarDevolucion(req))
                     .isInstanceOf(ConflictException.class)
-                    .hasMessageContaining("solicitud de devolución pendiente");
+                    .hasMessageContaining("solicitud de devolución");
         }
 
         @Test
@@ -404,7 +408,7 @@ class DevolucionServiceTest {
 
             TicketDTO ticket = crearTicketValido("EMITIDO");
             when(ticketClient.obtenerTicket(100L)).thenReturn(ticket);
-            when(devolucionRepository.existsByTicketIdAndEstado(100L, EstadoDevolucion.PENDIENTE)).thenReturn(false);
+            when(devolucionRepository.existsByTicketIdAndEstadoIn(eq(100L), anyCollection())).thenReturn(false);
             when(devolucionRepository.saveAndFlush(any(Devolucion.class)))
                     .thenThrow(new DataIntegrityViolationException("duplicate key value violates unique constraint uq_devoluciones_ticket_pendiente"));
 
@@ -530,6 +534,116 @@ class DevolucionServiceTest {
             assertThatThrownBy(() -> devolucionService.solicitarDevolucion(req))
                     .isInstanceOf(BadRequestException.class)
                     .hasMessageContaining("255 caracteres");
+        }
+    }
+
+    @Nested
+    @DisplayName("Criterio: Rechazar devolución (US-06.04 / TKY-68)")
+    class RechazarDevolucionTests {
+
+        @Test
+        @DisplayName("Rechazo exitoso pasa a DENEGADA, guarda motivoRechazo y preserva motivo del cliente")
+        void rechazoExitoso_guardaMotivoRechazoYDatosAuditoria() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+            when(userContext.userId()).thenReturn(999L);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .clienteId(10L)
+                    .ticketId(100L)
+                    .estado(EstadoDevolucion.PENDIENTE)
+                    .motivo("Motivo del cliente")
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+            when(devolucionRepository.saveAndFlush(any(Devolucion.class))).thenAnswer(i -> i.getArgument(0));
+
+            RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+            req.setMotivo("Entrada duplicada en sistema");
+
+            Devolucion res = devolucionService.rechazarDevolucion(1L, req);
+
+            assertThat(res.getEstado()).isEqualTo(EstadoDevolucion.DENEGADA);
+            assertThat(res.getMotivo()).isEqualTo("Motivo del cliente");
+            assertThat(res.getMotivoRechazo()).isEqualTo("Entrada duplicada en sistema");
+            assertThat(res.getResueltaPor()).isEqualTo(999L);
+            assertThat(res.getFechaResolucion()).isNotNull();
+        }
+
+        @Test
+        @DisplayName("Rechazo con motivo vacío o en blanco responde 400")
+        void rechazoMotivoVacio_lanzaBadRequest() {
+            RechazarDevolucionRequest reqNull = new RechazarDevolucionRequest();
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, reqNull))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("El motivo de rechazo es obligatorio");
+
+            RechazarDevolucionRequest reqBlank = new RechazarDevolucionRequest();
+            reqBlank.setMotivo("   ");
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, reqBlank))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("El motivo de rechazo es obligatorio");
+        }
+
+        @Test
+        @DisplayName("Rechazo con motivo > 255 caracteres responde 400")
+        void rechazoMotivoMayor255_lanzaBadRequest() {
+            RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+            req.setMotivo("A".repeat(256));
+
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, req))
+                    .isInstanceOf(BadRequestException.class)
+                    .hasMessageContaining("255 caracteres");
+        }
+
+        @Test
+        @DisplayName("Rechazo por usuario no administrador o sin autenticar responde 403")
+        void rechazoUsuarioNoAdmin_lanzaForbidden() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.CLIENTE);
+
+            RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+            req.setMotivo("Motivo válido");
+
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, req))
+                    .isInstanceOf(ForbiddenException.class);
+        }
+
+        @Test
+        @DisplayName("Rechazo de devolución inexistente responde 404")
+        void rechazoDevolucionInexistente_lanzaNotFound() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+            when(devolucionRepository.findByIdForUpdate(99L)).thenReturn(java.util.Optional.empty());
+
+            RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+            req.setMotivo("Motivo válido");
+
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(99L, req))
+                    .isInstanceOf(NotFoundException.class)
+                    .hasMessageContaining("no existe");
+        }
+
+        @Test
+        @DisplayName("Rechazo de devolución ya resuelta responde 409")
+        void rechazoDevolucionYaResuelta_lanzaConflict() {
+            when(userContext.isPresent()).thenReturn(true);
+            when(userContext.role()).thenReturn(Role.ADMINISTRADOR);
+
+            Devolucion dev = Devolucion.builder()
+                    .id(1L)
+                    .estado(EstadoDevolucion.DENEGADA)
+                    .build();
+
+            when(devolucionRepository.findByIdForUpdate(1L)).thenReturn(java.util.Optional.of(dev));
+
+            RechazarDevolucionRequest req = new RechazarDevolucionRequest();
+            req.setMotivo("Motivo válido");
+
+            assertThatThrownBy(() -> devolucionService.rechazarDevolucion(1L, req))
+                    .isInstanceOf(ConflictException.class)
+                    .hasMessageContaining("ya fue resuelta");
         }
     }
 }

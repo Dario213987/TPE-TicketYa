@@ -11,6 +11,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
+import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
@@ -106,11 +107,11 @@ public class DevolucionService {
             throw new ConflictException("El ticket no se encuentra emitido (estado actual: " + ticket.getEstado() + ")");
         }
 
-        boolean tieneSolicitudPendiente = devolucionRepository.existsByTicketIdAndEstado(
-                ticket.getId(), EstadoDevolucion.PENDIENTE);
+        boolean tieneSolicitudActiva = devolucionRepository.existsByTicketIdAndEstadoIn(
+                ticket.getId(), java.util.List.of(EstadoDevolucion.PENDIENTE, EstadoDevolucion.APROBADA));
 
-        if (tieneSolicitudPendiente) {
-            throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
+        if (tieneSolicitudActiva) {
+            throw new ConflictException("El ticket ya posee una solicitud de devolución activa");
         }
 
         LocalDateTime ahora = LocalDateTime.now(clock);
@@ -138,7 +139,7 @@ public class DevolucionService {
             return persistirDevolucion(devolucion);
         } catch (DataIntegrityViolationException e) {
             String message = e.getMessage() != null ? e.getMessage().toLowerCase() : "";
-            if (message.contains("uq_devoluciones") || message.contains("ticket_pendiente") || message.contains("unique") || message.contains("duplicate")) {
+            if (message.contains("uk_devoluciones_ticket_activa") || message.contains("uq_devoluciones") || message.contains("ticket_pendiente") || message.contains("unique") || message.contains("duplicate")) {
                 throw new ConflictException("El ticket ya posee una solicitud de devolución pendiente");
             }
             throw e;
@@ -225,5 +226,42 @@ public class DevolucionService {
             throw new NotFoundException("No existe devolución para el ticket " + ticketId);
         }
         return devolucion;
+    }
+
+    @Transactional
+    public Devolucion rechazarDevolucion(Long id, RechazarDevolucionRequest request) {
+        if (request == null || request.getMotivo() == null || request.getMotivo().trim().isEmpty()) {
+            throw new BadRequestException("El motivo de rechazo es obligatorio");
+        }
+        return rechazarDevolucion(id, request.getMotivo().trim());
+    }
+
+    @Transactional
+    public Devolucion rechazarDevolucion(Long id, String motivo) {
+        if (motivo == null || motivo.trim().isEmpty()) {
+            throw new BadRequestException("El motivo de rechazo es obligatorio");
+        }
+
+        if (motivo.length() > 255) {
+            throw new BadRequestException("El motivo no puede superar los 255 caracteres");
+        }
+
+        if (!userContext.isPresent() || userContext.role() != Role.ADMINISTRADOR) {
+            throw new ForbiddenException("No tenés permisos para realizar esta operación.");
+        }
+
+        Devolucion devolucion = devolucionRepository.findByIdForUpdate(id)
+                .orElseThrow(() -> new NotFoundException("La devolución " + id + " no existe"));
+
+        if (devolucion.getEstado() != EstadoDevolucion.PENDIENTE) {
+            throw new ConflictException("La solicitud de devolución ya fue resuelta (estado actual: " + devolucion.getEstado() + ")");
+        }
+
+        devolucion.setEstado(EstadoDevolucion.DENEGADA);
+        devolucion.setMotivoRechazo(motivo.trim());
+        devolucion.setResueltaPor(userContext.userId());
+        devolucion.setFechaResolucion(Instant.now(clock));
+
+        return devolucionRepository.saveAndFlush(devolucion);
     }
 }
