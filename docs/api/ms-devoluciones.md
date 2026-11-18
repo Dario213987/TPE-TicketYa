@@ -22,8 +22,8 @@ Como cliente, puedo solicitar la devolución de una entrada comprada hasta 72 ho
    - Si el ticket ya fue utilizado (`USADO` o `utilizado: true`), responde `409 Conflict`.
    - Si el ticket ya fue devuelto (`DEVUELTO`), responde `409 Conflict`.
    - Si el ticket se encuentra en otro estado no emitido (`RESERVADO`, `CANCELADO`, `EXPIRADO`, `LIBERADO`), responde `409 Conflict`.
-   - Si el ticket ya posee otra solicitud en estado `PENDIENTE`, responde `409 Conflict`. Protegido a nivel de base de datos mediante índice único parcial:
-     `CREATE UNIQUE INDEX uq_devoluciones_ticket_pendiente ON devoluciones (ticket_id) WHERE estado = 'PENDIENTE';`
+   - Si el ticket ya posee otra solicitud activa (`PENDIENTE` o `APROBADA`), responde `409 Conflict`. Protegido a nivel de base de datos mediante índice único parcial:
+     `CREATE UNIQUE INDEX uk_devoluciones_ticket_activa ON devoluciones (ticket_id) WHERE estado IN ('PENDIENTE', 'APROBADA');`
    - *Regla de reintento:* Si una solicitud anterior fue `DENEGADA`, el cliente puede volver a solicitar la devolución si aún faltan `>= 72 hs`.
 
 4. **Titularidad y permisos (403 Forbidden):**
@@ -79,6 +79,50 @@ Crea una solicitud de devolución.
   "motivo": "No podré asistir al evento por motivos personales"
 }
 ```
+
+---
+
+### `POST /api/devoluciones/{id}/rechazar` (US-06.04 / TKY-68)
+
+Rechaza una solicitud de devolución en estado `PENDIENTE`, pasando su estado a `DENEGADA` y registrando el motivo de rechazo. El ticket asociado se mantiene en estado `VENDIDO`.
+
+#### Headers requeridos
+| Header | Tipo | Descripción |
+|---|---|---|
+| `X-User-Id` | Long | ID del administrador autenticado |
+| `X-User-Role` | String | Rol del usuario (`ADMINISTRADOR`) |
+| `Content-Type` | String | `application/json` |
+
+#### Request Body
+```json
+{
+  "motivo": "No cumple con las condiciones establecidas en los términos y condiciones"
+}
+```
+* `motivo` (String, obligatorio, min 1, máx 255 caracteres, no en blanco): Razón por la cual se deniega la solicitud.
+
+#### Respuestas
+- **`200 OK`**: Solicitud rechazada exitosamente.
+```json
+{
+  "id": 1,
+  "clienteId": 10,
+  "ticketId": 100,
+  "eventoId": 1,
+  "fecha": "2026-11-06T12:00:00Z",
+  "estado": "DENEGADA",
+  "transaccionId": 999,
+  "motivo": "No podré asistir al evento por motivos personales",
+  "motivoRechazo": "No cumple con las condiciones establecidas en los términos y condiciones",
+  "resueltaPor": 1,
+  "fechaResolucion": "2026-11-06T14:30:00Z"
+}
+```
+- **`400 Bad Request`**: Motivo ausente, en blanco o superior a 255 caracteres.
+- **`401 Unauthorized`**: Falta autenticación.
+- **`403 Forbidden`**: El usuario no posee rol `ADMINISTRADOR`.
+- **`404 Not Found`**: La devolución no existe.
+- **`409 Conflict`**: La solicitud ya fue resuelta previamente (estado distinto a `PENDIENTE`).
 
 ---
 

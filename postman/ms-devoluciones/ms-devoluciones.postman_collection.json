@@ -474,6 +474,258 @@
 					]
 				}
 			}
+		},
+		{
+			"name": "11. Rechazar devolución exitosa (200)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 200 OK\", function () {",
+							"    pm.response.to.have.status(200);",
+							"});",
+							"pm.test(\"Estado es DENEGADA con motivoRechazo y auditoría\", function () {",
+							"    var jsonData = pm.response.json();",
+							"    pm.expect(jsonData.estado).to.eql(\"DENEGADA\");",
+							"    pm.expect(jsonData.motivoRechazo).to.eql(\"No cumple con los términos y condiciones de devolución\");",
+							"    pm.expect(jsonData.resueltaPor).to.be.a(\"number\");",
+							"    pm.expect(jsonData.fechaResolucion).to.not.be.null;",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"motivo\": \"No cumple con los términos y condiciones de devolución\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/rechazar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"rechazar"
+					]
+				}
+			}
+		},
+		{
+			"name": "12. Rechazar devolución ya resuelta (409)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 409 Conflict\", function () {",
+							"    pm.response.to.have.status(409);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"motivo\": \"Intento de rechazar una devolución ya resuelta\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/rechazar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"rechazar"
+					]
+				}
+			}
+		},
+		{
+			"name": "13. Rechazar devolución con motivo vacío (400)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 400 Bad Request\", function () {",
+							"    pm.response.to.have.status(400);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"motivo\": \"   \"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/rechazar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"rechazar"
+					]
+				}
+			}
+		},
+		{
+			"name": "14. Rechazar devolución inexistente (404)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 404 Not Found\", function () {",
+							"    pm.response.to.have.status(404);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "1"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "ADMINISTRADOR"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"motivo\": \"Devolución que no existe en el sistema\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/99999/rechazar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"99999",
+						"rechazar"
+					]
+				}
+			}
+		},
+		{
+			"name": "15. Rechazar devolución sin rol ADMINISTRADOR (403)",
+			"event": [
+				{
+					"listen": "test",
+					"script": {
+						"type": "text/javascript",
+						"exec": [
+							"pm.test(\"Status code is 403 Forbidden\", function () {",
+							"    pm.response.to.have.status(403);",
+							"});"
+						]
+					}
+				}
+			],
+			"request": {
+				"method": "POST",
+				"header": [
+					{
+						"key": "X-User-Id",
+						"value": "10"
+					},
+					{
+						"key": "X-User-Role",
+						"value": "CLIENTE"
+					},
+					{
+						"key": "Content-Type",
+						"value": "application/json"
+					}
+				],
+				"body": {
+					"mode": "raw",
+					"raw": "{\n  \"motivo\": \"Cliente intentando rechazar\"\n}"
+				},
+				"url": {
+					"raw": "{{baseUrl}}/api/devoluciones/1/rechazar",
+					"host": [
+						"{{baseUrl}}"
+					],
+					"path": [
+						"api",
+						"devoluciones",
+						"1",
+						"rechazar"
+					]
+				}
+			}
 		}
 	],
 	"variable": [
