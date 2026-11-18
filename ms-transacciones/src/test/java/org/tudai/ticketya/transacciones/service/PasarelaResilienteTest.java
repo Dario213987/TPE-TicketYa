@@ -1,5 +1,6 @@
 package org.tudai.ticketya.transacciones.service;
 
+import io.github.resilience4j.circuitbreaker.CircuitBreaker;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
 import org.mockito.ArgumentCaptor;
@@ -11,6 +12,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -119,5 +121,80 @@ class PasarelaResilienteTest {
                         assertThat(e.getRemoteStatus()).isEqualTo(PasarelaResiliente.STATUS_NO_DISPONIBLE))
                 .hasMessageContaining("caída");
         verify(gateway, times(3)).debitar(any());
+    }
+
+    @Test
+    void pasarelaCaida_elCircuitoSeAbreYYaNoLaLlama() {
+        // 1 intento por llamada; se abre con 2 fallas de 2 (ventana 4, mínimo 2, 50 %).
+        pasarela = new PasarelaResiliente(gateway, 1_000, 1, 10, 4, 2, 50, 60_000, 1);
+        when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
+
+        for (int i = 0; i < 2; i++) {
+            assertThatThrownBy(() -> pasarela.procesar(TipoTransaccion.DEBITO, ORDEN))
+                    .isInstanceOf(RemoteServiceException.class)
+                    .isNotInstanceOf(PasarelaNoDisponibleException.class);
+        }
+        assertThat(pasarela.circuito().getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        assertThatThrownBy(() -> pasarela.procesar(TipoTransaccion.DEBITO, ORDEN))
+                .isInstanceOfSatisfying(PasarelaNoDisponibleException.class, e ->
+                        assertThat(e.getRemoteStatus()).isEqualTo(PasarelaResiliente.STATUS_NO_DISPONIBLE))
+                .hasMessageContaining("circuito abierto");
+        verify(gateway, times(2)).debitar(any());
+    }
+
+    @Test
+    void llamadaQueAgotaSusReintentos_cuentaComoUnaSolaFalla() {
+        pasarela = new PasarelaResiliente(gateway, 1_000, 3, 1, 4, 2, 50, 60_000, 1);
+        when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
+
+        assertThatThrownBy(() -> pasarela.procesar(TipoTransaccion.DEBITO, ORDEN))
+                .isInstanceOf(RemoteServiceException.class);
+
+        verify(gateway, times(3)).debitar(any());
+        assertThat(pasarela.circuito().getMetrics().getNumberOfFailedCalls()).isEqualTo(1);
+        assertThat(pasarela.circuito().getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
+    void rechazosDeLaPasarela_noAbrenElCircuito() {
+        pasarela = new PasarelaResiliente(gateway, 1_000, 1, 10, 4, 2, 50, 60_000, 1);
+        when(gateway.debitar(any())).thenReturn(new PaymentGateway.Resultado(false, "Fondos insuficientes"));
+
+        for (int i = 0; i < 5; i++) {
+            assertThat(pasarela.procesar(TipoTransaccion.DEBITO, ORDEN).aprobado()).isFalse();
+        }
+
+        assertThat(pasarela.circuito().getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+        verify(gateway, times(5)).debitar(any());
+    }
+
+    @Test
+    void pasadaLaEspera_pruebaYSiLaPasarelaRespondeSeCierra() throws InterruptedException {
+        pasarela = new PasarelaResiliente(gateway, 1_000, 1, 10, 4, 2, 50, 100, 1);
+        when(gateway.debitar(any()))
+                .thenThrow(new IllegalStateException("caída"))
+                .thenThrow(new IllegalStateException("caída"))
+                .thenReturn(APROBADO);
+        for (int i = 0; i < 2; i++) {
+            assertThatThrownBy(() -> pasarela.procesar(TipoTransaccion.DEBITO, ORDEN))
+                    .isInstanceOf(RemoteServiceException.class);
+        }
+        assertThat(pasarela.circuito().getState()).isEqualTo(CircuitBreaker.State.OPEN);
+
+        Thread.sleep(150);
+
+        assertThat(pasarela.procesar(TipoTransaccion.DEBITO, ORDEN).aprobado()).isTrue();
+        assertThat(pasarela.circuito().getState()).isEqualTo(CircuitBreaker.State.CLOSED);
+    }
+
+    @Test
+    void circuitoAbierto_tampocoLlamaParaAcreditar() {
+        pasarela = new PasarelaResiliente(gateway, 1_000, 1, 10);
+        pasarela.circuito().transitionToOpenState();
+
+        assertThatThrownBy(() -> pasarela.procesar(TipoTransaccion.CREDITO, ORDEN))
+                .isInstanceOf(PasarelaNoDisponibleException.class);
+        verify(gateway, never()).acreditar(any());
     }
 }
