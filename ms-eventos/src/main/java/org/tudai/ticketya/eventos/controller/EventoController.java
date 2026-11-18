@@ -2,7 +2,6 @@ package org.tudai.ticketya.eventos.controller;
 
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.modelmapper.ModelMapper;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.web.PageableDefault;
@@ -22,6 +21,7 @@ import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
+import org.tudai.ticketya.eventos.service.EventoBusquedaCache;
 import org.tudai.ticketya.eventos.service.EventoService;
 
 import java.util.Set;
@@ -35,8 +35,8 @@ public class EventoController {
     private static final int MAX_SIZE = 50;
 
     private final EventoService eventoService;
-    private final ModelMapper modelMapper;
     private final UserContext userContext;
+    private final EventoBusquedaCache eventoBusquedaCache;
 
     @GetMapping
     public PagedModel<EventoResumen> listarEventos(
@@ -45,8 +45,8 @@ public class EventoController {
             @PageableDefault(size = 20) Pageable pageable) {
 
         Pageable pageableValidado = ordenable(limitarSize(pageable));
-        return new PagedModel<>(eventoService.listarPublicados(filtro, pageableValidado)
-                .map(evento -> modelMapper.map(evento, EventoResumen.class)));
+        // Búsquedas cacheadas con TTL corto (TKY-83).
+        return new PagedModel<>(eventoBusquedaCache.buscar(filtro, pageableValidado).comoPage(pageableValidado));
     }
 
     @GetMapping("/{eventoId}")

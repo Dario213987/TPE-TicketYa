@@ -29,6 +29,7 @@ import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.domain.Evento;
 import org.tudai.ticketya.contract.eventos.model.EventoFiltroRequest;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
+import org.tudai.ticketya.eventos.service.EventoBusquedaCache;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -751,7 +752,8 @@ class EventoControllerTest {
     }
 
     private MockMvc mockMvc(Object... controllerAdvice) {
-        return MockMvcBuilders.standaloneSetup(new EventoController(eventoService, new ModelMapper(), userContext))
+        return MockMvcBuilders.standaloneSetup(new EventoController(eventoService, userContext,
+                new EventoBusquedaCache(eventoService, new ModelMapper())))
                 .setControllerAdvice(controllerAdvice)
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .addInterceptors(new AuthorizeInterceptor(userContext))

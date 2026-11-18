@@ -69,6 +69,34 @@ modifica:
 - **Límite conocido:** editar un **lugar o un sector** cambia el detalle de todos los eventos de
   ese lugar; no se invalidan uno por uno, así que la inconsistencia máxima es el TTL (5 min).
 
+### Búsquedas del listado (TKY-83)
+
+| | |
+|---|---|
+| **Endpoint** | `GET /api/eventos` (con o sin filtros) |
+| **Dato** | La página ya armada: lista de `EventoResumen` y total de resultados (nunca las entidades) |
+| **Dónde** | Redis `redis-eventos`, cache `evento-busqueda` (`RMapCache` de Redisson) |
+| **Clave** | Todos los filtros (`tipo`, `organizadorId`, `participante`, `participanteId`, `ciudad`, `desde`, `hasta`, `fechaDesde`, `fechaHasta`, `orden`) + página + tamaño + `sort` |
+| **TTL** | 30 s (`ticketya.cache.ttl.evento-busqueda`, variable `EVENTOS_CACHE_TTL_EVENTO_BUSQUEDA`) |
+| **Quién lo maneja** | `EventoBusquedaCache` (`@Cacheable`); `EventoController.listarEventos` lo usa |
+
+Dos búsquedas con los mismos parámetros comparten la entrada; cualquier diferencia (otro filtro,
+otra página, otro tamaño u otro orden) es otra entrada. Una búsqueda con filtros inválidos responde
+400 y no se guarda.
+
+**No se invalida: la inconsistencia máxima es el TTL (aceptado).** Publicar, cancelar, editar o
+suspender un evento no borra las búsquedas guardadas. Hasta 30 s después del cambio:
+
+- un evento recién **publicado** puede no aparecer en el listado;
+- un evento **cancelado** (o suspendido, finalizado) puede seguir apareciendo;
+- un cambio de nombre, fecha o ciudad puede verse con el valor anterior.
+
+Pasado el TTL, la siguiente búsqueda consulta la base y trae el dato actual. Se eligió así porque
+invalidar exigiría borrar todas las combinaciones de filtros y páginas en las que puede aparecer el
+evento, y con un TTL de 30 s no se justifica. El **detalle** del evento sí se invalida al instante
+(TKY-82): al entrar a un evento cancelado desde un listado desactualizado, se ve su estado real, y
+la compra la valida ms-tickets contra el estado actual.
+
 ## Redis caído
 
 La cache es una optimización: si Redis no está, `ms-eventos` sigue funcionando contra la base.
