@@ -8,7 +8,7 @@ info:
         
         Solo el rol ORGANIZADOR accede, y solo a sus propias transacciones: organizadorId es el X-User-Id.
         
-        Idempotencia: no puede haber dos transacciones con el mismo (ticketId, clienteId, organizadorId, estado).
+        Idempotencia: no puede haber dos transacciones con el mismo (ticketId, clienteId, organizadorId, tipo).
         Repetir una solicitud devuelve la transacción original sin volver a llamar al procesador de pagos.
         Repetirla con otro monto responde 409: la clave identifica un solo pedido.
         Si la original quedó PENDIENTE (el procesador no respondió), se vuelve a enviar con la misma

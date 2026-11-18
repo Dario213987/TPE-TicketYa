@@ -1,11 +1,20 @@
 <!DOCTYPE html>
 <html xmlns:th="http://www.thymeleaf.org">
-<head><meta charset="UTF-8" /><title>Notificación</title></head>
+<head th:replace="~{mail/fragments/layout :: head('Confirmación de compra')}"></head>
 <body>
-  <h2 th:text="${motivo}">MOTIVO</h2>
+  <h2>Confirmación de compra</h2>
   <p>Hola <span th:text="${usuarioNombre}">Usuario</span>,</p>
-  <p>Evento: <strong th:text="${eventoNombre}">Nombre</strong></p>
-  <p>Fecha: <span th:text="${eventoFecha}">Fecha</span></p>
-  <p>Lugar: <span th:text="${eventoLugar}">Lugar</span></p>
+  <p>Tu compra fue confirmada con el siguiente detalle:</p>
+  <ul>
+    <li>Evento: <strong th:text="${eventoNombre}">Nombre del evento</strong></li>
+    <li>Fecha: <span th:text="${eventoFecha}">Fecha</span></li>
+    <li>Lugar: <span th:text="${eventoLugar}">Lugar</span></li>
+    <li>Sector: <span th:text="${sectorNombre}">Sector</span></li>
+    <li>Asientos:
+      <span th:if="${esGeneral}">General x <span th:text="${cantidad}">0</span></span>
+      <span th:unless="${esGeneral}" th:text="${asientosTexto}">1-1</span>
+    </li>
+    <li th:if="${monto != null}">Monto: <span th:text="${monto}">0</span> <span th:text="${moneda}">ARS</span></li>
+  </ul>
 </body>
 </html>

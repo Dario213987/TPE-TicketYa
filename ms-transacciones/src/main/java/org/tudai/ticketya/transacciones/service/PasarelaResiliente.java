@@ -62,7 +62,7 @@ public class PasarelaResiliente {
 
     /** Para tests: circuito con los valores por defecto. */
     PasarelaResiliente(PaymentGateway gateway, long timeoutMs, int maxIntentos, long backoffInicialMs) {
-        this(gateway, timeoutMs, maxIntentos, backoffInicialMs, 10, 5, 50, 30_000, 3);
+        this(gateway, timeoutMs, maxIntentos, backoffInicialMs, 20, 5, 50, 30_000, 3);
     }
 
     @Autowired

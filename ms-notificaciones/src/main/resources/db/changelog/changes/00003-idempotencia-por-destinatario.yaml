@@ -1,0 +1,12 @@
+databaseChangeLog:
+  - changeSet:
+      id: 00003-idempotencia-por-destinatario
+      author: ticketya
+      changes:
+        - dropUniqueConstraint:
+            tableName: notificacion
+            constraintName: uk_notificacion_mensaje_id
+        - addUniqueConstraint:
+            tableName: notificacion
+            columnNames: mensaje_id, destinatario_id
+            constraintName: uk_notificacion_mensaje_destinatario

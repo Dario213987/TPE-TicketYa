@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+        http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-latest.xsd">
+
+    <changeSet id="00002-agregar-evento-id-devoluciones" author="TicketYa">
+        <addColumn tableName="devoluciones">
+            <column name="evento_id" type="bigint"/>
+        </addColumn>
+
+        <createIndex tableName="devoluciones" indexName="idx_devoluciones_evento">
+            <column name="evento_id"/>
+        </createIndex>
+    </changeSet>
+
+</databaseChangeLog>

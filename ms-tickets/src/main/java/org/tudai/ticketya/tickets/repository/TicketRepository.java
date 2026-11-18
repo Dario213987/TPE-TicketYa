@@ -6,6 +6,7 @@ import org.springframework.data.jpa.repository.EntityGraph;
 import jakarta.persistence.LockModeType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Lock;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -14,6 +15,7 @@ import org.tudai.ticketya.tickets.domain.Ticket;
 import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
@@ -34,6 +36,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
 
     List<Ticket> findByReserva_IdOrderByIdAsc(Long reservaId);
 
+    @Query("""
+            select t from Ticket t
+            join fetch t.evento
+            where t.codigo_qr = :codigoQr
+            """)
+    Optional<Ticket> buscarPorCodigoQr(@Param("codigoQr") String codigoQr);
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+            update Ticket t
+               set t.estadoTicket = :usado
+             where t.codigo_qr = :codigoQr
+               and t.evento.eventoId = :eventoId
+               and t.estadoTicket = :vendido
+            """)
+    int marcarComoUsado(@Param("codigoQr") String codigoQr,
+                        @Param("eventoId") Long eventoId,
+                        @Param("vendido") EstadoTicket vendido,
+                        @Param("usado") EstadoTicket usado);
+
     @EntityGraph(attributePaths = {"evento", "sector", "asiento"})
     Page<Ticket> findByClienteIdAndEstadoTicketIn(Long clienteId, Collection<EstadoTicket> estados,
                                                   Pageable pageable);
@@ -51,4 +73,26 @@ public interface TicketRepository extends JpaRepository<Ticket, Long> {
             """)
     List<Long> findEventosConReservasVencidas(@Param("estado") EstadoTicket estado,
                                               @Param("ahora") Instant ahora);
+
+    /**
+     * Devuelve los ids de usuario distintos que tienen al menos un ticket del evento
+     * en alguno de los estados indicados.
+     * <p>
+     * Excluye tickets sin {@code clienteId} y ordena los ids de menor a mayor para que
+     * la respuesta sea determinista. No valida la existencia del evento: si no hay
+     * tickets, devuelve una lista vacia.
+     *
+     * @param eventoId id del evento
+     * @param estados  estados de ticket que se consideran una compra
+     * @return ids de usuario distintos, ordenados ascendentemente
+     */
+    @Query("""
+            select distinct t.clienteId from Ticket t
+            where t.evento.eventoId = :eventoId
+              and t.clienteId is not null
+              and t.estadoTicket in :estados
+            order by t.clienteId asc
+            """)
+    List<Long> findClienteIdsDistintosPorEvento(@Param("eventoId") Long eventoId,
+                                                @Param("estados") Collection<EstadoTicket> estados);
 }
