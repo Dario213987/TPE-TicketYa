@@ -5,10 +5,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
-import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.dto.ResultadoAccesoDTO;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
+import org.tudai.ticketya.tickets.exception.CodigoRechazoAcceso;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
 
 import java.util.Objects;
@@ -45,16 +46,24 @@ public class AccesoService {
         }
 
         Ticket ticket = ticketRepository.buscarPorCodigoQr(qr)
-                .orElseThrow(() -> new NotFoundException("No existe un ticket con ese codigo QR"));
+                .orElseThrow(() -> new AccesoRechazadoException(
+                        CodigoRechazoAcceso.NO_EXISTE,
+                        "No existe un ticket con ese codigo QR"));
 
         if (!Objects.equals(ticket.getEvento().getEventoId(), eventoId)) {
-            throw new ConflictException("El ticket no pertenece al evento indicado");
+            throw new AccesoRechazadoException(
+                    CodigoRechazoAcceso.OTRO_EVENTO,
+                    "El ticket no pertenece al evento indicado");
         }
         if (ticket.getEstadoTicket() == EstadoTicket.USADO) {
-            throw new ConflictException("El ticket ya fue utilizado");
+            throw new AccesoRechazadoException(
+                    CodigoRechazoAcceso.YA_USADA,
+                    "El ticket ya fue utilizado");
         }
         if (ticket.getEstadoTicket() == EstadoTicket.DEVUELTO) {
-            throw new ConflictException("El ticket fue devuelto");
+            throw new AccesoRechazadoException(
+                    CodigoRechazoAcceso.DEVUELTA,
+                    "El ticket fue devuelto");
         }
         throw new ConflictException("El ticket no esta habilitado para ingresar (estado "
                 + ticket.getEstadoTicket() + ")");

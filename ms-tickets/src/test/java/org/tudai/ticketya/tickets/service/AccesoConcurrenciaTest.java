@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.tudai.ticketya.core.exception.ConflictException;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
@@ -90,7 +90,7 @@ class AccesoConcurrenciaTest {
                 try {
                     accesoService.validar(EVENTO_ID, codigoQrFirmado);
                     return true;
-                } catch (ConflictException e) {
+                } catch (AccesoRechazadoException e) {
                     return false;
                 }
             }));
