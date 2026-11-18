@@ -121,6 +121,18 @@ Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve
 
 El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
+## Log de operaciones críticas
+
+`OperationLogger` (`ticketya-core`) escribe una línea por operación crítica en el logger `ticketya.operations`, con la operación, el usuario, la entidad, su id, el resultado (`OK`, `FAILED` o `COMPENSATED`) y el motivo si no salió bien. Los mismos datos quedan como campos del JSON (`operation`, `userId`, `entity`, `entityId`, `result`, `reason`), así que en Grafana se puede filtrar por ellos: `{service="ms-tickets"} | json | operation="PURCHASE"`.
+
+| Operación | Dónde | Usuario / entidad | Resultados |
+|---|---|---|---|
+| `PURCHASE` | `PagoService` (ms-tickets): pago de una reserva y reconciliación de pagos pendientes | cliente / `Reserva` | `OK` entradas emitidas; `FAILED` pago rechazado o error (si no se pudo reintegrar lo cobrado, se aclara en el motivo); `COMPENSATED` se cobró, no se pudieron emitir las entradas y se reintegró. Un pago que queda `PENDIENTE_PAGO` no se registra hasta que se resuelve, y un reintento idempotente de una compra terminada tampoco. |
+| `REFUND` | `ReintegroMasivoService` (ms-devoluciones): reintegro por cancelación del evento, una línea por entrada | cliente / `Ticket` | `OK` acreditada; `FAILED` no se pudo acreditar (se reintenta) |
+| `REFUND` | `DevolucionService.rechazarDevolucion` (ms-devoluciones) | cliente / `Ticket` | `FAILED` con `rechazada: <motivo>` |
+| `EVENT_CANCEL` | `EventoController` (ms-eventos) | administrador / `Evento` | `OK` / `FAILED` |
+| `ACCESS` | `AccesoController` (ms-tickets) | personal de acceso / `Ticket` | `OK` / `FAILED` |
+
 ## Correlation id
 
 Cada operación lleva un id (`X-Correlation-Id`) que viaja por todos los servicios: el gateway lo genera si el cliente no lo manda (solo acepta `A-Z a-z 0-9 . _ -`, hasta 64 caracteres), lo devuelve en la respuesta y los servicios lo propagan en las llamadas Feign. Aparece en todas las líneas de log y en el campo `correlationId` de los errores.

@@ -13,6 +13,8 @@ import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
 import org.tudai.ticketya.contract.devoluciones.model.RechazarDevolucionRequest;
 import org.tudai.ticketya.contract.devoluciones.model.SolicitudDevolucionRequest;
+import org.tudai.ticketya.core.Operation;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.Role;
 import org.tudai.ticketya.core.UserContext;
 import org.tudai.ticketya.core.exception.BadRequestException;
@@ -262,6 +264,10 @@ public class DevolucionService {
         devolucion.setResueltaPor(userContext.userId());
         devolucion.setFechaResolucion(Instant.now(clock));
 
-        return devolucionRepository.saveAndFlush(devolucion);
+        Devolucion rechazada = devolucionRepository.saveAndFlush(devolucion);
+        // Log de operaciones (TKY-35): la devolución terminó sin reintegro.
+        OperationLogger.failed(Operation.REFUND, rechazada.getClienteId(), "Ticket", rechazada.getTicketId(),
+                "rechazada: " + rechazada.getMotivoRechazo());
+        return rechazada;
     }
 }

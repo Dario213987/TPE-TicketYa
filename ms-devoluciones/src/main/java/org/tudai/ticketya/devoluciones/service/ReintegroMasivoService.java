@@ -14,6 +14,8 @@ import org.tudai.ticketya.contract.transacciones.api.TransaccionesApiClient;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest;
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
+import org.tudai.ticketya.core.Operation;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.devoluciones.client.EntradaReintegroDTO;
 import org.tudai.ticketya.devoluciones.client.TicketClient;
 import org.tudai.ticketya.devoluciones.client.TransaccionesHeadersInterceptor;
@@ -39,6 +41,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class ReintegroMasivoService {
+
+    /** Entidad del log de operaciones críticas (TKY-35): el reintegro se registra por entrada. */
+    static final String ENTIDAD_REINTEGRO = "Ticket";
 
     static final String ORIGEN = "CANCELACION_EVENTO";
     private static final String MOTIVO = "Evento cancelado: reintegro automático";
@@ -143,7 +148,19 @@ public class ReintegroMasivoService {
         }
     }
 
+    /** Acredita una entrada y la registra en el log de operaciones (TKY-35): OK o FAILED. */
     private void reintegrar(Long eventoId, EntradaReintegroDTO entrada) {
+        try {
+            acreditar(eventoId, entrada);
+            OperationLogger.ok(Operation.REFUND, entrada.getClienteId(), ENTIDAD_REINTEGRO, entrada.getId());
+        } catch (RuntimeException e) {
+            OperationLogger.failed(Operation.REFUND, entrada.getClienteId(), ENTIDAD_REINTEGRO, entrada.getId(),
+                    e.getMessage());
+            throw e;
+        }
+    }
+
+    private void acreditar(Long eventoId, EntradaReintegroDTO entrada) {
         if (entrada.getClienteId() == null || entrada.getPrecio() == null
                 || entrada.getOrganizadorId() == null) {
             throw new IllegalStateException("La entrada " + entrada.getId()

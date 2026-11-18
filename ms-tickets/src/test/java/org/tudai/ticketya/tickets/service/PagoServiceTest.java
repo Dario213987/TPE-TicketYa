@@ -17,6 +17,7 @@ import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest;
 import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
@@ -61,6 +62,7 @@ class PagoServiceTest {
 
     private PagoService service;
     private ListAppender<ILoggingEvent> logs;
+    private ListAppender<ILoggingEvent> operaciones;
 
     @BeforeEach
     void setUp() {
@@ -69,11 +71,15 @@ class PagoServiceTest {
         logs = new ListAppender<>();
         logs.start();
         ((Logger) LoggerFactory.getLogger(PagoService.class)).addAppender(logs);
+        operaciones = new ListAppender<>();
+        operaciones.start();
+        ((Logger) LoggerFactory.getLogger(OperationLogger.LOGGER_NAME)).addAppender(operaciones);
     }
 
     @AfterEach
     void quitarAppender() {
         ((Logger) LoggerFactory.getLogger(PagoService.class)).detachAppender(logs);
+        ((Logger) LoggerFactory.getLogger(OperationLogger.LOGGER_NAME)).detachAppender(operaciones);
     }
 
     @Test
@@ -457,6 +463,178 @@ class PagoServiceTest {
         assertThat(service.reconciliar(RESERVA_ID)).isEqualTo(PagoService.Reconciliacion.EMITIDA);
 
         verify(reservaPagoService).emitir(RESERVA_ID, Map.of(1L, 11L));
+    }
+
+    // ---------- Log de operaciones críticas: PURCHASE (TKY-35) ----------
+
+    @Test
+    void operaciones_compraEmitida_registraOk() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenReturn(compra(EstadoPago.APROBADO));
+
+        service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago());
+
+        assertThat(lineas()).containsExactly("PURCHASE OK user=42 Reserva=99");
+        assertThat(operaciones.list.get(0).getMDCPropertyMap())
+                .containsEntry("operation", "PURCHASE").containsEntry("result", "OK");
+    }
+
+    @Test
+    void operaciones_reintentoDeUnaCompraTerminada_noRegistraOtraCompra() {
+        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
+                .thenReturn(new Preparacion(compra(EstadoPago.APROBADO), null, List.of()));
+
+        service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago());
+
+        assertThat(lineas()).isEmpty();
+    }
+
+    @Test
+    void operaciones_pagoRechazado_registraFailedConElMotivo() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.FALLIDA).motivoFallo("fondos insuficientes"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(PagoRechazadoException.class);
+
+        assertThat(lineas()).containsExactly("PURCHASE FAILED user=42 Reserva=99 reason=fondos insuficientes");
+    }
+
+    @Test
+    void operaciones_rechazoConReintegroPendiente_registraFailedAclarandolo() {
+        prepararCobros(new Cobro(1L, 1500.0), new Cobro(2L, 1500.0));
+        when(transaccionesClient.generarDebito(any()))
+                .thenReturn(transaccion(EstadoTransaccion.COMPLETA))
+                .thenReturn(transaccion(EstadoTransaccion.FALLIDA).motivoFallo("fondos insuficientes"));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.FALLIDA));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(PagoRechazadoException.class);
+
+        assertThat(lineas()).containsExactly(
+                "PURCHASE FAILED user=42 Reserva=99 reason=fondos insuficientes; el reintegro quedó pendiente");
+    }
+
+    @Test
+    void operaciones_fallaLaEmisionYSeReintegra_registraCompensated() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(ConflictException.class);
+
+        assertThat(lineas()).containsExactly(
+                "PURCHASE COMPENSATED user=42 Reserva=99 reason=" + PagoService.MOTIVO_FALLA_EMISION);
+    }
+
+    @Test
+    void operaciones_fallaLaEmisionYNoSePuedeReintegrar_registraFailed() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+        when(transaccionesClient.generarCredito(any())).thenThrow(new RemoteServiceException(503, "caído"));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(ConflictException.class);
+
+        assertThat(lineas()).containsExactly("PURCHASE FAILED user=42 Reserva=99 reason="
+                + PagoService.MOTIVO_FALLA_EMISION + "; el reintegro quedó pendiente");
+    }
+
+    @Test
+    void operaciones_pagoQueQuedaPendiente_noRegistraTodavia() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.PENDIENTE));
+        when(reservaPagoService.consultar(RESERVA_ID)).thenReturn(compra(EstadoPago.PENDIENTE_PAGO));
+
+        service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago());
+
+        assertThat(lineas()).isEmpty();
+    }
+
+    @Test
+    void operaciones_transaccionesRechazaElPedido_registraFailed() {
+        prepararCobros(new Cobro(1L, 1500.0));
+        when(transaccionesClient.generarDebito(any())).thenThrow(new ForbiddenException("el organizador no coincide"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(RemoteServiceException.class);
+
+        assertThat(lineas()).singleElement().asString()
+                .startsWith("PURCHASE FAILED user=42 Reserva=99 reason=")
+                .contains("el organizador no coincide");
+    }
+
+    @Test
+    void operaciones_errorAntesDeCobrar_registraFailedConElMensaje() {
+        when(reservaPagoService.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
+                .thenThrow(new ConflictException("La reserva 99 venció"));
+
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, CLAVE, pago()))
+                .isInstanceOf(ConflictException.class);
+
+        assertThat(lineas()).containsExactly("PURCHASE FAILED user=42 Reserva=99 reason=La reserva 99 venció");
+        verifyNoInteractions(transaccionesClient);
+    }
+
+    @Test
+    void operaciones_sinClaveDeIdempotencia_registraFailed() {
+        assertThatThrownBy(() -> service.pagar(RESERVA_ID, CLIENTE_ID, null, pago()))
+                .isInstanceOf(BadRequestException.class);
+
+        assertThat(lineas()).singleElement().asString().startsWith("PURCHASE FAILED user=42 Reserva=99 reason=");
+    }
+
+    @Test
+    void operaciones_reconciliacionQueEmite_registraOkDelCliente() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+
+        service.reconciliar(RESERVA_ID);
+
+        assertThat(lineas()).containsExactly("PURCHASE OK user=42 Reserva=99");
+    }
+
+    @Test
+    void operaciones_reconciliacionQueRechaza_registraFailed() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.FALLIDA).id(11L).clienteId(CLIENTE_ID).motivoFallo("tarjeta vencida"));
+
+        service.reconciliar(RESERVA_ID);
+
+        assertThat(lineas()).containsExactly("PURCHASE FAILED user=42 Reserva=99 reason=tarjeta vencida");
+    }
+
+    @Test
+    void operaciones_reconciliacionQueReintegra_registraCompensated() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.COMPLETA).id(11L).clienteId(CLIENTE_ID));
+        when(reservaPagoService.emitir(eq(RESERVA_ID), any())).thenThrow(new IllegalStateException("falla de base"));
+        when(transaccionesClient.generarCredito(any())).thenReturn(transaccion(EstadoTransaccion.COMPLETA));
+
+        service.reconciliar(RESERVA_ID);
+
+        assertThat(lineas()).containsExactly(
+                "PURCHASE COMPENSATED user=42 Reserva=99 reason=" + PagoService.MOTIVO_FALLA_EMISION);
+    }
+
+    @Test
+    void operaciones_reconciliacionQueSiguePendiente_noRegistra() {
+        pendienteDe(new Cobro(1L, 1500.0));
+        debitos(1L, transaccion(EstadoTransaccion.PENDIENTE).id(11L).clienteId(CLIENTE_ID));
+        when(transaccionesClient.generarDebito(any())).thenReturn(transaccion(EstadoTransaccion.PENDIENTE));
+
+        service.reconciliar(RESERVA_ID);
+
+        assertThat(lineas()).isEmpty();
+    }
+
+    private List<String> lineas() {
+        return operaciones.list.stream().map(ILoggingEvent::getFormattedMessage).toList();
     }
 
     private void pendienteDe(Cobro... cobros) {

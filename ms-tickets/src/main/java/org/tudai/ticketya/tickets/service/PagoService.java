@@ -13,6 +13,8 @@ import org.tudai.ticketya.contract.transacciones.model.GenerarTransaccionRequest
 import org.springframework.data.web.PagedModel;
 import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.TransaccionResponse;
+import org.tudai.ticketya.core.Operation;
+import org.tudai.ticketya.core.OperationLogger;
 import org.tudai.ticketya.core.exception.BadRequestException;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
@@ -47,6 +49,9 @@ public class PagoService {
     static final String MOTIVO_FALLA_EMISION = "no se pudieron emitir las entradas, se reintegró el pago";
     static final String MOTIVO_PAGO_NO_CONFIRMADO = "el pago no se confirmó en ms-transacciones";
     private static final int MAX_TRANSACCIONES_POR_TICKET = 100;
+    /** Entidad del log de operaciones críticas (TKY-35): la compra se registra por reserva. */
+    static final String ENTIDAD_COMPRA = "Reserva";
+    static final String REINTEGRO_PENDIENTE = "; el reintegro quedó pendiente";
     private static final ObjectMapper JSON = new ObjectMapper().findAndRegisterModules()
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
 
@@ -86,10 +91,15 @@ public class PagoService {
      */
     public CompraResponseDTO pagar(Long reservaId, Long clienteId, String idempotencyKey,
                                    PagoRequestDTO request) {
-        String clave = validarClave(idempotencyKey);
-
-        Preparacion preparacion = reservaPagoService.preparar(
-                reservaId, clienteId, clave, request.getMedioPago());
+        Preparacion preparacion;
+        try {
+            String clave = validarClave(idempotencyKey);
+            preparacion = reservaPagoService.preparar(reservaId, clienteId, clave, request.getMedioPago());
+        } catch (RuntimeException e) {
+            OperationLogger.failed(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId, e.getMessage());
+            throw e;
+        }
+        // Un reintento con la misma clave de un pago terminado no es una compra nueva: no se registra.
         if (preparacion.yaTerminada()) {
             return preparacion.compraExistente();
         }
@@ -110,8 +120,10 @@ public class PagoService {
                 log.error("Error de integración con ms-transacciones: reserva={} ticket={} ({}). "
                         + "La reserva queda PENDIENTE_PAGO, no se compensa", reservaId, cobro.ticketId(),
                         e.getMessage());
-                throw new RemoteServiceException(HttpStatus.BAD_GATEWAY.value(),
+                RemoteServiceException error = new RemoteServiceException(HttpStatus.BAD_GATEWAY.value(),
                         "ms-transacciones no aceptó el débito de la reserva " + reservaId + ": " + e.getMessage());
+                OperationLogger.failed(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId, error.getMessage());
+                throw error;
             }
 
             if (debito != null && debito.getEstado() == EstadoTransaccion.PENDIENTE) {
@@ -129,20 +141,25 @@ public class PagoService {
         }
 
         if (motivoRechazo != null) {
-            compensar(reservaId, preparacion.organizadorId(), clienteId, aprobados, EstadoPago.RECHAZADO,
-                    motivoRechazo);
+            EstadoPago estado = compensar(reservaId, preparacion.organizadorId(), clienteId, aprobados,
+                    EstadoPago.RECHAZADO, motivoRechazo);
+            registrarRechazo(reservaId, clienteId, estado, motivoRechazo);
             throw new PagoRechazadoException(motivoRechazo);
         }
 
+        CompraResponseDTO compra;
         try {
-            return reservaPagoService.emitir(reservaId, transacciones);
+            compra = reservaPagoService.emitir(reservaId, transacciones);
         } catch (RuntimeException e) {
             log.error("Falló la emisión de la reserva {} con el pago aprobado: {}", reservaId, e.getMessage(), e);
-            compensar(reservaId, preparacion.organizadorId(), clienteId, aprobados, EstadoPago.REINTEGRADO,
-                    MOTIVO_FALLA_EMISION);
+            EstadoPago estado = compensar(reservaId, preparacion.organizadorId(), clienteId, aprobados,
+                    EstadoPago.REINTEGRADO, MOTIVO_FALLA_EMISION);
+            registrarReintegro(reservaId, clienteId, estado);
             throw new ConflictException("No se pudieron emitir las entradas de la reserva " + reservaId
                     + "; se reintegró el pago");
         }
+        OperationLogger.ok(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId);
+        return compra;
     }
 
     /**
@@ -193,20 +210,23 @@ public class PagoService {
         if (motivoRechazo != null || sinDebito) {
             String motivo = motivoRechazo != null ? motivoRechazo : MOTIVO_PAGO_NO_CONFIRMADO;
             log.warn("Reconciliación: reserva={} el pago no se completó ({}); se compensa", reservaId, motivo);
-            compensar(reservaId, pendiente.organizadorId(), pendiente.clienteId(), aprobados,
+            EstadoPago estado = compensar(reservaId, pendiente.organizadorId(), pendiente.clienteId(), aprobados,
                     EstadoPago.RECHAZADO, motivo);
+            registrarRechazo(reservaId, pendiente.clienteId(), estado, motivo);
             return Reconciliacion.RECHAZADA;
         }
 
         try {
             reservaPagoService.emitir(reservaId, transacciones);
             log.warn("Reconciliación: reserva={} con todos los débitos aprobados; entradas emitidas", reservaId);
+            OperationLogger.ok(Operation.PURCHASE, pendiente.clienteId(), ENTIDAD_COMPRA, reservaId);
             return Reconciliacion.EMITIDA;
         } catch (RuntimeException e) {
             log.error("Reconciliación: falló la emisión de la reserva {} con el pago aprobado: {}",
                     reservaId, e.getMessage(), e);
-            compensar(reservaId, pendiente.organizadorId(), pendiente.clienteId(), aprobados,
+            EstadoPago estado = compensar(reservaId, pendiente.organizadorId(), pendiente.clienteId(), aprobados,
                     EstadoPago.REINTEGRADO, MOTIVO_FALLA_EMISION);
+            registrarReintegro(reservaId, pendiente.clienteId(), estado);
             return Reconciliacion.REINTEGRADA;
         }
     }
@@ -232,8 +252,10 @@ public class PagoService {
     /**
      * Reintegra (crédito) cada débito aprobado y libera la reserva. Si algún reintegro falla,
      * la reserva queda REINTEGRO_PENDIENTE para resolverlo a mano.
+     *
+     * @return el estado final de la reserva
      */
-    private void compensar(Long reservaId, Long organizadorId, Long clienteId, List<Cobro> aprobados,
+    private EstadoPago compensar(Long reservaId, Long organizadorId, Long clienteId, List<Cobro> aprobados,
                            EstadoPago estadoSiReintegra, String motivo) {
         boolean reintegroCompleto = true;
         for (Cobro cobro : aprobados) {
@@ -258,6 +280,27 @@ public class PagoService {
         EstadoPago estadoFinal = reintegroCompleto ? estadoSiReintegra : EstadoPago.REINTEGRO_PENDIENTE;
         reservaPagoService.liberar(reservaId, estadoFinal, motivo);
         log.warn("Compensación: reserva={} liberada, estado {}. Motivo: {}", reservaId, estadoFinal, motivo);
+        return estadoFinal;
+    }
+
+    /** Log de operaciones (TKY-35): pago rechazado; si no se pudo reintegrar lo cobrado, se aclara. */
+    private void registrarRechazo(Long reservaId, Long clienteId, EstadoPago estado, String motivo) {
+        String razon = estado == EstadoPago.REINTEGRO_PENDIENTE ? motivo + REINTEGRO_PENDIENTE : motivo;
+        OperationLogger.failed(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId, razon);
+    }
+
+    /**
+     * Log de operaciones (TKY-35): se cobró pero no se pudieron emitir las entradas. Si se reintegró
+     * todo queda COMPENSATED; si el reintegro quedó pendiente, FAILED.
+     */
+    private void registrarReintegro(Long reservaId, Long clienteId, EstadoPago estado) {
+        if (estado == EstadoPago.REINTEGRO_PENDIENTE) {
+            OperationLogger.failed(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId,
+                    MOTIVO_FALLA_EMISION + REINTEGRO_PENDIENTE);
+        } else {
+            OperationLogger.compensated(Operation.PURCHASE, clienteId, ENTIDAD_COMPRA, reservaId,
+                    MOTIVO_FALLA_EMISION);
+        }
     }
 
     private TransaccionResponse transaccion(Long organizadorId, Long clienteId, Cobro cobro, boolean debito) {
