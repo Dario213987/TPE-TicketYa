@@ -186,22 +186,16 @@ components:
           format: int64
         motivo:
           type: string
-<<<<<<< HEAD
           maxLength: 255
-=======
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     RechazarDevolucionRequest:
       type: object
       required: [motivo]
       properties:
         motivo:
           type: string
-<<<<<<< HEAD
           minLength: 1
           maxLength: 255
           pattern: '.*\S.*'
-=======
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     DevolucionResponse:
       type: object
       required: [id, clienteId, ticketId, fecha, estado]

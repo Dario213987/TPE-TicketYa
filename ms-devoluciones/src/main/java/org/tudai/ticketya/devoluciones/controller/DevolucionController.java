@@ -72,14 +72,7 @@ public class DevolucionController {
         return toResponseDTO(devolucionService.findByTicketId(ticketId));
     }
 
-<<<<<<< HEAD
     @PostMapping("/{id}/rechazar")
-=======
-    @RequestMapping(
-            value = {"/{id}/rechazar"},
-            method = {RequestMethod.POST, RequestMethod.PATCH, RequestMethod.PUT}
-    )
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     @ResponseStatus(HttpStatus.OK)
     @Authorize("hasRole('ADMINISTRADOR')")
     public DevolucionResponse rechazarDevolucion(

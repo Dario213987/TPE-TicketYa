@@ -228,10 +228,7 @@ public class DevolucionService {
         return devolucion;
     }
 
-<<<<<<< HEAD
     @Transactional
-=======
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     public Devolucion rechazarDevolucion(Long id, RechazarDevolucionRequest request) {
         if (request == null || request.getMotivo() == null || request.getMotivo().trim().isEmpty()) {
             throw new BadRequestException("El motivo de rechazo es obligatorio");
@@ -239,16 +236,12 @@ public class DevolucionService {
         return rechazarDevolucion(id, request.getMotivo().trim());
     }
 
-<<<<<<< HEAD
     @Transactional
-=======
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     public Devolucion rechazarDevolucion(Long id, String motivo) {
         if (motivo == null || motivo.trim().isEmpty()) {
             throw new BadRequestException("El motivo de rechazo es obligatorio");
         }
 
-<<<<<<< HEAD
         if (motivo.length() > 255) {
             throw new BadRequestException("El motivo no puede superar los 255 caracteres");
         }
@@ -258,13 +251,6 @@ public class DevolucionService {
         }
 
         Devolucion devolucion = devolucionRepository.findByIdForUpdate(id)
-=======
-        if (userContext.isPresent() && userContext.role() != Role.ADMINISTRADOR) {
-            throw new ForbiddenException("No tenés permisos para realizar esta operación.");
-        }
-
-        Devolucion devolucion = devolucionRepository.findById(id)
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
                 .orElseThrow(() -> new NotFoundException("La devolución " + id + " no existe"));
 
         if (devolucion.getEstado() != EstadoDevolucion.PENDIENTE) {
@@ -272,20 +258,10 @@ public class DevolucionService {
         }
 
         devolucion.setEstado(EstadoDevolucion.DENEGADA);
-<<<<<<< HEAD
         devolucion.setMotivoRechazo(motivo.trim());
         devolucion.setResueltaPor(userContext.userId());
         devolucion.setFechaResolucion(Instant.now(clock));
 
         return devolucionRepository.saveAndFlush(devolucion);
-=======
-        devolucion.setMotivo(motivo.trim());
-
-        try {
-            return devolucionRepository.saveAndFlush(devolucion);
-        } catch (DataIntegrityViolationException e) {
-            throw new ConflictException("Ya existe una devolución en estado DENEGADA para este ticket");
-        }
->>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     }
 }
