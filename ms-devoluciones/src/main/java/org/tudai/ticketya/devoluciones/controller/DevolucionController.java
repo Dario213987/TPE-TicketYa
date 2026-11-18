@@ -14,6 +14,7 @@ import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestMethod;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
@@ -71,7 +72,14 @@ public class DevolucionController {
         return toResponseDTO(devolucionService.findByTicketId(ticketId));
     }
 
+<<<<<<< HEAD
     @PostMapping("/{id}/rechazar")
+=======
+    @RequestMapping(
+            value = {"/{id}/rechazar"},
+            method = {RequestMethod.POST, RequestMethod.PATCH, RequestMethod.PUT}
+    )
+>>>>>>> d325a89be31bcf8324ba8d614145ed5d17e96a66
     @ResponseStatus(HttpStatus.OK)
     @Authorize("hasRole('ADMINISTRADOR')")
     public DevolucionResponse rechazarDevolucion(
