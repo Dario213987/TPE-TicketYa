@@ -26,6 +26,10 @@ public interface DevolucionRepository extends JpaRepository<Devolucion, Long>, J
     Page<Devolucion> findAllByClienteId(Long clienteId, Pageable pageable);
     Page<Devolucion> findAllByClienteIdAndEstado(Long clienteId, EstadoDevolucion estado, Pageable pageable);
 
+    boolean existsByTicketIdAndOrigen(Long ticketId, String origen);
+
+    @Query("select distinct d.clienteId from Devolucion d where d.eventoId = :eventoId and d.origen = :origen")
+    List<Long> findClientesReintegrados(@Param("eventoId") Long eventoId, @Param("origen") String origen);
     @Lock(LockModeType.PESSIMISTIC_WRITE)
     @Query("select d from Devolucion d where d.id = :id")
     Optional<Devolucion> findByIdForUpdate(@Param("id") Long id);
