@@ -105,7 +105,7 @@ En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargad
 
 Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
 
-El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID, errores 5xx por servicio, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
+El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
 ## Correlation id
 

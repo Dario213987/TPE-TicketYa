@@ -36,12 +36,12 @@
     {
       "id": 1,
       "type": "timeseries",
-      "title": "Errores 5xx por servicio",
-      "description": "Cantidad de requests con status >= 500 en cada intervalo (logger ticketya.http).",
+      "title": "Tasa de errores 5xx por servicio",
+      "description": "Porcentaje de requests con status >= 500 sobre el total de requests del intervalo (logger ticketya.http), filtrado por servicio y correlation ID.",
       "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "loki", "uid": "loki" },
       "fieldConfig": {
-        "defaults": { "unit": "short", "min": 0, "custom": { "drawStyle": "bars", "fillOpacity": 60 } },
+        "defaults": { "unit": "percent", "min": 0, "max": 100, "custom": { "drawStyle": "bars", "fillOpacity": 60 } },
         "overrides": []
       },
       "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } },
@@ -49,7 +49,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "sum by (service) (count_over_time({service=~\"$service\"} | json | logger=\"ticketya.http\" | status >= 500 [$__auto]))",
+          "expr": "sum by (service) (count_over_time({service=~\"$service\"} |= \"$correlationId\" | json | logger=\"ticketya.http\" | status >= 500 [$__auto])) / sum by (service) (count_over_time({service=~\"$service\"} |= \"$correlationId\" | json | logger=\"ticketya.http\" [$__auto])) * 100",
           "legendFormat": "{{service}}"
         }
       ]
@@ -58,7 +58,7 @@
       "id": 2,
       "type": "timeseries",
       "title": "Latencia p95 por endpoint",
-      "description": "Percentil 95 de durationMs por servicio, método y path (logger ticketya.http).",
+      "description": "Percentil 95 de durationMs por servicio, método y path (logger ticketya.http), filtrado por servicio y correlation ID.",
       "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
       "datasource": { "type": "loki", "uid": "loki" },
       "fieldConfig": {
@@ -70,7 +70,7 @@
         {
           "refId": "A",
           "datasource": { "type": "loki", "uid": "loki" },
-          "expr": "quantile_over_time(0.95, {service=~\"$service\"} | json | logger=\"ticketya.http\" | unwrap durationMs | __error__=\"\" [$__auto]) by (service, method, path)",
+          "expr": "quantile_over_time(0.95, {service=~\"$service\"} |= \"$correlationId\" | json | logger=\"ticketya.http\" | unwrap durationMs | __error__=\"\" [$__auto]) by (service, method, path)",
           "legendFormat": "{{service}} {{method}} {{path}}"
         }
       ]
