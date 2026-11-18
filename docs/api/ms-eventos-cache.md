@@ -2,7 +2,8 @@
 
 Capa de cache de `ms-eventos` sobre Redis con [Redisson](https://redisson.org/) (TKY-81). Qué se
 cachea y cómo se invalida lo definen TKY-82 (detalle de evento) y TKY-83 (búsquedas); qué **no**
-se cachea, TKY-84.
+se cachea y por qué (disponibilidad, reservas, estado de pago y tickets), TKY-84:
+[Qué NO se cachea](../cache-que-no-se-cachea.md).
 
 ## Infraestructura
 
