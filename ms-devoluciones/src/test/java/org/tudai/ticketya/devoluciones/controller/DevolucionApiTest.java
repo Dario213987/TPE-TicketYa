@@ -23,8 +23,10 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.hasSize;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.Mockito.when;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -68,6 +70,30 @@ class DevolucionApiTest {
             builder.header("X-User-Role", role);
         }
         return builder;
+    }
+
+    private MockHttpServletRequestBuilder getWithUser(String uri, Long userId, String role) {
+        var builder = get(uri)
+                .accept(MediaType.APPLICATION_JSON);
+        if (userId != null) {
+            builder.header("X-User-Id", userId);
+        }
+        if (role != null) {
+            builder.header("X-User-Role", role);
+        }
+        return builder;
+    }
+
+    private Devolucion persistirDevolucion(Long clienteId, Long ticketId, Long eventoId, EstadoDevolucion estado) {
+        Devolucion d = Devolucion.builder()
+                .clienteId(clienteId)
+                .ticketId(ticketId)
+                .eventoId(eventoId)
+                .fecha(Instant.now())
+                .estado(estado)
+                .motivo("Motivo de prueba")
+                .build();
+        return devolucionRepository.save(d);
     }
 
     private TicketDTO ticketValido(Long ticketId, Long clienteId, String estado) {
@@ -242,5 +268,90 @@ class DevolucionApiTest {
 
         mvc.perform(postWithUser("/api/devoluciones", 10L, "CLIENTE", req))
                 .andExpect(status().isBadRequest());
+    }
+
+    // ==========================================
+    // Tests de Listado (TKY-66 & US-06.02)
+    // ==========================================
+
+    @Test
+    @DisplayName("GET /api/devoluciones con rol ADMINISTRADOR -> 200 OK y lista todas las solicitudes")
+    void listarDevoluciones_administrador_listaTodas() throws Exception {
+        persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+        persistirDevolucion(20L, 102L, 1L, EstadoDevolucion.APROBADA);
+        persistirDevolucion(30L, 103L, 2L, EstadoDevolucion.DENEGADA);
+
+        mvc.perform(getWithUser("/api/devoluciones", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(3)))
+                .andExpect(jsonPath("$.page.totalElements").value(3));
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con rol CLIENTE -> 200 OK y solo ve sus propias solicitudes")
+    void listarDevoluciones_cliente_soloVeLoSuyo() throws Exception {
+        persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+        persistirDevolucion(10L, 102L, 2L, EstadoDevolucion.APROBADA);
+        persistirDevolucion(20L, 103L, 1L, EstadoDevolucion.PENDIENTE); // de otro cliente
+
+        mvc.perform(getWithUser("/api/devoluciones", 10L, "CLIENTE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].clienteId").value(10))
+                .andExpect(jsonPath("$.content[1].clienteId").value(10))
+                .andExpect(jsonPath("$.page.totalElements").value(2));
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con rol CLIENTE pasando clienteId ajeno -> 403 Forbidden")
+    void listarDevoluciones_clienteConClienteIdAjeno_responde403() throws Exception {
+        persistirDevolucion(20L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+
+        mvc.perform(getWithUser("/api/devoluciones?clienteId=20", 10L, "CLIENTE"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con rol ORGANIZADOR -> 403 Forbidden")
+    void listarDevoluciones_rolOrganizador_responde403() throws Exception {
+        mvc.perform(getWithUser("/api/devoluciones", 10L, "ORGANIZADOR"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con filtro por estado -> 200 OK solo devuelve el estado solicitado")
+    void listarDevoluciones_filtroPorEstado_filtraCorrectamente() throws Exception {
+        persistirDevolucion(10L, 101L, 1L, EstadoDevolucion.PENDIENTE);
+        persistirDevolucion(10L, 102L, 1L, EstadoDevolucion.APROBADA);
+        persistirDevolucion(20L, 103L, 2L, EstadoDevolucion.PENDIENTE);
+
+        mvc.perform(getWithUser("/api/devoluciones?estado=PENDIENTE", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].estado").value("PENDIENTE"))
+                .andExpect(jsonPath("$.content[1].estado").value("PENDIENTE"))
+                .andExpect(jsonPath("$.page.totalElements").value(2));
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con sort inválido -> 400 Bad Request")
+    void listarDevoluciones_sortInvalido_responde400() throws Exception {
+        mvc.perform(getWithUser("/api/devoluciones?sort=campoInexistente,desc", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    @DisplayName("GET /api/devoluciones con filtro por eventoId (US-06.02) -> 200 OK filtra por evento")
+    void listarDevoluciones_filtroPorEventoId_filtraCorrectamente() throws Exception {
+        persistirDevolucion(10L, 101L, 42L, EstadoDevolucion.PENDIENTE);
+        persistirDevolucion(10L, 102L, 99L, EstadoDevolucion.PENDIENTE);
+        persistirDevolucion(20L, 103L, 42L, EstadoDevolucion.APROBADA);
+
+        mvc.perform(getWithUser("/api/devoluciones?eventoId=42", 1L, "ADMINISTRADOR"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].eventoId").value(42))
+                .andExpect(jsonPath("$.content[1].eventoId").value(42))
+                .andExpect(jsonPath("$.page.totalElements").value(2));
     }
 }

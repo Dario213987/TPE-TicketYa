@@ -1,11 +1,13 @@
 package org.tudai.ticketya.devoluciones.service;
 
+import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
 import lombok.Setter;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.devoluciones.model.EstadoDevolucion;
@@ -125,6 +127,7 @@ public class DevolucionService {
         Devolucion devolucion = Devolucion.builder()
                 .clienteId(clienteId)
                 .ticketId(ticket.getId())
+                .eventoId(ticket.getEventoId())
                 .fecha(Instant.now(clock))
                 .estado(EstadoDevolucion.PENDIENTE)
                 .motivo(request.getMotivo())
@@ -172,7 +175,7 @@ public class DevolucionService {
     }
 
     @Transactional(readOnly = true)
-    public Page<Devolucion> listarDevoluciones(EstadoDevolucion estado, Long clienteId, Pageable pageable) {
+    public Page<Devolucion> listarDevoluciones(EstadoDevolucion estado, Long clienteId, Long eventoId, Pageable pageable) {
         Role role = userContext.role();
         if (role == Role.CLIENTE) {
             Long authenticatedClientId = userContext.userId();
@@ -184,19 +187,22 @@ public class DevolucionService {
             throw new ForbiddenException("No tenés permisos para realizar esta operación.");
         }
 
-        if (clienteId != null) {
-            if (estado != null) {
-                return devolucionRepository.findAllByClienteIdAndEstado(clienteId, estado, pageable);
-            } else {
-                return devolucionRepository.findAllByClienteId(clienteId, pageable);
+        final Long finalClienteId = clienteId;
+        Specification<Devolucion> spec = (root, query, cb) -> {
+            java.util.List<Predicate> predicates = new java.util.ArrayList<>();
+            if (finalClienteId != null) {
+                predicates.add(cb.equal(root.get("clienteId"), finalClienteId));
             }
-        } else {
             if (estado != null) {
-                return devolucionRepository.findAllByEstado(estado, pageable);
-            } else {
-                return devolucionRepository.findAll(pageable);
+                predicates.add(cb.equal(root.get("estado"), estado));
             }
-        }
+            if (eventoId != null) {
+                predicates.add(cb.equal(root.get("eventoId"), eventoId));
+            }
+            return cb.and(predicates.toArray(new Predicate[0]));
+        };
+
+        return devolucionRepository.findAll(spec, pageable);
     }
 
     @Transactional(readOnly = true)

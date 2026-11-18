@@ -54,6 +54,12 @@ paths:
           schema:
             type: integer
             format: int64
+        - name: eventoId
+          in: query
+          required: false
+          schema:
+            type: integer
+            format: int64
         - $ref: '#/components/parameters/Page'
         - $ref: '#/components/parameters/Size'
         - $ref: '#/components/parameters/Sort'
@@ -161,6 +167,10 @@ components:
         ticketId:
           type: integer
           format: int64
+        eventoId:
+          type: integer
+          format: int64
+          nullable: true
         fecha:
           type: string
           format: date-time

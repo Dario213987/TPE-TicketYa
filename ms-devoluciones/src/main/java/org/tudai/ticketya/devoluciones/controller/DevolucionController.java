@@ -9,6 +9,8 @@ import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PageableDefault;
 import org.springframework.data.web.PagedModel;
 import org.springframework.http.HttpStatus;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -32,7 +34,7 @@ import java.util.Set;
 public class DevolucionController {
 
     private static final Set<String> ORDENABLES = Set.of(
-            "id", "fecha", "estado", "ticketId", "clienteId", "creadoEl", "actualizadoEl"
+            "id", "fecha", "estado", "ticketId", "clienteId", "eventoId", "creadoEl", "actualizadoEl"
     );
 
     private final DevolucionService devolucionService;
@@ -51,8 +53,9 @@ public class DevolucionController {
     public PagedModel<DevolucionResponse> listarDevoluciones(
             @RequestParam(required = false) EstadoDevolucion estado,
             @RequestParam(required = false) Long clienteId,
+            @RequestParam(required = false) Long eventoId,
             @PageableDefault(sort = {"id"}, direction = Sort.Direction.DESC) Pageable pageable) {
-        return toPage(devolucionService.listarDevoluciones(estado, clienteId, ordenable(pageable)));
+        return toPage(devolucionService.listarDevoluciones(estado, clienteId, eventoId, ordenable(pageable)));
     }
 
     @GetMapping("/{id}")
