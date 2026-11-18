@@ -14,7 +14,7 @@ posterior falla.
 |---|---|---|
 | 1. Preparar | `ReservaPagoService.preparar` (transacción) | Valida la reserva, la clave y los precios. Pasa la reserva y sus tickets a `PENDIENTE_PAGO`. |
 | 2. Cobrar | `PagoService` (sin transacción) | Un débito por ticket en ms-transacciones, a nombre del organizador. |
-| 3. Emitir | `ReservaPagoService.emitir` (transacción) | Tickets y asientos a `VENDIDO`, reserva a `APROBADO` y registro de la venta con sus ítems (TKY-62). |
+| 3. Emitir | `ReservaPagoService.emitir` (transacción) | Tickets y asientos a `VENDIDO`, reserva a `APROBADO`, registro de la venta con sus ítems (TKY-62) y evento `CompraConfirmadaNotificacionEvent` para `ms-notificaciones`. |
 | Compensar | `PagoService.compensar` + `ReservaPagoService.liberar` | Crédito por cada débito aprobado y liberación de los lugares. |
 
 ## Estados de la reserva (`reservas.estado_pago`)
@@ -48,6 +48,10 @@ posterior falla.
 Un reintento con la misma `Idempotency-Key` sobre un estado final devuelve el mismo resultado
 sin volver a cobrar. Un reintento sobre `PENDIENTE_PAGO` conserva el medio de pago del primer
 intento.
+
+La transición a `APROBADO` dispara la notificación de compra por Rabbit (`AFTER_COMMIT`). El
+`mensajeId` se deriva de `reservaId` (`MST-RESERVA-{id}`), por lo que un hook repetido no genera
+otra notificación.
 
 Un 4xx de ms-transacciones (headers, monto u organizador inválidos) no es un rechazo del pago:
 se reintenta con la misma clave cuando se corrige la integración.

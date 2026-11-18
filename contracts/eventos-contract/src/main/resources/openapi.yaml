@@ -69,10 +69,10 @@ paths:
       operationId: obtenerEvento
       summary: Devuelve el detalle de un evento
       description: |
-        Endpoint público. Devuelve el detalle de un evento con su lugar, participantes,
-        sectores y precios. Los eventos en BORRADOR solo los puede ver su organizador o un
-        administrador; para el resto responde 404. La disponibilidad por sector no forma
-        parte del detalle: se consulta en GET /api/eventos/{eventoId}/disponibilidad.
+        Endpoint público. Devuelve el detalle de un evento con su lugar (incluida la ciudad),
+        participantes (id y nombre), sectores y precios. Los eventos en BORRADOR solo los puede
+        ver su organizador o un administrador; para el resto responde 404. La disponibilidad
+        por sector no forma parte del detalle: se consulta en GET /api/eventos/{eventoId}/disponibilidad.
       parameters:
         - $ref: '#/components/parameters/EventoId'
       responses:
@@ -612,6 +612,13 @@ components:
         altaDemanda:
           type: boolean
           description: Indica que el evento usa fila virtual por alta demanda.
+        ciudad:
+          type: string
+          description: Ciudad del lugar del evento.
+        participanteIds:
+          type: array
+          items: { type: integer, format: int64 }
+          description: Ids de los participantes/artistas del evento.
     EventoUpdateRequest:
       type: object
       description: |

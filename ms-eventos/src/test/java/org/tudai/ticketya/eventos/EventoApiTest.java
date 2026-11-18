@@ -28,6 +28,7 @@ import java.time.LocalDateTime;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsInAnyOrder;
+import static org.hamcrest.Matchers.hasSize;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.mock;
@@ -180,7 +181,9 @@ class EventoApiTest {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(2))
                 .andExpect(jsonPath("$.content[*].estado",
-                        containsInAnyOrder("PUBLICADO", "AGOTADO")));
+                        containsInAnyOrder("PUBLICADO", "AGOTADO")))
+                .andExpect(jsonPath("$.content[0].ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.content[0].participanteIds", hasSize(0)));
     }
 
     @Test
@@ -217,7 +220,9 @@ class EventoApiTest {
         mvc.perform(get("/api/eventos").param("participante", "CAFE TACVBA"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.page.totalElements").value(1))
-                .andExpect(jsonPath("$.content[0].nombre").value("Festival Cafe"));
+                .andExpect(jsonPath("$.content[0].nombre").value("Festival Cafe"))
+                .andExpect(jsonPath("$.content[0].ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.content[0].participanteIds", hasSize(2)));
     }
 
     @Test
@@ -353,7 +358,9 @@ class EventoApiTest {
 
     @Test
     void obtenerEvento_publicado_devuelveElDetalleSinAutenticacion() throws Exception {
-        Evento evento = guardarEvento(EstadoEvento.PUBLICADO, 7L);
+        Participante participante = Participante.builder().nombre("La Renga").build();
+        Evento evento = guardarEvento("Evento de integración", TipoEvento.RECITAL,
+                EstadoEvento.PUBLICADO, 7L, lugar, LocalDateTime.now().plusDays(10), participante);
 
         mvc.perform(get("/api/eventos/{id}", evento.getId()))
                 .andExpect(status().isOk())
@@ -362,6 +369,8 @@ class EventoApiTest {
                 .andExpect(jsonPath("$.estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.organizadorId").value(7))
                 .andExpect(jsonPath("$.lugar.ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.participantes[0].id").value(participante.getId()))
+                .andExpect(jsonPath("$.participantes[0].nombre").value("La Renga"))
                 .andExpect(jsonPath("$.sectores").isEmpty());
     }
 

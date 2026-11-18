@@ -5,6 +5,7 @@ import org.modelmapper.config.Configuration;
 import org.modelmapper.convention.MatchingStrategies;
 import org.springframework.context.annotation.Bean;
 import org.tudai.ticketya.contract.eventos.model.EventoResponse;
+import org.tudai.ticketya.contract.eventos.model.EventoResumen;
 import org.tudai.ticketya.contract.eventos.model.LugarCreateRequest;
 import org.tudai.ticketya.contract.eventos.model.LugarDetalleResponse;
 import org.tudai.ticketya.contract.eventos.model.LugarResponse;
@@ -21,6 +22,7 @@ import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.domain.Ubicacion;
 
 import java.util.Comparator;
+import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.stream.Collectors;
@@ -87,6 +89,29 @@ public class ModelMapperConfig {
                             .toList());
                     destination.setPreciosSectores(source.getPreciosSectores().entrySet().stream()
                             .collect(Collectors.toMap(entry -> entry.getKey().toString(), Map.Entry::getValue)));
+                    return destination;
+                });
+
+        modelMapper.createTypeMap(Evento.class, EventoResumen.class)
+                .setConverter(context -> {
+                    Evento source = context.getSource();
+                    EventoResumen destination = new EventoResumen();
+                    destination.setId(source.getId());
+                    destination.setNombre(source.getNombre());
+                    destination.setTipo(source.getTipo());
+                    destination.setFecha(source.getFecha());
+                    destination.setEstado(source.getEstado());
+                    destination.setAltaDemanda(source.isAltaDemanda());
+                    destination.setCiudad(source.getLugar() == null
+                            ? null
+                            : source.getLugar().getCiudad());
+                    destination.setParticipanteIds(source.getParticipantes() == null
+                            ? List.of()
+                            : source.getParticipantes().stream()
+                                    .map(Participante::getId)
+                                    .filter(Objects::nonNull)
+                                    .sorted()
+                                    .toList());
                     return destination;
                 });
 
