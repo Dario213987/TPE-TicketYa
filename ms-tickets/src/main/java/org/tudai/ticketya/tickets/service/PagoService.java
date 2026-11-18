@@ -14,6 +14,7 @@ import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
+import org.tudai.ticketya.tickets.client.ReintentoTransacciones;
 import org.tudai.ticketya.tickets.client.TransaccionesHeadersInterceptor;
 import org.tudai.ticketya.tickets.domain.EstadoPago;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
@@ -42,6 +43,7 @@ public class PagoService {
 
     private final ReservaPagoService reservaPagoService;
     private final TransaccionesApiClient transaccionesClient;
+    private final ReintentoTransacciones reintento;
 
     /**
      * Paga una reserva vigente y emite sus entradas.
@@ -49,7 +51,8 @@ public class PagoService {
      *   <li>Todos los débitos aprobados: emite los tickets VENDIDO y devuelve la compra APROBADO.</li>
      *   <li>Algún débito FALLIDA (rechazado por el procesador): reintegra los aprobados, libera
      *       la reserva y lanza {@link PagoRechazadoException} (409).</li>
-     *   <li>Timeout, 5xx o débito todavía PENDIENTE en ms-transacciones: la reserva queda
+     *   <li>Timeout o 5xx de ms-transacciones: se reintenta con backoff ({@link ReintentoTransacciones}).
+     *       Si sigue fallando, o el débito queda PENDIENTE en ms-transacciones, la reserva queda
      *       PENDIENTE_PAGO, no se libera y se devuelve ese estado. Un reintento con la misma clave
      *       consulta el estado real (los débitos son idempotentes en ms-transacciones).</li>
      *   <li>ms-transacciones rechaza el pedido (4xx: headers, monto, organizador): es un error de
@@ -164,9 +167,9 @@ public class PagoService {
                 .ticketId(cobro.ticketId())
                 .clienteId(clienteId)
                 .monto(cobro.monto());
-        return TransaccionesHeadersInterceptor.comoOrganizador(organizadorId, () -> debito
+        return reintento.ejecutar(() -> TransaccionesHeadersInterceptor.comoOrganizador(organizadorId, () -> debito
                 ? transaccionesClient.generarDebito(request)
-                : transaccionesClient.generarCredito(request));
+                : transaccionesClient.generarCredito(request)));
     }
 
     private String validarClave(String idempotencyKey) {

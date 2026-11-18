@@ -99,6 +99,11 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
 - En avisos masivos, un fallo por destinatario no aborta el resto: las filas exitosas quedan `ENVIADO`, las fallidas `FALLIDO` y el mensaje se reintenta. En el reintento se reutilizan las filas existentes y se omiten `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE`.
 - Al agotar reintentos el mensaje se rechaza y el broker lo enruta por **DLX** `enviar.dlx` a la **DLQ** `enviar.dlq`. Las filas pueden quedar `FALLIDO`; la reprocesación/gestión de la DLQ es operativa.
 
+## Timeouts
+
+- **SMTP:** conexión **2 s**, lectura **5 s** y escritura **5 s** (`MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_READ_TIMEOUT_MS`, `MAIL_WRITE_TIMEOUT_MS`). Si el proveedor no responde, el envío se corta, la notificación queda `FALLIDO` y la excepción activa los reintentos/DLQ.
+- **Feign** hacia `ms-eventos` y `ms-usuarios`: usa los timeouts globales de `ticketya-web-starter` (**2 s** de conexión y **5 s** de lectura).
+
 ## Tecnologías y por qué
 
 | Tecnología | Uso / motivo |
