@@ -18,10 +18,17 @@ public class CompraConfirmadaNotificacionEvent {
     private final List<AsientoNotificacion> asientos;
     private final Integer cantidad;
     private final BigDecimal monto;
+    private final String moneda;
 
     public CompraConfirmadaNotificacionEvent(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                              List<AsientoNotificacion> asientos, Integer cantidad,
                                              BigDecimal monto) {
+        this(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad, monto, "ARS");
+    }
+
+    public CompraConfirmadaNotificacionEvent(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
+                                             List<AsientoNotificacion> asientos, Integer cantidad,
+                                             BigDecimal monto, String moneda) {
         this.reservaId = reservaId;
         this.eventoId = eventoId;
         this.destinatarioId = destinatarioId;
@@ -29,6 +36,7 @@ public class CompraConfirmadaNotificacionEvent {
         this.asientos = asientos;
         this.cantidad = cantidad;
         this.monto = monto;
+        this.moneda = moneda;
     }
 
     public Long getReservaId() {
@@ -57,5 +65,9 @@ public class CompraConfirmadaNotificacionEvent {
 
     public BigDecimal getMonto() {
         return monto;
+    }
+
+    public String getMoneda() {
+        return moneda;
     }
 }

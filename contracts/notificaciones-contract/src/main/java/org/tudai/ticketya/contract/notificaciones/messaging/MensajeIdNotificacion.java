@@ -44,6 +44,17 @@ public final class MensajeIdNotificacion {
         return prefijo + "-" + motivo.name() + "-" + eventoId;
     }
 
+    public static String generarDerivado(String prefijo, String entidad, Long id) {
+        validarPrefijo(prefijo);
+        if (entidad == null || entidad.isBlank()) {
+            throw new IllegalArgumentException("La entidad es obligatoria");
+        }
+        if (id == null) {
+            throw new IllegalArgumentException("El id es obligatorio");
+        }
+        return prefijo + "-" + entidad + "-" + id;
+    }
+
     /**
      * Valida que el prefijo no este vacio.
      *
@@ -53,18 +64,5 @@ public final class MensajeIdNotificacion {
         if (prefijo == null || prefijo.isBlank()) {
             throw new IllegalArgumentException("El prefijo es obligatorio");
         }
-    }
-
-    public static String generarDerivado(String prefijo, String entidad, Long id) {
-        if (prefijo == null || prefijo.isBlank()) {
-            throw new IllegalArgumentException("El prefijo es obligatorio");
-        }
-        if (entidad == null || entidad.isBlank()) {
-            throw new IllegalArgumentException("La entidad es obligatoria");
-        }
-        if (id == null) {
-            throw new IllegalArgumentException("El id es obligatorio");
-        }
-        return prefijo + "-" + entidad + "-" + id;
     }
 }

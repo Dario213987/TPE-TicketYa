@@ -50,4 +50,7 @@ public class Notificacion {
 
     @Column(name = "fecha_envio")
     private LocalDateTime fechaEnvio;
+
+    @Column(name = "ultimo_error", length = 1000)
+    private String ultimoError;
 }

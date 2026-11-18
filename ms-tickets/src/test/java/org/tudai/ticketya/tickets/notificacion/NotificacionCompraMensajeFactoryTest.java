@@ -16,11 +16,11 @@ class NotificacionCompraMensajeFactoryTest {
     private final NotificacionCompraMensajeFactory factory = new NotificacionCompraMensajeFactory();
 
     @Test
-    void creaMensajeConDatosDeCompraYMensajeIdDerivadoDeReserva() {
-        NotificacionEntranteDTO dto = factory.crear(99L, 10L, 20L, 5L,
+    void creaMensajeConDatosDeCompraYMensajeIdMst() {
+        NotificacionEntranteDTO dto = factory.crear(7L, 10L, 20L, 5L,
                 List.of(new AsientoNotificacion(1, 2)), 1, new BigDecimal("1500.00"), "ARS");
 
-        assertEquals("MST-RESERVA-99", dto.getMensajeId());
+        assertEquals("MST-RESERVA-7", dto.getMensajeId());
         assertEquals(MotivoNotificacion.CONFIRMACION_COMPRA, dto.getMotivo());
         assertEquals(10L, dto.getEventoId());
         assertEquals(20L, dto.getDestinatarioId().longValue());
@@ -36,9 +36,9 @@ class NotificacionCompraMensajeFactoryTest {
     }
 
     @Test
-    void mismaReservaGeneraMismoMensajeId() {
-        NotificacionEntranteDTO a = factory.crear(99L, 10L, 20L, 5L, List.of(), 1, null, "ARS");
-        NotificacionEntranteDTO b = factory.crear(99L, 10L, 20L, 5L, List.of(), 1, null, "ARS");
+    void generaIdEstableParaLaMismaReserva() {
+        NotificacionEntranteDTO a = factory.crear(7L, 1L, 2L, 3L, List.of(), 0, null, null);
+        NotificacionEntranteDTO b = factory.crear(7L, 1L, 2L, 3L, List.of(), 0, null, null);
         assertEquals(a.getMensajeId(), b.getMensajeId());
     }
 

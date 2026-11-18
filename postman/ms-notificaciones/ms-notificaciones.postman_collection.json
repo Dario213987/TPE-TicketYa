@@ -1,7 +1,7 @@
 {
   "info": {
     "name": "ms-notificaciones",
-    "description": "Colección de ms-notificaciones. Incluye el runbook E2E de PUBLICACION_ARTISTA: preferencias por ciudad + artista favorito, RabbitMQ y MailHog.",
+    "description": "Colección de ms-notificaciones. Incluye el runbook E2E de PUBLICACION_ARTISTA y la inspección/reproceso de la DLQ `notificaciones.fallidas`.",
     "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
   },
   "variable": [
@@ -16,7 +16,8 @@
     { "key": "artistaNombre", "value": "La Renga" },
     { "key": "eventoId", "value": "10" },
     { "key": "ciudad", "value": "Tandil" },
-    { "key": "mensajeId", "value": "MSE-PUBLICACION_ARTISTA-10" }
+    { "key": "mensajeId", "value": "MSE-PUBLICACION_ARTISTA-10" },
+    { "key": "mensajeIdDlq", "value": "MST-1-u" }
   ],
   "item": [
     {
@@ -231,6 +232,147 @@
               "raw": "{{mailhogUrl}}/api/v2/messages",
               "host": ["{{mailhogUrl}}"],
               "path": ["api", "v2", "messages"]
+            }
+          }
+        }
+      ]
+    },
+    {
+      "name": "DLQ y reintentos",
+      "item": [
+        {
+          "name": "1. Inspeccionar DLQ notificaciones.fallidas",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "const mensajes = pm.response.json();",
+                  "pm.test(\"mensaje de prueba presente\", () => pm.expect(mensajes.some(m => String(m.payload).includes(pm.collectionVariables.get(\"mensajeIdDlq\")))).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmqUser}}", "type": "string" },
+                { "key": "password", "value": "{{rabbitmqPassword}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"count\": 10,\n  \"requeue\": false,\n  \"encoding\": \"auto\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{rabbitmqUrl}}/api/queues/%2F/notificaciones.fallidas/get",
+              "host": ["{{rabbitmqUrl}}"],
+              "path": ["api", "queues", "%2F", "notificaciones.fallidas", "get"]
+            }
+          }
+        },
+        {
+          "name": "2. Republicar mensaje de DLQ en enviar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "pm.test(\"mensaje enrutado\", () => pm.expect(pm.response.json().routed).to.be.true);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmqUser}}", "type": "string" },
+                { "key": "password", "value": "{{rabbitmqPassword}}", "type": "string" }
+              ]
+            },
+            "method": "POST",
+            "header": [{ "key": "Content-Type", "value": "application/json" }],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"properties\": {\n    \"delivery_mode\": 2,\n    \"content_type\": \"application/json\",\n    \"headers\": {\n      \"__TypeId__\": \"org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO\"\n    }\n  },\n  \"routing_key\": \"enviar\",\n  \"payload\": \"{\\\"mensajeId\\\":\\\"{{mensajeIdDlq}}\\\",\\\"motivo\\\":\\\"CANCELACION\\\",\\\"eventoId\\\":{{eventoId}},\\\"destinatarioId\\\":20}\",\n  \"payload_encoding\": \"string\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": {
+              "raw": "{{rabbitmqUrl}}/api/exchanges/%2F/amq.default/publish",
+              "host": ["{{rabbitmqUrl}}"],
+              "path": ["api", "exchanges", "%2F", "amq.default", "publish"]
+            }
+          }
+        },
+        {
+          "name": "3. Ver métricas de DLQ",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(\"mensajes en DLQ:\", pm.response.json().messages);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmqUser}}", "type": "string" },
+                { "key": "password", "value": "{{rabbitmqPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmqUrl}}/api/queues/%2F/notificaciones.fallidas",
+              "host": ["{{rabbitmqUrl}}"],
+              "path": ["api", "queues", "%2F", "notificaciones.fallidas"]
+            }
+          }
+        },
+        {
+          "name": "4. Ver métricas de enviar",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+                  "console.log(\"mensajes listos:\", pm.response.json().messages_ready);",
+                  "console.log(\"mensajes sin ack:\", pm.response.json().messages_unacknowledged);"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "auth": {
+              "type": "basic",
+              "basic": [
+                { "key": "username", "value": "{{rabbitmqUser}}", "type": "string" },
+                { "key": "password", "value": "{{rabbitmqPassword}}", "type": "string" }
+              ]
+            },
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{rabbitmqUrl}}/api/queues/%2F/enviar",
+              "host": ["{{rabbitmqUrl}}"],
+              "path": ["api", "queues", "%2F", "enviar"]
             }
           }
         }

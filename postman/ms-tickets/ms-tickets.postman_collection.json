@@ -233,6 +233,7 @@
                 "type": "text/javascript",
                 "exec": [
                   "pm.test(\"Status 201\", () => pm.response.to.have.status(201));",
+                  "pm.test(\"respuesta no bloqueante (<5s)\", () => pm.expect(pm.response.responseTime).to.be.below(5000));",
                   "const j = pm.response.json();",
                   "pm.test(\"cliente tomado del header\", () => pm.expect(j.clienteId).to.eql(Number(pm.collectionVariables.get(\"clienteId\"))));",
                   "pm.test(\"cantidad reservada\", () => pm.expect(j.cantidad).to.eql(2));",

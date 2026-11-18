@@ -10,26 +10,29 @@ import org.springframework.amqp.rabbit.annotation.EnableRabbit;
 import org.springframework.amqp.rabbit.config.RetryInterceptorBuilder;
 import org.springframework.amqp.rabbit.config.SimpleRabbitListenerContainerFactory;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
-import org.springframework.amqp.rabbit.retry.RejectAndDontRequeueRecoverer;
+import org.springframework.amqp.rabbit.retry.MessageRecoverer;
 import org.springframework.amqp.support.converter.Jackson2JsonMessageConverter;
 import org.springframework.amqp.support.converter.MessageConverter;
+import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_FALLIDAS;
 import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
-import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_FALLIDAS;
 
 /**
  * Configuracion de RabbitMQ para consumir mensajes de notificacion.
  * <p>
  * Declara la cola principal, el exchange y la cola de mensajes fallidos (DLQ), y
- * configura reintentos con backoff exponencial. Al agotar los intentos el mensaje se
- * rechaza y el broker lo enruta a la DLQ.
+ * configura reintentos con backoff exponencial. Al agotar los intentos el recoverer
+ * marca las filas pendientes como fallidas y el broker enruta el mensaje a la cola de fallidas.
  */
 @Configuration
 @EnableRabbit
+@EnableConfigurationProperties(ReintentosNotificacionProperties.class)
 public class RabbitConfig {
 
     /**
@@ -48,20 +51,20 @@ public class RabbitConfig {
      * @return cola DLQ
      */
     @Bean
-    public Queue colaDlq() {
-        return QueueBuilder.durable(ROUTING_DLQ).build();
+    public Queue colaFallidas() {
+        return QueueBuilder.durable(COLA_FALLIDAS).build();
     }
 
     /**
      * Vincula la cola de fallidos al exchange DLX con la routing key configurada.
      *
-     * @param colaDlq     cola de fallidos
+     * @param colaFallidas cola de fallidos
      * @param enviarDlx   exchange de fallidos
      * @return binding entre la cola y el exchange
      */
     @Bean
-    public Binding bindingDlq(Queue colaDlq, DirectExchange enviarDlx) {
-        return BindingBuilder.bind(colaDlq).to(enviarDlx).with(ROUTING_DLQ);
+    public Binding bindingFallidas(Queue colaFallidas, DirectExchange enviarDlx) {
+        return BindingBuilder.bind(colaFallidas).to(enviarDlx).with(ROUTING_FALLIDAS);
     }
 
     /**
@@ -73,7 +76,7 @@ public class RabbitConfig {
     public Queue colaEnviar() {
         return QueueBuilder.durable(COLA_ENVIAR)
                 .withArgument("x-dead-letter-exchange", EXCHANGE_DLX)
-                .withArgument("x-dead-letter-routing-key", ROUTING_DLQ)
+                .withArgument("x-dead-letter-routing-key", ROUTING_FALLIDAS)
                 .build();
     }
 
@@ -90,22 +93,27 @@ public class RabbitConfig {
     }
 
     /**
-     * Configura tres intentos con backoff exponencial de 1s, 2s y 4s.
+     * Configura los intentos y el backoff exponencial desde propiedades.
      *
      * @return interceptor de reintentos
      */
     @Bean
-    public RetryOperationsInterceptor retryInterceptor() {
+    public RetryOperationsInterceptor retryInterceptor(
+            ReintentosNotificacionProperties propiedades,
+            MessageRecoverer messageRecoverer) {
         return RetryInterceptorBuilder.stateless()
-                .maxAttempts(3)
-                .backOffOptions(1000, 2.0, 4000)
-                .recoverer(new RejectAndDontRequeueRecoverer())
+                .maxAttempts(propiedades.getMaxIntentos())
+                .backOffOptions(
+                        propiedades.getIntervaloInicialMs(),
+                        propiedades.getMultiplicador(),
+                        propiedades.getIntervaloMaximoMs())
+                .recoverer(messageRecoverer)
                 .build();
     }
 
     /**
      * Crea la factory de listeners con el conversor JSON, los reintentos y el rechazo
-     * sin reencolado para que los fallos terminen en la DLQ.
+     * sin reencolado para que los fallos terminen en la cola de fallidas.
      *
      * @param connectionFactory  conexion con RabbitMQ
      * @param jsonMessageConverter conversor JSON

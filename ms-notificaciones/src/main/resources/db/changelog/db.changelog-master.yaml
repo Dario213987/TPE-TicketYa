@@ -5,3 +5,5 @@ databaseChangeLog:
       file: db/changelog/changes/00002-agregar-mensaje-id-notificacion.yaml
   - include:
       file: db/changelog/changes/00003-idempotencia-por-destinatario.yaml
+  - include:
+      file: db/changelog/changes/00004-agregar-ultimo-error-notificacion.yaml
