@@ -2,6 +2,7 @@ package org.tudai.ticketya.tickets.service;
 
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
@@ -69,8 +70,9 @@ public class ReservaPagoService {
      *
      * @throws NotFoundException      si la reserva no existe
      * @throws ForbiddenException     si la reserva no pertenece al cliente
-     * @throws ConflictException      si la reserva venció, ya se procesó con otra clave,
-     *                                o al evento le falta organizador o precio
+     * @throws ConflictException      si la reserva venció, ya se procesó con otra clave, la clave
+     *                                ya se usó con otro medio de pago o para otra reserva del
+     *                                cliente (TKY-88), o al evento le falta organizador o precio
      * @throws PagoRechazadoException si es un reintento de un pago rechazado o reintegrado
      */
     @Transactional
@@ -83,7 +85,10 @@ public class ReservaPagoService {
         }
 
         if (reserva.getEstadoPago() != null) {
-            return reintento(reserva, clave);
+            return reintento(reserva, clave, medioPago);
+        }
+        if (reservaRepository.existsByClienteIdAndIdempotencyKeyAndIdNot(clienteId, clave, reservaId)) {
+            throw claveUsadaEnOtraReserva();
         }
 
         DisponibilidadEvento evento = eventoRepository.findByIdForUpdate(reserva.getEventoId())
@@ -116,7 +121,12 @@ public class ReservaPagoService {
         reserva.setIdempotencyKey(clave);
         reserva.setMedioPago(medioPago);
         reserva.setEstadoPago(EstadoPago.PENDIENTE_PAGO);
-        reservaRepository.save(reserva);
+        try {
+            // El índice único (cliente_id, idempotency_key) cubre dos pagos simultáneos con la misma clave.
+            reservaRepository.saveAndFlush(reserva);
+        } catch (DataIntegrityViolationException e) {
+            throw claveUsadaEnOtraReserva();
+        }
 
         return new Preparacion(null, evento.getOrganizadorId(), cobros(tickets));
     }
@@ -237,9 +247,14 @@ public class ReservaPagoService {
         return toResponse(reserva, ticketsDe(reservaId));
     }
 
-    private Preparacion reintento(Reserva reserva, String clave) {
+    private Preparacion reintento(Reserva reserva, String clave, MedioPago medioPago) {
         if (!clave.equals(reserva.getIdempotencyKey())) {
             throw new ConflictException("La reserva " + reserva.getId() + " ya fue procesada");
+        }
+        // Misma clave con otro payload (TKY-88): no se devuelve el resultado de otro pedido.
+        if (reserva.getMedioPago() != null && medioPago != null && reserva.getMedioPago() != medioPago) {
+            throw new ConflictException("La Idempotency-Key ya se usó para pagar la reserva " + reserva.getId()
+                    + " con otro medio de pago (" + reserva.getMedioPago() + ")");
         }
         return switch (reserva.getEstadoPago()) {
             case APROBADO -> Preparacion.terminada(toResponse(reserva, ticketsDe(reserva.getId())));
@@ -251,6 +266,10 @@ public class ReservaPagoService {
             }
             case RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE -> throw new PagoRechazadoException(reserva.getMotivoRechazo());
         };
+    }
+
+    private static ConflictException claveUsadaEnOtraReserva() {
+        return new ConflictException("La Idempotency-Key ya se usó para pagar otra reserva");
     }
 
     private Reserva reservaBloqueada(Long reservaId) {

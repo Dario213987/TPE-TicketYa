@@ -26,6 +26,11 @@ Como cliente, puedo solicitar la devolución de una entrada comprada hasta 72 ho
      `CREATE UNIQUE INDEX uk_devoluciones_ticket_activa ON devoluciones (ticket_id) WHERE estado IN ('PENDIENTE', 'APROBADA');`
    - *Regla de reintento:* Si una solicitud anterior fue `DENEGADA`, el cliente puede volver a solicitar la devolución si aún faltan `>= 72 hs`.
 
+**Idempotencia (TKY-88):** la clave natural es `(cliente_id, ticket_id)`. Mientras exista una
+devolución `PENDIENTE` o `APROBADA`, un reintento no crea otra: responde `409 Conflict` sin
+efecto. Si la anterior fue `DENEGADA`, se permite una nueva solicitud. No se usa el header
+`Idempotency-Key`; el índice único parcial del punto anterior es la garantía a nivel de base.
+
 4. **Titularidad y permisos (403 Forbidden):**
    - Si el ticket pertenece a otro cliente, responde `403 Forbidden`.
    - Si el cuerpo incluye `clienteId` y no coincide con el usuario autenticado (`X-User-Id`), responde `403 Forbidden`.

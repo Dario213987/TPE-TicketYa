@@ -17,6 +17,8 @@ paths:
       description: |
         Crea una solicitud de devolución en estado PENDIENTE si el ticket está EMITIDO,
         no fue utilizado, pertenece al cliente autenticado y faltan al menos 72 horas para el evento.
+        Idempotencia por ticket: mientras exista una devolución PENDIENTE o APROBADA no se crea otra
+        y responde 409; si la anterior fue DENEGADA se permite una nueva solicitud.
       requestBody:
         required: true
         content:
