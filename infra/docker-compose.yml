@@ -82,6 +82,15 @@ services:
       timeout: 3s
       retries: 10
 
+  db-usuarios:
+    <<: *postgres
+    environment:
+      POSTGRES_DB: usuarios
+      POSTGRES_USER: usuarios
+      POSTGRES_PASSWORD: ${USUARIOS_DB_PASSWORD}
+    ports: ["127.0.0.1:5437:5432"]
+    volumes: [usuarios-data:/var/lib/postgresql]
+
   # MySQL (plantilla). Para pasar un servicio a MySQL:
   #   1. Comentar su bloque db-* de PostgreSQL y descomentar este, cambiando
   #      nombre, base, usuario y contraseña. Mantener el MISMO puerto del host y
@@ -195,3 +204,4 @@ volumes:
   notificaciones-data:
   preferencias-data:
   rabbitmq-data:
+  usuarios-data:
