@@ -4,12 +4,14 @@ import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.jdbc.AutoConfigureTestDatabase;
 import org.springframework.boot.test.context.SpringBootTest;
-import org.tudai.ticketya.core.exception.ConflictException;
+import org.springframework.test.context.bean.override.mockito.MockitoBean;
+import org.tudai.ticketya.tickets.exception.AccesoRechazadoException;
 import org.tudai.ticketya.tickets.domain.DisponibilidadEvento;
 import org.tudai.ticketya.tickets.domain.DisponibilidadSector;
 import org.tudai.ticketya.tickets.domain.EstadoTicket;
 import org.tudai.ticketya.tickets.domain.Ticket;
 import org.tudai.ticketya.tickets.domain.TipoSector;
+import org.tudai.ticketya.tickets.messaging.TicketUtilizadoPublisher;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.DisponibilidadSectorRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
@@ -24,6 +26,9 @@ import java.util.concurrent.Future;
 import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.times;
+import static org.mockito.Mockito.verify;
 
 @SpringBootTest(properties = {
         "spring.datasource.url=jdbc:h2:mem:tickets-acceso-concurrency;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;LOCK_TIMEOUT=30000",
@@ -31,6 +36,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.yaml",
+        "tickets.qr.secreto=test-secret-para-firmar-qr-en-concurrencia",
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
         "transacciones.name=transacciones"
@@ -45,6 +51,9 @@ class AccesoConcurrenciaTest {
     private AccesoService accesoService;
 
     @Autowired
+    private QrFirmaService qrFirmaService;
+
+    @Autowired
     private DisponibilidadEventoRepository eventoRepository;
 
     @Autowired
@@ -52,6 +61,9 @@ class AccesoConcurrenciaTest {
 
     @Autowired
     private TicketRepository ticketRepository;
+
+    @MockitoBean
+    private TicketUtilizadoPublisher ticketUtilizadoPublisher;
 
     @Test
     void escaneosSimultaneosDelMismoQr_soloUnoValidaElAcceso() throws Exception {
@@ -67,8 +79,9 @@ class AccesoConcurrenciaTest {
                 .capacidadTotal(10)
                 .disponibles(10)
                 .build());
+        String codigoQrFirmado = qrFirmaService.firmar(CODIGO_QR);
         ticketRepository.save(Ticket.builder()
-                .codigo_qr(CODIGO_QR)
+                .codigo_qr(codigoQrFirmado)
                 .estadoTicket(EstadoTicket.VENDIDO)
                 .evento(evento)
                 .sector(sector)
@@ -83,9 +96,9 @@ class AccesoConcurrenciaTest {
             resultados.add(pool.submit(() -> {
                 inicio.await();
                 try {
-                    accesoService.validar(EVENTO_ID, CODIGO_QR);
+                    accesoService.validar(EVENTO_ID, codigoQrFirmado);
                     return true;
-                } catch (ConflictException e) {
+                } catch (AccesoRechazadoException e) {
                     return false;
                 }
             }));
@@ -101,7 +114,8 @@ class AccesoConcurrenciaTest {
         pool.shutdownNow();
 
         assertThat(exitos).isEqualTo(1);
-        assertThat(ticketRepository.buscarPorCodigoQr(CODIGO_QR).orElseThrow().getEstadoTicket())
+        assertThat(ticketRepository.buscarPorCodigoQr(codigoQrFirmado).orElseThrow().getEstadoTicket())
                 .isEqualTo(EstadoTicket.USADO);
+        verify(ticketUtilizadoPublisher, times(1)).publicar(any(Ticket.class));
     }
 }

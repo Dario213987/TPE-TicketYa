@@ -71,7 +71,7 @@ La resolución de destinatarios para avisos masivos usa el mismo criterio: `Noti
 
 MailHog se levanta con `docker compose -f infra/docker-compose.yml up -d mailhog` y expone SMTP en `127.0.0.1:1025` y UI en `http://localhost:8025` (`infra/docker-compose.yml:181-186`). La bandeja se consulta en la UI o con `GET http://localhost:8025/api/v2/messages`, y se limpia con `DELETE http://localhost:8025/api/v1/messages`. Los correos quedan cautivos en MailHog y no se envían a casillas reales; el estado persistido de la notificación está en `db-notificaciones`.
 
-No confundir puertos: RabbitMQ Management está en `15672` y es donde se inspeccionan `enviar` y `notificaciones.fallidas`; MailHog `8025` es donde se ven los mails. Si no llega un correo, revisar logs de `ms-notificaciones`, la cola `enviar`, la DLQ `notificaciones.fallidas` y los timeouts SMTP configurables (`MAIL_SMTP_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS`, `MAIL_SMTP_WRITE_TIMEOUT_MS`).
+No confundir puertos: RabbitMQ Management está en `15672` y es donde se inspeccionan `enviar` y `notificaciones.fallidas`; MailHog `8025` es donde se ven los mails. Si no llega un correo, revisar logs de `ms-notificaciones`, la cola `enviar`, la DLQ `notificaciones.fallidas` y los timeouts SMTP configurables (`MAIL_SMTP_CONNECTION_TIMEOUT_MS`/`MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS`/`MAIL_READ_TIMEOUT_MS`, `MAIL_SMTP_WRITE_TIMEOUT_MS`/`MAIL_WRITE_TIMEOUT_MS`).
 
 ## Runbook E2E: `PUBLICACION_ARTISTA` con MailHog
 
@@ -109,7 +109,7 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
 ## Reintentos y cola de fallidos
 
 - Listener con **8 intentos** y backoff exponencial **5s → 10s → 20s → 40s → 80s → 160s → 300s → 300s** (`RetryOperationsInterceptor`), tope de 5 min, `default-requeue-rejected=false`.
-- Configurable por entorno: `REINTENTOS_MAX_INTENTOS`, `REINTENTOS_INTERVALO_INICIAL_MS`, `REINTENTOS_MULTIPLICADOR` y `REINTENTOS_INTERVALO_MAXIMO_MS`. Timeouts SMTP: `MAIL_SMTP_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS` y `MAIL_SMTP_WRITE_TIMEOUT_MS` (5000 ms por defecto).
+- Configurable por entorno: `REINTENTOS_MAX_INTENTOS`, `REINTENTOS_INTERVALO_INICIAL_MS`, `REINTENTOS_MULTIPLICADOR` y `REINTENTOS_INTERVALO_MAXIMO_MS`. Timeouts SMTP: `MAIL_SMTP_CONNECTION_TIMEOUT_MS`/`MAIL_CONNECTION_TIMEOUT_MS` (2000 ms por defecto), `MAIL_SMTP_TIMEOUT_MS`/`MAIL_READ_TIMEOUT_MS` y `MAIL_SMTP_WRITE_TIMEOUT_MS`/`MAIL_WRITE_TIMEOUT_MS` (5000 ms por defecto).
 - Clasificación de errores SMTP:
   - `ConnectException`, `UnknownHostException`, `SocketException`, SMTP 4xx y errores no clasificados → transitorios: fila `PENDIENTE`, se relanza.
   - `SocketTimeoutException` o mensaje `timeout`/`timed out` → fila `ENVIANDO`, no se relanza; requiere reconciliación operativa con MailHog antes de reenviar.
@@ -140,6 +140,11 @@ curl -u "$RABBITMQ_USER:$RABBITMQ_PASSWORD" \
 - [Runbook de resiliencia](runbook-resiliencia-notificaciones.md)
 - [Evidencia de pruebas](../evidencia/resiliencia-notificaciones.md)
 - [Publicación no bloqueante](publicacion-no-bloqueante.md)
+
+## Timeouts
+
+- **SMTP:** conexión **2 s**, lectura **5 s** y escritura **5 s** (`MAIL_SMTP_CONNECTION_TIMEOUT_MS`/`MAIL_CONNECTION_TIMEOUT_MS`, `MAIL_SMTP_TIMEOUT_MS`/`MAIL_READ_TIMEOUT_MS`, `MAIL_SMTP_WRITE_TIMEOUT_MS`/`MAIL_WRITE_TIMEOUT_MS`; los nombres `MAIL_SMTP_*` tienen prioridad). Si el proveedor no responde, el envío se corta, la notificación queda `FALLIDO` y la excepción activa los reintentos/DLQ.
+- **Feign** hacia `ms-eventos` y `ms-usuarios`: usa los timeouts globales de `ticketya-web-starter` (**2 s** de conexión y **5 s** de lectura).
 
 ## Tecnologías y por qué
 
