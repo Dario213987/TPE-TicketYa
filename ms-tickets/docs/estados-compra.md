@@ -1,8 +1,8 @@
 # Estados de la compra (ms-tickets)
 
 Cómo avanza el pago de una reserva (`POST /api/tickets/reservas/{reservaId}/pago`) y qué se
-compensa cuando un paso falla. Es la versión básica de la entrega 1 (TKY-56 y TKY-57). En la
-entrega 2 se refina con una Saga.
+compensa cuando un paso falla. La saga completa (compensación de cada paso, reconciliación de
+pagos pendientes y qué es consistencia fuerte o eventual) está en [saga-compra.md](saga-compra.md).
 
 ## Pasos
 
@@ -131,9 +131,8 @@ Toda compensación se registra en el log de `PagoService`:
 - `WARN Pago pendiente: reserva=… ticket=…`, en un timeout o débito PENDIENTE, que no se compensa.
 - `ERROR Error de integración con ms-transacciones: reserva=… ticket=…`, en un 4xx, que no se compensa.
 
-## Pendiente para la Saga (E2)
+## Pendiente
 
-- Reintentar automáticamente los `REINTEGRO_PENDIENTE` y los `PENDIENTE_PAGO` abandonados, que
-  hoy solo avanzan con un reintento del cliente.
+- Reintentar automáticamente los `REINTEGRO_PENDIENTE` (ver los límites en
+  [saga-compra.md](saga-compra.md)). Los `PENDIENTE_PAGO` los resuelve la reconciliación (TKY-87).
 - Persistir cada paso (outbox) en lugar de depender del log.
-- Consultar el estado de las transacciones por ticket en lugar de repetir el débito idempotente.
