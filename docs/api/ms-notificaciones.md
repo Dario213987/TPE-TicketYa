@@ -117,6 +117,7 @@ Variables sugeridas: `baseUrl=http://localhost:8080`, `rabbitmqUrl=http://localh
   - Autenticación, parseo, preparación y SMTP 5xx general → `FALLIDO`, no se relanza.
 - En avisos masivos, los fallos de conexión cortan el lote y se relanza para reintentar solo las filas `PENDIENTE`; los fallos permanentes se registran y el lote continúa. En el reintento se reutilizan las filas existentes y se omiten `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE`.
 - Al agotar reintentos, `NotificacionDlqRecoverer` extrae `mensajeId` del body, marca como `FALLIDO` (con `ultimo_error`) todas las filas `PENDIENTE` de ese mensaje, loguea en `ERROR` y lanza `AmqpRejectAndDontRequeueException`. El broker enruta por **DLX** `enviar.dlx` a la **DLQ** `notificaciones.fallidas`. Si el body no trae `mensajeId`, solo rechaza y loguea.
+- La cola `enviar` conserva `x-dead-letter-routing-key=enviar.dlq` (RabbitMQ no permite cambiar un argumento de una cola existente y el volumen `rabbitmq-data` la conserva); `notificaciones.fallidas` se bindea a `enviar.dlx` con esa clave. En un entorno que ya tenía la cola vieja `enviar.dlq`, los fallidos también llegan a ella: se puede borrar desde RabbitMQ Management.
 - Reproceso operativo: corregir la causa, inspeccionar la DLQ y republicar exactamente el mismo payload en `enviar` (debe mantener el header `__TypeId__` y el mismo `mensajeId`). Las filas `FALLIDO` vuelven a intentarse; las filas `ENVIADO`, `ENVIANDO` y `NO_ENTREGABLE` se omiten.
 
 ```bash
