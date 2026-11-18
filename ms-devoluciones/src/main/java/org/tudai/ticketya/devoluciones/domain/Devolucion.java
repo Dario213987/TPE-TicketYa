@@ -56,6 +56,8 @@ public class Devolucion extends Auditable {
     @Column(name = "motivo", length = 255)
     private String motivo;
 
+    @Column(name = "origen", length = 40)
+    private String origen;
     @Column(name = "motivo_rechazo", length = 255)
     private String motivoRechazo;
 

@@ -385,6 +385,7 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test(\"Status 200\", () => pm.response.to.have.status(200));",
+									"pm.test(\"respuesta no bloqueante (<5s)\", () => pm.expect(pm.response.responseTime).to.be.below(5000));",
 									"pm.test(\"estado PUBLICADO\", () => pm.expect(pm.response.json().estado).to.eql(\"PUBLICADO\"));"
 								]
 							}
@@ -425,6 +426,7 @@
 								"type": "text/javascript",
 								"exec": [
 									"pm.test(\"Status 202\", () => pm.response.to.have.status(202));",
+									"pm.test(\"respuesta no bloqueante (<5s)\", () => pm.expect(pm.response.responseTime).to.be.below(5000));",
 									"pm.test(\"estado CANCELADO\", () => pm.expect(pm.response.json().estado).to.eql(\"CANCELADO\"));"
 								]
 							}

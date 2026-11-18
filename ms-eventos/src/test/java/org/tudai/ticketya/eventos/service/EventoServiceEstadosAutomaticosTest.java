@@ -67,6 +67,13 @@ class EventoServiceEstadosAutomaticosTest {
     @InjectMocks
     private EventoService eventoService;
 
+    @org.junit.jupiter.api.BeforeEach
+    void usarLaCacheDelDetalleSinRedis() {
+        // Sin contexto de Spring no hay cache: EventoDetalleCache consulta el repositorio de prueba.
+        org.springframework.test.util.ReflectionTestUtils.setField(eventoService, "eventoDetalleCache",
+                org.mockito.Mockito.spy(new EventoDetalleCache(eventoRepository, modelMapper)));
+    }
+
     @Test
     void finalizarEventosVencidos_finalizaYEncolaUnaNotificacionPorEvento() {
         when(eventoRepository.findIdsEventosVencidos(any(LocalDateTime.class), any()))

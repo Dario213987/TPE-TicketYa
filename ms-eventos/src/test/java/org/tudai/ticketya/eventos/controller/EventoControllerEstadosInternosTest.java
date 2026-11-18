@@ -11,6 +11,7 @@ import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
 import org.tudai.ticketya.contract.eventos.model.EventoEstadoResponse;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.eventos.service.EventoBusquedaCache;
 import org.tudai.ticketya.eventos.service.EventoService;
 import org.tudai.ticketya.web.error.GlobalExceptionHandler;
 import org.tudai.ticketya.web.security.AuthorizeInterceptor;
@@ -33,7 +34,8 @@ class EventoControllerEstadosInternosTest {
         eventoService = mock(EventoService.class);
         userContext = mock(UserContext.class);
 
-        mvc = MockMvcBuilders.standaloneSetup(new EventoController(eventoService, new ModelMapper(), userContext))
+        mvc = MockMvcBuilders.standaloneSetup(new EventoController(eventoService, userContext,
+                new EventoBusquedaCache(eventoService, new ModelMapper())))
                 .setControllerAdvice(new GlobalExceptionHandler())
                 .setCustomArgumentResolvers(new PageableHandlerMethodArgumentResolver())
                 .addInterceptors(new AuthorizeInterceptor(userContext))

@@ -11,12 +11,15 @@ import org.springframework.transaction.annotation.Transactional;
 import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.contract.transacciones.model.TipoTransaccion;
 import org.tudai.ticketya.core.UserContext;
+import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
+import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.transacciones.domain.Transaccion;
 import org.tudai.ticketya.transacciones.repository.TransaccionRepository;
 import org.tudai.ticketya.transacciones.service.temp_mock_gateway.PaymentGateway;
 
+import java.util.Objects;
 import java.util.Optional;
 
 @Service
@@ -25,16 +28,38 @@ import java.util.Optional;
 public class TransaccionService {
 
     private final TransaccionRepository repository;
-    private final PaymentGateway gateway;
+    private final PasarelaResiliente pasarela;
     private final UserContext user;
 
+    /**
+     * Crea la transacción y la procesa en la pasarela.
+     * <p>
+     * Es idempotente por ticket, cliente, organizador y tipo: si ya existe una COMPLETA o FALLIDA,
+     * la devuelve sin volver a llamar a la pasarela. Si existe una PENDIENTE (porque la pasarela
+     * no respondió en un intento anterior), la vuelve a procesar con la misma clave de
+     * idempotencia, así la pasarela no cobra dos veces.
+     * <p>
+     * Si el circuito de la pasarela está abierto (TKY-86), una transacción nueva queda FALLIDA con
+     * {@link PasarelaNoDisponibleException#MOTIVO}, porque nunca llegó a la pasarela. Una que ya
+     * estaba PENDIENTE sigue PENDIENTE: un intento anterior pudo haber cobrado.
+     * <p>
+     * Si el pedido repite la clave (ticket, cliente, organizador y tipo) con otro monto, responde
+     * 409 en lugar de devolver la transacción de otro pedido (TKY-88).
+     *
+     * @throws ConflictException      si ya existe una transacción con la misma clave y otro monto
+     * @throws RemoteServiceException si la pasarela no responde después de los reintentos, o si el
+     *                                circuito está abierto al reprocesar una PENDIENTE; la
+     *                                transacción queda PENDIENTE para reintentarla después
+     */
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
     public Transaccion crear(Transaccion pedido) {
         Long organizadorId = user.userId();
 
         var existente = find(pedido, organizadorId);
         if (existente.isPresent()) {
-            return existente.get();
+            Transaccion transaccion = mismoPedido(existente.get(), pedido);
+            return transaccion.getEstado() == EstadoTransaccion.PENDIENTE
+                    ? procesar(transaccion, false) : transaccion;
         }
 
         pedido.setOrganizadorId(organizadorId);
@@ -42,23 +67,42 @@ public class TransaccionService {
         try {
             repository.saveAndFlush(pedido);
         } catch (DataIntegrityViolationException e) {
-            return find(pedido, organizadorId).orElseThrow();
+            return mismoPedido(find(pedido, organizadorId).orElseThrow(), pedido);
         }
 
-        var orden = new PaymentGateway.Orden(pedido.getId(), pedido.getTicketId(),
-                pedido.getClienteId(), pedido.getMonto());
+        return procesar(pedido, true);
+    }
+
+    private Transaccion procesar(Transaccion transaccion, boolean nueva) {
+        var orden = new PaymentGateway.Orden(transaccion.getId(), claveIdempotencia(transaccion),
+                transaccion.getTicketId(), transaccion.getClienteId(), transaccion.getMonto());
+
+        // Si la pasarela no responde, lanza RemoteServiceException y la transacción queda PENDIENTE.
         PaymentGateway.Resultado resultado;
         try {
-            resultado = pedido.getTipo() == TipoTransaccion.DEBITO
-                    ? gateway.debitar(orden) : gateway.acreditar(orden);
-        } catch (RuntimeException e) {
-            repository.deleteById(pedido.getId());
-            throw e;
+            resultado = pasarela.procesar(transaccion.getTipo(), orden);
+        } catch (PasarelaNoDisponibleException e) {
+            if (!nueva) {
+                throw e;
+            }
+            resultado = new PaymentGateway.Resultado(false, PasarelaNoDisponibleException.MOTIVO);
         }
 
-        pedido.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
-        pedido.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());
-        return repository.saveAndFlush(pedido);
+        transaccion.setEstado(resultado.aprobado() ? EstadoTransaccion.COMPLETA : EstadoTransaccion.FALLIDA);
+        transaccion.setMotivoFallo(resultado.aprobado() ? null : resultado.motivo());
+        return repository.saveAndFlush(transaccion);
+    }
+
+    private static Transaccion mismoPedido(Transaccion existente, Transaccion pedido) {
+        if (!Objects.equals(existente.getMonto(), pedido.getMonto())) {
+            throw new ConflictException("Ya existe una transacción " + existente.getTipo() + " para el ticket "
+                    + existente.getTicketId() + " con otro monto (" + existente.getMonto() + ")");
+        }
+        return existente;
+    }
+
+    static String claveIdempotencia(Transaccion transaccion) {
+        return "tx-" + transaccion.getId();
     }
 
     private Optional<Transaccion> find(Transaccion p, Long organizadorId) {

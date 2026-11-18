@@ -29,7 +29,7 @@ class TicketsSchemaValidationTest {
         JdbcTemplate jdbcTemplate = new JdbcTemplate(dataSource);
 
         assertThat(jdbcTemplate.queryForObject(
-                "select count(*) from databasechangelog", Long.class)).isEqualTo(11L);
+                "select count(*) from databasechangelog", Long.class)).isEqualTo(12L);
         assertThat(jdbcTemplate.queryForObject(
                 "select count(*) from tickets", Long.class)).isZero();
     }

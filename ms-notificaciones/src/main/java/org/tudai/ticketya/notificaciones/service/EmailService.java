@@ -14,6 +14,7 @@ public class EmailService {
 
     private final JavaMailSender mailSender;
     private final String from;
+    private final EmailErrorClassifier emailErrorClassifier;
 
     /**
      * Crea el servicio con el remitente configurado.
@@ -21,9 +22,11 @@ public class EmailService {
      * @param mailSender cliente SMTP
      * @param from       direccion remitente
      */
-    public EmailService(JavaMailSender mailSender, @Value("${ticketya.mail.from}") String from) {
+    public EmailService(JavaMailSender mailSender, @Value("${ticketya.mail.from}") String from,
+            EmailErrorClassifier emailErrorClassifier) {
         this.mailSender = mailSender;
         this.from = from;
+        this.emailErrorClassifier = emailErrorClassifier;
     }
 
     /**
@@ -32,14 +35,13 @@ public class EmailService {
      * @param destinatario direccion del destinatario
      * @param asunto       asunto del email
      * @param html         cuerpo HTML ya renderizado
-     * @throws IllegalArgumentException si el destinatario esta vacio
-     * @throws RuntimeException         si falla el envio SMTP
+     * @throws RuntimeException si falla el envio SMTP
      */
     public void enviar(String destinatario, String asunto, String html) {
-        if (destinatario == null || destinatario.isBlank()) {
-            throw new IllegalArgumentException("El destinatario del email es obligatorio");
-        }
         try {
+            if (destinatario == null || destinatario.isBlank()) {
+                throw new IllegalArgumentException("El destinatario del email es obligatorio");
+            }
             MimeMessage message = mailSender.createMimeMessage();
             MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
             helper.setFrom(from);
@@ -48,7 +50,7 @@ public class EmailService {
             helper.setText(html, true);
             mailSender.send(message);
         } catch (Exception e) {
-            throw new RuntimeException("Error enviando email", e);
+            throw emailErrorClassifier.clasificar(e);
         }
     }
 }

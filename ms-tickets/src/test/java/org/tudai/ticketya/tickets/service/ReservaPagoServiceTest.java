@@ -2,6 +2,7 @@ package org.tudai.ticketya.tickets.service;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
@@ -142,6 +143,59 @@ class ReservaPagoServiceTest {
         assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
                 .isInstanceOf(ConflictException.class)
                 .hasMessageContaining("ya fue procesada");
+    }
+
+    @Test
+    void preparar_mismaClaveConOtroMedioDePago_lanzaConflictSinDevolverElResultado() {
+        Reserva reserva = reserva(EstadoPago.APROBADO);
+        reserva.setMedioPago(MedioPago.TARJETA_CREDITO);
+        when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
+
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_DEBITO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("otro medio de pago");
+        verifyNoInteractions(ticketRepository);
+    }
+
+    @Test
+    void preparar_mismaClaveYMismoMedioDePago_devuelveElResultadoGuardado() {
+        Reserva reserva = reserva(EstadoPago.APROBADO);
+        reserva.setMedioPago(MedioPago.TARJETA_CREDITO);
+        when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID))
+                .thenReturn(List.of(ticket(1L, sector(1500.0), null, EstadoTicket.VENDIDO)));
+
+        Preparacion preparacion = service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO);
+
+        assertThat(preparacion.yaTerminada()).isTrue();
+        assertThat(preparacion.compraExistente().getEstadoPago()).isEqualTo(EstadoPago.APROBADO);
+    }
+
+    @Test
+    void preparar_claveYaUsadaEnOtraReservaDelCliente_lanzaConflictSinTocarLaReserva() {
+        Reserva reserva = reserva(null);
+        when(reservaRepository.findByIdForUpdate(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(reservaRepository.existsByClienteIdAndIdempotencyKeyAndIdNot(CLIENTE_ID, CLAVE, RESERVA_ID))
+                .thenReturn(true);
+
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("otra reserva");
+        assertThat(reserva.getEstadoPago()).isNull();
+        verifyNoInteractions(ticketRepository, eventoRepository);
+    }
+
+    @Test
+    void preparar_dosPagosSimultaneosConLaMismaClave_elIndiceUnicoResponde409() {
+        Reserva reserva = reserva(null);
+        prepararReserva(reserva, evento(ORGANIZADOR_ID),
+                List.of(ticket(1L, sector(1500.0), null, EstadoTicket.RESERVADO)));
+        when(reservaRepository.saveAndFlush(reserva))
+                .thenThrow(new DataIntegrityViolationException("uk_reservas_cliente_idempotency_key"));
+
+        assertThatThrownBy(() -> service.preparar(RESERVA_ID, CLIENTE_ID, CLAVE, MedioPago.TARJETA_CREDITO))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("otra reserva");
     }
 
     @Test
@@ -345,6 +399,36 @@ class ReservaPagoServiceTest {
 
         verifyNoInteractions(reservaVencidaService);
         assertThat(reserva.getEstadoPago()).isEqualTo(EstadoPago.APROBADO);
+    }
+
+    @Test
+    void pendiente_reservaEnPendientePago_devuelveClienteOrganizadorYCobros() {
+        Reserva reserva = reserva(EstadoPago.PENDIENTE_PAGO);
+        Ticket pendiente = ticket(1L, sector(1500.0), null, EstadoTicket.PENDIENTE_PAGO);
+        pendiente.setPrecio(1500.0);
+        when(reservaRepository.findById(RESERVA_ID)).thenReturn(Optional.of(reserva));
+        when(eventoRepository.findById(EVENTO_ID)).thenReturn(Optional.of(evento(ORGANIZADOR_ID)));
+        when(ticketRepository.findByReserva_IdOrderByIdAsc(RESERVA_ID)).thenReturn(List.of(pendiente));
+
+        assertThat(service.pendiente(RESERVA_ID)).contains(new ReservaPagoService.Pendiente(
+                RESERVA_ID, CLIENTE_ID, ORGANIZADOR_ID, List.of(new Cobro(1L, 1500.0))));
+    }
+
+    @Test
+    void pendiente_reservaYaResuelta_devuelveVacio() {
+        when(reservaRepository.findById(RESERVA_ID)).thenReturn(Optional.of(reserva(EstadoPago.APROBADO)));
+
+        assertThat(service.pendiente(RESERVA_ID)).isEmpty();
+        verifyNoInteractions(eventoRepository, ticketRepository);
+    }
+
+    @Test
+    void pendientesVencidas_buscaLasReservasEnPendientePagoVencidasAntesDelLimite() {
+        Instant limite = Instant.now();
+        when(reservaRepository.findIdsByEstadoPagoAndExpiraElBefore(EstadoPago.PENDIENTE_PAGO, limite))
+                .thenReturn(List.of(5L, 6L));
+
+        assertThat(service.pendientesVencidas(limite)).containsExactly(5L, 6L);
     }
 
     private void prepararReserva(Reserva reserva, DisponibilidadEvento evento, List<Ticket> tickets) {

@@ -95,6 +95,40 @@ class ReservaVencidaServiceTest {
     }
 
     @Test
+    void liberarReservasVigentes_liberaLasReservasSinEsperarElVencimiento() {
+        Instant ahora = Instant.now();
+        DisponibilidadSector sector = DisponibilidadSector.builder()
+                .id(10L)
+                .sectorIdExterno(3L)
+                .tipo(TipoSector.NO_NUMERADO)
+                .capacidadTotal(3)
+                .disponibles(1)
+                .build();
+        Ticket vigente = Ticket.builder()
+                .estadoTicket(EstadoTicket.RESERVADO)
+                .expiraEl(ahora.plusSeconds(600))
+                .sector(sector)
+                .build();
+        Ticket enPago = Ticket.builder()
+                .estadoTicket(EstadoTicket.RESERVADO)
+                .expiraEl(ahora.plusSeconds(600))
+                .sector(sector)
+                .pagoEnCurso(true)
+                .build();
+        when(ticketRepository.findByEvento_EventoIdAndEstadoTicketInAndExpiraElGreaterThan(
+                7L, List.of(EstadoTicket.RESERVADO, EstadoTicket.PENDIENTE_PAGO), ahora))
+                .thenReturn(List.of(vigente, enPago));
+
+        int liberadas = service.liberarReservasVigentes(7L, ahora);
+
+        assertThat(liberadas).isEqualTo(1);
+        assertThat(vigente.getEstadoTicket()).isEqualTo(EstadoTicket.CANCELADO);
+        assertThat(enPago.getEstadoTicket()).isEqualTo(EstadoTicket.RESERVADO);
+        assertThat(sector.getDisponibles()).isEqualTo(2);
+        verify(ticketRepository).saveAll(List.of(vigente));
+    }
+
+    @Test
     void liberarVencidas_noSuperaLaCapacidadDelSector() {
         Instant ahora = Instant.now();
         DisponibilidadSector sector = DisponibilidadSector.builder()

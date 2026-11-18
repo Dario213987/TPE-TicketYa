@@ -303,3 +303,9 @@ redis-cli -p 6380 ZRANGE tickets:pases-activos:evento:5 0 -1 WITHSCORES
 ```
 
 Para probar el abandono, llamar `DELETE /api/tickets/eventos/5/fila` con un `X-User-Id` que esté en la fila y verificar que desaparece del sorted set. Para probar el vencimiento, ajustar un TTL corto (por ejemplo `{"ttlPaseSegundos": 5}`), esperar a que venza el pase y comprobar que el job habilita al siguiente cliente de la cola en el tick siguiente.
+
+## Publicación de la confirmación de compra
+
+Cuando la compra se confirma se publica `CompraConfirmadaNotificacionEvent` con `reservaId`. `NotificacionCompraEventListener` lo recibe con `@TransactionalEventListener(AFTER_COMMIT)` y agenda el envío en un executor dedicado de 2 hilos y cola 200; el worker publica en `enviar` con `mensajeId = MST-RESERVA-{reservaId}`.
+
+Si Rabbit falla o el executor rechaza la tarea, se loguea el error con `mensajeId` y la compra ya confirmada no se revierte. Los timeouts de conexión, handshake y RPC son de 2 segundos. El procedimiento de medición y las variables de entorno están en `docs/api/publicacion-no-bloqueante.md`.

@@ -3,6 +3,7 @@ package org.tudai.ticketya.transacciones;
 import com.jayway.jsonpath.JsonPath;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -15,8 +16,11 @@ import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilde
 import org.testcontainers.containers.MySQLContainer;
 import org.testcontainers.junit.jupiter.Container;
 import org.testcontainers.junit.jupiter.Testcontainers;
+import org.tudai.ticketya.contract.transacciones.model.EstadoTransaccion;
 import org.tudai.ticketya.transacciones.domain.Transaccion;
 import org.tudai.ticketya.transacciones.repository.TransaccionRepository;
+import org.tudai.ticketya.transacciones.service.PasarelaNoDisponibleException;
+import org.tudai.ticketya.transacciones.service.PasarelaResiliente;
 import org.tudai.ticketya.transacciones.service.temp_mock_gateway.PaymentGateway;
 
 import java.util.ArrayList;
@@ -31,6 +35,8 @@ import java.util.concurrent.TimeUnit;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doReturn;
+import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -42,7 +48,8 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 @SpringBootTest(properties = {
         "eureka.client.enabled=false",
         "spring.datasource.password=ignored",
-        "ticketya.logging.dir=target/test-logs"
+        "ticketya.logging.dir=target/test-logs",
+        "ticketya.pasarela.backoff-inicial-ms=10"
 })
 @AutoConfigureMockMvc
 @Testcontainers
@@ -61,9 +68,14 @@ class TransaccionApiTest {
     @Autowired
     TransaccionRepository repository;
 
+    @Autowired
+    PasarelaResiliente pasarela;
+
     @BeforeEach
     void preparar() {
         repository.deleteAllInBatch();
+        // El circuito es un singleton del contexto: cada test empieza con el circuito cerrado.
+        pasarela.circuito().reset();
         when(gateway.debitar(any())).thenReturn(new PaymentGateway.Resultado(true, null));
         when(gateway.acreditar(any())).thenReturn(new PaymentGateway.Resultado(true, null));
     }
@@ -107,12 +119,61 @@ class TransaccionApiTest {
     }
 
     @Test
-    void fallaTecnicaDelProcesador_revierteYNoDejaRegistro() throws Exception {
+    void fallaTecnicaDelProcesador_reintentaYDejaLaTransaccionPendiente() throws Exception {
         when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
 
-        mvc.perform(debito(10)).andExpect(status().isInternalServerError());
+        mvc.perform(debito(10))
+                .andExpect(status().isBadGateway())
+                .andExpect(jsonPath("$.title").value("Error en servicio dependiente"));
 
-        assertThat(repository.count()).isZero();
+        verify(gateway, times(3)).debitar(any());
+        assertThat(repository.findAll()).singleElement()
+                .extracting(Transaccion::getEstado).isEqualTo(EstadoTransaccion.PENDIENTE);
+    }
+
+    @Test
+    void circuitoAbierto_transaccionNuevaQuedaFallidaSinLlamarALaPasarela() throws Exception {
+        pasarela.circuito().transitionToOpenState();
+
+        mvc.perform(debito(10))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.estado").value("FALLIDA"))
+                .andExpect(jsonPath("$.motivoFallo").value(PasarelaNoDisponibleException.MOTIVO));
+
+        verify(gateway, never()).debitar(any());
+    }
+
+    @Test
+    void circuitoAbierto_transaccionPendienteSiguePendienteY502() throws Exception {
+        when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
+        mvc.perform(debito(10)).andExpect(status().isBadGateway());
+
+        pasarela.circuito().transitionToOpenState();
+        mvc.perform(debito(10))
+                .andExpect(status().isBadGateway());
+
+        verify(gateway, times(3)).debitar(any());
+        assertThat(repository.findAll()).singleElement()
+                .extracting(Transaccion::getEstado).isEqualTo(EstadoTransaccion.PENDIENTE);
+    }
+
+    @Test
+    void transaccionPendiente_alRepetirElRequestSeCompletaConLaMismaClave() throws Exception {
+        when(gateway.debitar(any())).thenThrow(new IllegalStateException("caída"));
+        mvc.perform(debito(10)).andExpect(status().isBadGateway());
+        long id = repository.findAll().get(0).getId();
+
+        doReturn(new PaymentGateway.Resultado(true, null)).when(gateway).debitar(any());
+        mvc.perform(debito(10))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.id").value(id))
+                .andExpect(jsonPath("$.estado").value("COMPLETA"));
+
+        ArgumentCaptor<PaymentGateway.Orden> ordenes = ArgumentCaptor.forClass(PaymentGateway.Orden.class);
+        verify(gateway, times(4)).debitar(ordenes.capture());
+        assertThat(ordenes.getAllValues()).extracting(PaymentGateway.Orden::idempotencyKey)
+                .containsOnly("tx-" + id);
+        assertThat(repository.count()).isEqualTo(1);
     }
 
     @Test
@@ -124,6 +185,21 @@ class TransaccionApiTest {
                 .andExpect(jsonPath("$.id").value(id));
 
         assertThat(repository.count()).isEqualTo(1);
+        verify(gateway, times(1)).debitar(any());
+    }
+
+    @Test
+    void repetirElRequestConOtroMonto_responde409SinTocarLaOriginal() throws Exception {
+        long id = idDe(mvc.perform(debito(10)).andReturn());
+
+        mvc.perform(generar("debitos", "1", "ORGANIZADOR", 10, 7, 250.0))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail").value(org.hamcrest.Matchers.containsString("otro monto")));
+
+        assertThat(repository.findAll()).singleElement().satisfies(t -> {
+            assertThat(t.getId()).isEqualTo(id);
+            assertThat(t.getMonto()).isEqualTo(100.0);
+        });
         verify(gateway, times(1)).debitar(any());
     }
 

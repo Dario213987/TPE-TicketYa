@@ -37,10 +37,16 @@ public class NotificacionCompraPublicador {
     public void producirConfirmacionCompra(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
                                            List<AsientoNotificacion> asientos, Integer cantidad,
                                            BigDecimal monto) {
+        producirConfirmacionCompra(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad,
+                monto, MONEDA_COMPRA);
+    }
+
+    public void producirConfirmacionCompra(Long reservaId, Long eventoId, Long destinatarioId, Long sectorId,
+                                           List<AsientoNotificacion> asientos, Integer cantidad,
+                                           BigDecimal monto, String moneda) {
         NotificacionEntranteDTO mensaje = null;
         try {
-            mensaje = factory.crear(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad,
-                    monto, MONEDA_COMPRA);
+            mensaje = factory.crear(reservaId, eventoId, destinatarioId, sectorId, asientos, cantidad, monto, moneda);
             rabbitTemplate.convertAndSend(ColasNotificacion.COLA_ENVIAR, mensaje);
             log.info("Notificación de confirmación de compra publicada: mensajeId={}, reservaId={}, eventoId={}, destinatarioId={}, motivo={}",
                     mensaje.getMensajeId(), reservaId, eventoId, destinatarioId, mensaje.getMotivo());
@@ -59,6 +65,6 @@ public class NotificacionCompraPublicador {
             return;
         }
         producirConfirmacionCompra(event.getReservaId(), event.getEventoId(), event.getDestinatarioId(),
-                event.getSectorId(), event.getAsientos(), event.getCantidad(), event.getMonto());
+                event.getSectorId(), event.getAsientos(), event.getCantidad(), event.getMonto(), event.getMoneda());
     }
 }

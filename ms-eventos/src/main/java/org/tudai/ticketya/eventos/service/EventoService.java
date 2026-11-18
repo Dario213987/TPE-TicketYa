@@ -5,6 +5,7 @@ import feign.RetryableException;
 import jakarta.persistence.criteria.Join;
 import jakarta.persistence.criteria.Predicate;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.CacheEvict;
 import org.hibernate.Hibernate;
 import org.modelmapper.ModelMapper;
 import org.springframework.beans.factory.annotation.Value;
@@ -99,6 +100,7 @@ public class EventoService {
     private final ParticipanteService participanteService;
     private final NotificacionTicketsService notificacionTicketsService;
     private final TransactionTemplate transactionTemplate;
+    private final EventoDetalleCache eventoDetalleCache;
     private final ApplicationEventPublisher applicationEventPublisher;
 
     @Value("${ticketya.eventos.finalizacion.horas-gracia:6}")
@@ -466,14 +468,15 @@ public class EventoService {
      */
     @Transactional(readOnly = true)
     public EventoDetalleResponse obtenerEvento(Long eventoId, Long userId, boolean esAdmin) {
-        Evento evento = buscarEvento(eventoId);
+        // El detalle sale de la cache (TKY-82); la regla de borradores se aplica siempre acá.
+        EventoDetalleResponse detalle = eventoDetalleCache.obtener(eventoId);
 
-        if (evento.getEstado() == EstadoEvento.BORRADOR
-                && !esAdmin && !Objects.equals(evento.getOrganizadorId(), userId)) {
+        if (detalle.getEstado() == EstadoEvento.BORRADOR
+                && !esAdmin && !Objects.equals(detalle.getOrganizadorId(), userId)) {
             throw new NotFoundException("Evento no encontrado con id: " + eventoId);
         }
 
-        return toDetalleResponse(evento);
+        return detalle;
     }
 
 
@@ -503,6 +506,7 @@ public class EventoService {
      * @throws SectoresSinPrecioException  si algún sector no tiene precio asignado
      * @throws RemoteServiceException      si ms-tickets no está disponible o responde con error
      */
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#idEvento")
     public EventoEstadoResponse publicarEvento(Long idEvento, Long organizadorId, boolean esAdmin) {
         PublicacionPendiente pendiente = transactionTemplate.execute(
                 status -> prepararPublicacion(idEvento, organizadorId, esAdmin));
@@ -537,6 +541,7 @@ public class EventoService {
      * @throws ConflictException      si el evento no está en estado PUBLICADO, SUSPENDIDO, AGOTADO ni CANCELADO
      * @throws RemoteServiceException si ms-tickets o ms-devoluciones no están disponibles o responden con error
      */
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#id")
     public EventoEstadoResponse cancelarEvento(Long id) {
         EventoEstadoResponse yaCancelado = transactionTemplate.execute(
                 status -> validarCancelacion(id));
@@ -552,6 +557,7 @@ public class EventoService {
         return transactionTemplate.execute(status -> confirmarCancelacion(id));
     }
 
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#id")
     public EventoEstadoResponse suspenderEvento(Long id) {
         EventoEstadoResponse yaSuspendido = transactionTemplate.execute(
                 status -> validarSuspension(id));
@@ -565,6 +571,7 @@ public class EventoService {
         return transactionTemplate.execute(status -> confirmarSuspension(id));
     }
 
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#id")
     public EventoEstadoResponse reactivarEvento(Long id) {
         EventoEstadoResponse yaReactivado = transactionTemplate.execute(
                 status -> validarReactivacion(id));
@@ -788,6 +795,7 @@ public class EventoService {
 
         for (Long id : ids) {
             notificacionTicketsService.encolar(id, TipoNotificacionTickets.FINALIZAR);
+            eventoDetalleCache.invalidar(id);
         }
     }
 
@@ -807,6 +815,7 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado PUBLICADO ni AGOTADO
      */
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#id")
     public EventoEstadoResponse marcarAgotado(Long id) {
         String mensaje = "Evento no encontrado con id: " + id;
         EventoEstadoResponse yaAgotado = transactionTemplate.execute(
@@ -837,6 +846,7 @@ public class EventoService {
      * @throws NotFoundException si el evento no existe
      * @throws ConflictException si el evento no está en estado AGOTADO ni PUBLICADO
      */
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#id")
     public EventoEstadoResponse marcarPublicado(Long id) {
         String mensaje = "Evento no encontrado con id: " + id;
         EventoEstadoResponse yaPublicado = transactionTemplate.execute(
@@ -958,6 +968,7 @@ public class EventoService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#eventoId")
     public EventoResponse actualizarEvento(Long eventoId, EventoUpdateRequest dto, Long organizadorId,
                                               boolean esAdmin) {
         Evento evento = buscarEvento(eventoId);
@@ -982,6 +993,7 @@ public class EventoService {
     }
 
     @Transactional
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#eventoId")
     public void eliminarEvento(Long eventoId, Long organizadorId, boolean esAdmin) {
         Evento evento = buscarEvento(eventoId);
         verificarPropiedad(evento, organizadorId, esAdmin, "eliminar");
@@ -1099,12 +1111,8 @@ public class EventoService {
         return modelMapper.map(evento, EventoResponse.class);
     }
 
-    private EventoDetalleResponse toDetalleResponse(Evento evento) {
-        EventoResponse base = modelMapper.map(evento, EventoResponse.class);
-        return modelMapper.map(base, EventoDetalleResponse.class);
-    }
-
     @Transactional
+    @CacheEvict(cacheNames = EventoDetalleCache.CACHE, key = "#eventoId")
     public PrecioEventoSectorResponse definirPrecioSector(Long eventoId, Long sectorId, Double precio,
                                                           Long organizadorId, boolean esAdmin) {
         Evento evento = eventoRepository.findById(eventoId)

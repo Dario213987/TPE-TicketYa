@@ -39,9 +39,9 @@ class NotificacionCompraPublicadorTest {
         dto.setMotivo(MotivoNotificacion.CONFIRMACION_COMPRA);
         dto.setEventoId(10L);
         dto.setDestinatarioId(20L);
-        when(factory.crear(eq(99L), eq(10L), eq(20L), eq(5L), any(), eq(2), any(), eq("ARS"))).thenReturn(dto);
+        when(factory.crear(eq(7L), eq(10L), eq(20L), eq(5L), any(), eq(2), any(), eq("ARS"))).thenReturn(dto);
 
-        publicador.producirConfirmacionCompra(99L, 10L, 20L, 5L, List.of(new AsientoNotificacion(1, 1)), 2, new BigDecimal("100"));
+        publicador.producirConfirmacionCompra(7L, 10L, 20L, 5L, List.of(new AsientoNotificacion(1, 1)), 2, new BigDecimal("100"), "ARS");
 
         ArgumentCaptor<NotificacionEntranteDTO> captor = ArgumentCaptor.forClass(NotificacionEntranteDTO.class);
         verify(rabbitTemplate).convertAndSend(eq(ColasNotificacion.COLA_ENVIAR), captor.capture());
@@ -58,6 +58,6 @@ class NotificacionCompraPublicadorTest {
         doThrow(new RuntimeException("broker caido")).when(rabbitTemplate)
                 .convertAndSend(eq(ColasNotificacion.COLA_ENVIAR), any(Object.class));
 
-        assertDoesNotThrow(() -> publicador.producirConfirmacionCompra(1L, 2L, 3L, 4L, List.of(), 1, null));
+        assertDoesNotThrow(() -> publicador.producirConfirmacionCompra(7L, 1L, 2L, 3L, List.of(), 1, null, null));
     }
 }
