@@ -5,12 +5,15 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.context.ApplicationEventPublisher;
+import org.tudai.ticketya.contract.notificaciones.messaging.AsientoNotificacion;
 import org.tudai.ticketya.core.exception.ConflictException;
 import org.tudai.ticketya.core.exception.ForbiddenException;
 import org.tudai.ticketya.core.exception.NotFoundException;
 import org.tudai.ticketya.tickets.domain.*;
 import org.tudai.ticketya.tickets.dto.CompraResponseDTO;
 import org.tudai.ticketya.tickets.exception.PagoRechazadoException;
+import org.tudai.ticketya.tickets.notificacion.CompraConfirmadaNotificacionEvent;
 import org.tudai.ticketya.tickets.repository.DisponibilidadEventoRepository;
 import org.tudai.ticketya.tickets.repository.ReservaRepository;
 import org.tudai.ticketya.tickets.repository.TicketRepository;
@@ -53,12 +56,15 @@ class ReservaPagoServiceTest {
     @Mock
     private VentaRepository ventaRepository;
 
+    @Mock
+    private ApplicationEventPublisher eventPublisher;
+
     private ReservaPagoService service;
 
     @BeforeEach
     void setUp() {
         service = new ReservaPagoService(reservaRepository, eventoRepository, ticketRepository,
-                reservaVencidaService, ventaRepository);
+                reservaVencidaService, ventaRepository, eventPublisher);
     }
 
     @Test
@@ -225,6 +231,20 @@ class ReservaPagoServiceTest {
             assertThat(emitido.getFila()).isEqualTo(2);
             assertThat(emitido.getNumero()).isEqualTo(5);
         });
+
+        org.mockito.ArgumentCaptor<CompraConfirmadaNotificacionEvent> captor =
+                org.mockito.ArgumentCaptor.forClass(CompraConfirmadaNotificacionEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        CompraConfirmadaNotificacionEvent evento = captor.getValue();
+        assertThat(evento.getReservaId()).isEqualTo(RESERVA_ID);
+        assertThat(evento.getEventoId()).isEqualTo(EVENTO_ID);
+        assertThat(evento.getDestinatarioId()).isEqualTo(CLIENTE_ID);
+        assertThat(evento.getSectorId()).isEqualTo(3L);
+        assertThat(evento.getAsientos())
+                .extracting(AsientoNotificacion::getFila, AsientoNotificacion::getNumero)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(2, 5));
+        assertThat(evento.getCantidad()).isEqualTo(1);
+        assertThat(evento.getMonto()).isEqualByComparingTo("1500.0");
     }
 
     @Test
@@ -263,6 +283,16 @@ class ReservaPagoServiceTest {
         assertThat(venta.getItems()).allSatisfy(item -> assertThat(item.getVenta()).isSameAs(venta));
         assertThat(numerado.getVenta()).isSameAs(venta);
         assertThat(campo.getVenta()).isSameAs(venta);
+
+        org.mockito.ArgumentCaptor<CompraConfirmadaNotificacionEvent> captor =
+                org.mockito.ArgumentCaptor.forClass(CompraConfirmadaNotificacionEvent.class);
+        verify(eventPublisher).publishEvent(captor.capture());
+        CompraConfirmadaNotificacionEvent evento = captor.getValue();
+        assertThat(evento.getAsientos())
+                .extracting(AsientoNotificacion::getFila, AsientoNotificacion::getNumero)
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(2, 5));
+        assertThat(evento.getCantidad()).isEqualTo(2);
+        assertThat(evento.getMonto()).isEqualByComparingTo("2300.0");
     }
 
     @Test
@@ -277,7 +307,7 @@ class ReservaPagoServiceTest {
         CompraResponseDTO compra = service.emitir(RESERVA_ID, Map.of(1L, 501L));
 
         assertThat(compra.getVentaId()).isEqualTo(300L);
-        verifyNoInteractions(ventaRepository);
+        verifyNoInteractions(ventaRepository, eventPublisher);
     }
 
     @Test
@@ -288,6 +318,7 @@ class ReservaPagoServiceTest {
         assertThatThrownBy(() -> service.emitir(RESERVA_ID, Map.of()))
                 .isInstanceOf(ConflictException.class);
         verify(ticketRepository, never()).saveAll(any());
+        verifyNoInteractions(eventPublisher);
     }
 
     @Test
