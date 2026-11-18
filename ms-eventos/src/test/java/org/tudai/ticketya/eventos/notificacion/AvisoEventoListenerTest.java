@@ -48,7 +48,8 @@ class AvisoEventoListenerTest {
         doThrow(new RuntimeException("Rabbit caido")).when(publicador).publicar(any(), any(), any());
 
         assertDoesNotThrow(() -> listener.onAviso(
-                new AvisoEventoEvent(MotivoNotificacion.CANCELACION, 1L, "MSE-CANCELACION-1")));
+                new AvisoEventoEvent(MotivoNotificacion.PUBLICACION_ARTISTA, 1L,
+                        "MSE-PUBLICACION_ARTISTA-1")));
     }
 
     @Test
@@ -60,7 +61,7 @@ class AvisoEventoListenerTest {
         contexto.refresh();
 
         AvisoEventoEvent aviso = new AvisoEventoEvent(
-                MotivoNotificacion.CANCELACION, 10L, "MSE-CANCELACION-10");
+                MotivoNotificacion.PUBLICACION_ARTISTA, 10L, "MSE-PUBLICACION_ARTISTA-10");
 
         TransactionSynchronizationManager.initSynchronization();
         TransactionSynchronizationManager.setActualTransactionActive(true);

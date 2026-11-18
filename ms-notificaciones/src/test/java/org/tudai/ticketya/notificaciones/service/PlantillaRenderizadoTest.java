@@ -10,10 +10,12 @@ import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.LugarClientDTO;
+import org.tudai.ticketya.notificaciones.client.dto.ParticipanteClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.SectorClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.service.plantilla.AvisoGeneralPlantilla;
 import org.tudai.ticketya.notificaciones.service.plantilla.ConfirmacionCompraPlantilla;
+import org.tudai.ticketya.notificaciones.service.plantilla.PublicacionArtistaPlantilla;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -37,7 +39,8 @@ class PlantillaRenderizadoTest {
         engine.setTemplateResolver(resolver);
 
         service = new PlantillaEmailService(engine,
-                List.of(new ConfirmacionCompraPlantilla(), new AvisoGeneralPlantilla()));
+                List.of(new ConfirmacionCompraPlantilla(), new AvisoGeneralPlantilla(),
+                        new PublicacionArtistaPlantilla()));
     }
 
     @Test
@@ -80,6 +83,26 @@ class PlantillaRenderizadoTest {
         assertTrue(html.contains("EDICION"));
         assertTrue(html.contains("Show"));
         assertTrue(html.contains("La fecha o el lugar del evento fueron actualizados."));
+    }
+
+    @Test
+    void renderizaPublicacionArtistaConVariosParticipantesYCiudad() {
+        EventoClientDTO evento = eventoBase();
+        evento.getLugar().setCiudad("Tandil");
+        ParticipanteClientDTO primero = new ParticipanteClientDTO();
+        primero.setNombre("La Renga");
+        ParticipanteClientDTO segundo = new ParticipanteClientDTO();
+        segundo.setNombre("Divididos");
+        evento.setParticipantes(List.of(primero, segundo));
+
+        String html = service.renderizar(
+                entrante(MotivoNotificacion.PUBLICACION_ARTISTA, null), evento, usuarioBase());
+
+        assertTrue(html.contains("PUBLICACION_ARTISTA"));
+        assertTrue(html.contains("La Renga, Divididos"));
+        assertTrue(html.contains("Tandil"));
+        assertTrue(html.contains("Show"));
+        assertTrue(html.contains("Teatro"));
     }
 
     private EventoClientDTO eventoBase() {

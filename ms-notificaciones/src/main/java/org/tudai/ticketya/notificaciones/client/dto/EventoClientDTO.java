@@ -1,5 +1,6 @@
 package org.tudai.ticketya.notificaciones.client.dto;
 
+import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
@@ -13,12 +14,14 @@ import java.util.List;
 @Getter
 @Setter
 @NoArgsConstructor
+@JsonIgnoreProperties(ignoreUnknown = true)
 public class EventoClientDTO {
     private Long id;
     private String nombre;
     private LocalDateTime fecha;
     private LugarClientDTO lugar;
     private List<SectorClientDTO> sectores;
+    private List<ParticipanteClientDTO> participantes;
 
     /**
      * Devuelve el nombre del lugar o {@code null} si el evento no trae lugar.

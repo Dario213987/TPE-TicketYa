@@ -320,7 +320,8 @@ class EventoServiceTest {
         assertThat(response.getOrganizadorId()).isEqualTo(7L);
         assertThat(response.getLugar().getNombre()).isEqualTo("Estadio");
         assertThat(response.getLugar().getCiudad()).isEqualTo("Tandil");
-        assertThat(response.getParticipantes()).extracting("nombre").containsExactly("La Renga");
+        assertThat(response.getParticipantes()).extracting("id", "nombre")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(3L, "La Renga"));
         assertThat(response.getSectores()).hasSize(1);
         assertThat(response.getSectores().get(0).getPrecio()).isEqualTo(15000.0);
         assertThat(response.getPreciosSectores()).containsEntry("100", 15000.0);
@@ -896,6 +897,7 @@ class EventoServiceTest {
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
         verify(ticketsClient).crearDisponibilidad(eq(1L), any(PublicarEventoRequest.class));
         verify(eventoRepository).save(evento);
+        verificarAvisoPublicado(MotivoNotificacion.PUBLICACION_ARTISTA, 1L);
     }
 
     @Test
@@ -988,7 +990,7 @@ class EventoServiceTest {
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
-        verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(ticketsClient, applicationEventPublisher);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1045,7 +1047,7 @@ class EventoServiceTest {
                     .isInstanceOf(ConflictException.class)
                     .hasMessage("Solo se pueden publicar eventos en estado BORRADOR");
         }
-        verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(ticketsClient, applicationEventPublisher);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1629,8 +1631,8 @@ class EventoServiceTest {
         AvisoEventoEvent aviso = captor.getValue();
         assertThat(aviso.motivo()).isEqualTo(motivo);
         assertThat(aviso.eventoId()).isEqualTo(eventoId);
-        if (motivo == MotivoNotificacion.CANCELACION) {
-            assertThat(aviso.mensajeId()).isEqualTo("MSE-CANCELACION-" + eventoId);
+        if (motivo == MotivoNotificacion.CANCELACION || motivo == MotivoNotificacion.PUBLICACION_ARTISTA) {
+            assertThat(aviso.mensajeId()).isEqualTo("MSE-" + motivo.name() + "-" + eventoId);
         } else {
             assertThat(aviso.mensajeId()).startsWith("MSE-EDICION-");
         }

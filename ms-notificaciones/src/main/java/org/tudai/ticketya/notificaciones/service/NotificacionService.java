@@ -9,11 +9,11 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.contract.notificaciones.messaging.NotificacionEntranteDTO;
 import org.tudai.ticketya.notificaciones.client.EventoClient;
-import org.tudai.ticketya.notificaciones.client.TicketsClient;
 import org.tudai.ticketya.notificaciones.client.UsuarioClient;
 import org.tudai.ticketya.notificaciones.client.dto.EventoClientDTO;
 import org.tudai.ticketya.notificaciones.client.dto.UsuarioClientDTO;
 import org.tudai.ticketya.notificaciones.domain.EstadoNotificacion;
+import org.tudai.ticketya.notificaciones.service.destinatarios.DestinatariosResolverRegistry;
 import org.tudai.ticketya.notificaciones.domain.Notificacion;
 import org.tudai.ticketya.notificaciones.repository.NotificacionRepository;
 
@@ -35,7 +35,7 @@ public class NotificacionService {
 
     private final EventoClient eventoClient;
     private final UsuarioClient usuarioClient;
-    private final TicketsClient ticketsClient;
+    private final DestinatariosResolverRegistry destinatariosResolverRegistry;
     private final PlantillaEmailService plantillaEmailService;
     private final EmailService emailService;
     private final NotificacionRepository notificacionRepository;
@@ -43,9 +43,9 @@ public class NotificacionService {
 
     /**
      * Procesa un mensaje entrante de la cola. Si trae {@code destinatarioId}, envia una
-     * sola notificacion. Si no lo trae, consulta los compradores de {@code ms-tickets} y
-     * genera una notificacion por comprador. Los avisos masivos se expanden en una unica
-     * transaccion antes de enviar emails, de modo que un fallo de {@code ms-tickets} no
+     * sola notificacion. Si no lo trae, resuelve los destinatarios segun el motivo y
+     * genera una notificacion por destinatario. Los avisos masivos se expanden en una
+     * unica transaccion antes de enviar emails, de modo que un fallo del resolvedor no
      * deja filas parciales.
      * <p>
      * Los estados {@code ENVIADO}, {@code ENVIANDO} y {@code NO_ENTREGABLE} se omiten
@@ -79,7 +79,7 @@ public class NotificacionService {
     private void procesarAvisoMasivo(NotificacionEntranteDTO entrante) {
         List<Notificacion> notificaciones = obtenerOCrearNotificacionesMasivas(entrante);
         if (notificaciones.isEmpty()) {
-            log.warn("Aviso masivo sin compradores para enviar: {}", entrante.getMensajeId());
+            log.warn("Aviso masivo sin destinatarios para enviar: {}", entrante.getMensajeId());
             return;
         }
 
@@ -104,8 +104,8 @@ public class NotificacionService {
 
     /**
      * Recupera las notificaciones de un aviso masivo o las crea todas juntas. Si ya
-     * existen filas para el mensaje, no vuelve a consultar {@code ms-tickets}; asi un
-     * reintento puede continuar sin depender del servicio de tickets.
+     * existen filas para el mensaje, no vuelve a resolver destinatarios; asi un reintento
+     * puede continuar sin depender de servicios remotos.
      *
      * @param entrante mensaje masivo
      * @return notificaciones existentes o recien creadas
@@ -117,12 +117,14 @@ public class NotificacionService {
             return existentes;
         }
 
-        List<Long> compradores = ticketsClient.obtenerCompradores(entrante.getEventoId());
-        if (compradores == null || compradores.isEmpty()) {
+        List<Long> resueltos = destinatariosResolverRegistry
+                .resolver(entrante.getMotivo())
+                .resolver(entrante);
+        if (resueltos == null || resueltos.isEmpty()) {
             return List.of();
         }
 
-        List<Long> destinatarios = compradores.stream()
+        List<Long> destinatarios = resueltos.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();

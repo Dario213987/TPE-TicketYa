@@ -652,7 +652,12 @@ public class EventoService {
         }
 
         evento.setEstado(EstadoEvento.PUBLICADO);
-        return toEstadoDTO(eventoRepository.save(evento));
+        Evento guardado = eventoRepository.save(evento);
+        applicationEventPublisher.publishEvent(new AvisoEventoEvent(
+                MotivoNotificacion.PUBLICACION_ARTISTA, idEvento,
+                MensajeIdNotificacion.generarDerivado(
+                        PREFIJO_MENSAJE, MotivoNotificacion.PUBLICACION_ARTISTA, idEvento)));
+        return toEstadoDTO(guardado);
     }
 
     private EventoEstadoResponse validarCancelacion(Long id) {
