@@ -30,9 +30,9 @@ public class PlantillaEmailService {
     public String asunto(MotivoNotificacion motivo, EventoClientDTO evento, DetalleConfirmacionCompra detalle) {
         String nombreEvento = evento != null && evento.getNombre() != null ? evento.getNombre() : "evento";
         if (motivo == MotivoNotificacion.CONFIRMACION_COMPRA) {
-            return "Confirmacion de compra - " + nombreEvento;
+            return "Confirmación de compra - " + nombreEvento;
         }
-        return "Notificacion " + motivo + " - " + nombreEvento;
+        return "Notificación " + motivo + " - " + nombreEvento;
     }
 
     public String renderizar(MotivoNotificacion motivo, EventoClientDTO evento, UsuarioClientDTO usuario) {
