@@ -34,15 +34,19 @@ class AccesoServiceTest {
     @Mock
     private TicketRepository ticketRepository;
 
+    @Mock
+    private QrFirmaService qrFirmaService;
+
     private AccesoService service;
 
     @BeforeEach
     void setUp() {
-        service = new AccesoService(ticketRepository);
+        service = new AccesoService(ticketRepository, qrFirmaService);
     }
 
     @Test
     void validar_ticketVendidoDelEvento_loMarcaComoUsado() {
+        qrValido();
         when(ticketRepository.marcarComoUsado(QR, EVENTO_ID, EstadoTicket.VENDIDO, EstadoTicket.USADO))
                 .thenReturn(1);
 
@@ -58,6 +62,7 @@ class AccesoServiceTest {
 
     @Test
     void validar_qrInexistente_lanzaRechazoNoExiste() {
+        qrValido();
         when(ticketRepository.marcarComoUsado(QR, EVENTO_ID, EstadoTicket.VENDIDO, EstadoTicket.USADO))
                 .thenReturn(0);
         when(ticketRepository.buscarPorCodigoQr(QR)).thenReturn(Optional.empty());
@@ -71,6 +76,7 @@ class AccesoServiceTest {
 
     @Test
     void validar_ticketDeOtroEvento_lanzaRechazoOtroEvento() {
+        qrValido();
         prepararRechazo(ticket(9L, EstadoTicket.VENDIDO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
@@ -82,6 +88,7 @@ class AccesoServiceTest {
 
     @Test
     void validar_ticketYaUsado_lanzaRechazoYaUsada() {
+        qrValido();
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.USADO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
@@ -93,6 +100,7 @@ class AccesoServiceTest {
 
     @Test
     void validar_ticketDevuelto_lanzaRechazoDevuelta() {
+        qrValido();
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.DEVUELTO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
@@ -104,6 +112,7 @@ class AccesoServiceTest {
 
     @Test
     void validar_ticketNoVendido_lanzaConflictExceptionSinCodigo() {
+        qrValido();
         prepararRechazo(ticket(EVENTO_ID, EstadoTicket.EMITIDO));
 
         assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
@@ -128,6 +137,22 @@ class AccesoServiceTest {
                 .hasMessageContaining("evento");
 
         verifyNoInteractions(ticketRepository);
+    }
+
+    @Test
+    void validar_firmaInvalida_lanzaBadRequestSinConsultarElRepositorio() {
+        when(qrFirmaService.verificar(QR))
+                .thenThrow(new BadRequestException("La firma del QR es inválida"));
+
+        assertThatThrownBy(() -> service.validar(EVENTO_ID, QR))
+                .isInstanceOf(BadRequestException.class)
+                .hasMessageContaining("firma");
+
+        verifyNoInteractions(ticketRepository);
+    }
+
+    private void qrValido() {
+        when(qrFirmaService.verificar(QR)).thenReturn(QR);
     }
 
     private void prepararRechazo(Ticket ticket) {

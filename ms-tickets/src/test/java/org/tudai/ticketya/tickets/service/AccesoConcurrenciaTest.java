@@ -31,6 +31,7 @@ import static org.assertj.core.api.Assertions.assertThat;
         "spring.datasource.password=",
         "spring.jpa.hibernate.ddl-auto=validate",
         "spring.liquibase.change-log=classpath:db/changelog/db.changelog-master.yaml",
+        "tickets.qr.secreto=test-secret-para-firmar-qr-en-concurrencia",
         "eureka.client.enabled=false",
         "spring.cloud.discovery.enabled=false",
         "transacciones.name=transacciones"
@@ -43,6 +44,9 @@ class AccesoConcurrenciaTest {
 
     @Autowired
     private AccesoService accesoService;
+
+    @Autowired
+    private QrFirmaService qrFirmaService;
 
     @Autowired
     private DisponibilidadEventoRepository eventoRepository;
@@ -67,8 +71,9 @@ class AccesoConcurrenciaTest {
                 .capacidadTotal(10)
                 .disponibles(10)
                 .build());
+        String codigoQrFirmado = qrFirmaService.firmar(CODIGO_QR);
         ticketRepository.save(Ticket.builder()
-                .codigo_qr(CODIGO_QR)
+                .codigo_qr(codigoQrFirmado)
                 .estadoTicket(EstadoTicket.VENDIDO)
                 .evento(evento)
                 .sector(sector)
@@ -83,7 +88,7 @@ class AccesoConcurrenciaTest {
             resultados.add(pool.submit(() -> {
                 inicio.await();
                 try {
-                    accesoService.validar(EVENTO_ID, CODIGO_QR);
+                    accesoService.validar(EVENTO_ID, codigoQrFirmado);
                     return true;
                 } catch (AccesoRechazadoException e) {
                     return false;
@@ -101,7 +106,7 @@ class AccesoConcurrenciaTest {
         pool.shutdownNow();
 
         assertThat(exitos).isEqualTo(1);
-        assertThat(ticketRepository.buscarPorCodigoQr(CODIGO_QR).orElseThrow().getEstadoTicket())
+        assertThat(ticketRepository.buscarPorCodigoQr(codigoQrFirmado).orElseThrow().getEstadoTicket())
                 .isEqualTo(EstadoTicket.USADO);
     }
 }

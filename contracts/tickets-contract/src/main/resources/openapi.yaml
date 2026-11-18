@@ -424,10 +424,13 @@ paths:
       operationId: validarAcceso
       summary: Valida el ingreso de una entrada por QR
       description: |
-        Solo el rol PERSONAL_ACCESO puede validar accesos. Marca la entrada como USADA de forma
-        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Ante un
-        rechazo devuelve un ProblemDetail con el campo codigo: NO_EXISTE (404), OTRO_EVENTO,
-        YA_USADA o DEVUELTA (409).
+        Solo el rol PERSONAL_ACCESO puede validar accesos. El codigo QR se verifica con HMAC
+        (TICKETS_QR_SECRET) antes de consultar la base: una firma invalida responde 400 sin
+        acceder al repositorio. La verificacion alcanza a los QRs emitidos con firma; los
+        codigos anteriores a su incorporacion deben re-firmarse. Marca la entrada como USADA
+        de forma atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200.
+        Ante un rechazo devuelve un ProblemDetail con el campo codigo: NO_EXISTE (404),
+        OTRO_EVENTO, YA_USADA o DEVUELTA (409).
       parameters:
         - name: eventoId
           in: path
