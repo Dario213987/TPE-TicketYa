@@ -832,6 +832,11 @@ components:
         eventoId: { type: integer, format: int64 }
         estadoTicket:
           $ref: '#/components/schemas/EstadoTicket'
+        ticketId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id interno del ticket validado (nunca el código QR)
     CodigoRechazoAcceso:
       type: string
       description: Motivo por el que se rechaza el acceso

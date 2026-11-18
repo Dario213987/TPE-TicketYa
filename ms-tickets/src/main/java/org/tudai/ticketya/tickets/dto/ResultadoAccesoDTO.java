@@ -15,4 +15,5 @@ public class ResultadoAccesoDTO {
     private String codigoQr;
     private Long eventoId;
     private EstadoTicket estadoTicket;
+    private Long ticketId;
 }

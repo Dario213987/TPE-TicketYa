@@ -28,6 +28,7 @@ public class DisponibilidadEvento {
 
     @Column(name = "organizador_id")
     private Long organizadorId;
+
     @Builder.Default
     @Column(name = "alta_demanda", nullable = false)
     private boolean altaDemanda = false;
