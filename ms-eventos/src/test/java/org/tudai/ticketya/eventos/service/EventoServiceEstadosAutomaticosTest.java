@@ -9,6 +9,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.support.TransactionTemplate;
 import org.tudai.ticketya.contract.eventos.model.EstadoEvento;
@@ -55,6 +56,9 @@ class EventoServiceEstadosAutomaticosTest {
 
     @Mock
     private NotificacionTicketsService notificacionTicketsService;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Spy
     private TransactionTemplate transactionTemplate =
@@ -194,7 +198,7 @@ class EventoServiceEstadosAutomaticosTest {
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
         verify(ticketsClient).reactivarEvento(1L);
         verify(eventoRepository).save(evento);
-        verifyNoInteractions(lugarRepository);
+        verifyNoInteractions(lugarRepository, applicationEventPublisher);
     }
 
     @Test

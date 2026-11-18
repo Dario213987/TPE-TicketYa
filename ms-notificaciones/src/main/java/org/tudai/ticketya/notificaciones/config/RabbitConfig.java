@@ -17,30 +17,58 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.retry.interceptor.RetryOperationsInterceptor;
 
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.COLA_ENVIAR;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.EXCHANGE_DLX;
+import static org.tudai.ticketya.contract.notificaciones.messaging.ColasNotificacion.ROUTING_DLQ;
+
+/**
+ * Configuracion de RabbitMQ para consumir mensajes de notificacion.
+ * <p>
+ * Declara la cola principal, el exchange y la cola de mensajes fallidos (DLQ), y
+ * configura reintentos con backoff exponencial. Al agotar los intentos el mensaje se
+ * rechaza y el broker lo enruta a la DLQ.
+ */
 @Configuration
 @EnableRabbit
 public class RabbitConfig {
 
-    public static final String COLA_ENVIAR = "enviar";
-    public static final String EXCHANGE_DLX = "enviar.dlx";
-    public static final String COLA_DLQ = "enviar.dlq";
-    public static final String ROUTING_DLQ = "enviar.dlq";
-
+    /**
+     * Declara el exchange directo que recibe los mensajes rechazados.
+     *
+     * @return exchange DLX
+     */
     @Bean
     public DirectExchange enviarDlx() {
         return new DirectExchange(EXCHANGE_DLX);
     }
 
+    /**
+     * Declara la cola durable donde terminan los mensajes que agotan los reintentos.
+     *
+     * @return cola DLQ
+     */
     @Bean
     public Queue colaDlq() {
-        return QueueBuilder.durable(COLA_DLQ).build();
+        return QueueBuilder.durable(ROUTING_DLQ).build();
     }
 
+    /**
+     * Vincula la cola de fallidos al exchange DLX con la routing key configurada.
+     *
+     * @param colaDlq     cola de fallidos
+     * @param enviarDlx   exchange de fallidos
+     * @return binding entre la cola y el exchange
+     */
     @Bean
     public Binding bindingDlq(Queue colaDlq, DirectExchange enviarDlx) {
         return BindingBuilder.bind(colaDlq).to(enviarDlx).with(ROUTING_DLQ);
     }
 
+    /**
+     * Declara la cola principal de envio con la DLX asociada.
+     *
+     * @return cola de envio
+     */
     @Bean
     public Queue colaEnviar() {
         return QueueBuilder.durable(COLA_ENVIAR)
@@ -49,6 +77,11 @@ public class RabbitConfig {
                 .build();
     }
 
+    /**
+     * Crea el conversor JSON usado para deserializar {@code NotificacionEntranteDTO}.
+     *
+     * @return conversor de mensajes
+     */
     @Bean
     public MessageConverter jsonMessageConverter() {
         ObjectMapper mapper = new ObjectMapper();
@@ -56,6 +89,11 @@ public class RabbitConfig {
         return new Jackson2JsonMessageConverter(mapper);
     }
 
+    /**
+     * Configura tres intentos con backoff exponencial de 1s, 2s y 4s.
+     *
+     * @return interceptor de reintentos
+     */
     @Bean
     public RetryOperationsInterceptor retryInterceptor() {
         return RetryInterceptorBuilder.stateless()
@@ -65,6 +103,15 @@ public class RabbitConfig {
                 .build();
     }
 
+    /**
+     * Crea la factory de listeners con el conversor JSON, los reintentos y el rechazo
+     * sin reencolado para que los fallos terminen en la DLQ.
+     *
+     * @param connectionFactory  conexion con RabbitMQ
+     * @param jsonMessageConverter conversor JSON
+     * @param retryInterceptor   interceptor de reintentos
+     * @return factory configurada para los listeners
+     */
     @Bean
     public SimpleRabbitListenerContainerFactory rabbitListenerContainerFactory(
             ConnectionFactory connectionFactory,

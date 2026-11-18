@@ -28,6 +28,7 @@ tags:
   - name: reservas
   - name: entradas
   - name: disponibilidad
+  - name: reportes
   - name: accesos
   - name: fila
   - name: interno
@@ -345,16 +346,91 @@ paths:
               schema:
                 $ref: '#/components/schemas/DisponibilidadEventoResponseDTO'
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reportes/eventos/{id}/entradas:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteEntradasVendidas
+      summary: Reporta entradas vendidas y devueltas por sector y totales
+      description: |
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden consultar el reporte. El organizador
+        solo puede consultar eventos propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteEntradasVendidasDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reportes/eventos/{id}/ocupacion:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteOcupacion
+      summary: Reporta la ocupación por sector y total del evento
+      description: |
+        Ocupación = entradas vendidas / capacidad del sector * 100. Solo los roles ORGANIZADOR
+        y ADMINISTRADOR pueden consultar el reporte. El organizador solo puede consultar eventos
+        propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte de ocupación del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteOcupacionDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/reportes/eventos/{id}/recaudacion:
+    get:
+      tags: [reportes]
+      operationId: obtenerReporteRecaudacion
+      summary: Reporta ventas, reintegros y recaudación neta por sector y total del evento
+      description: |
+        Recaudación neta = ventas brutas menos reintegros efectivamente realizados. Las ventas
+        incluyen tickets vendidos y devueltos; los reintegros incluyen los tickets devueltos.
+        Solo los roles ORGANIZADOR y ADMINISTRADOR pueden consultar el reporte. El organizador
+        solo puede consultar eventos propios; el administrador puede consultar cualquier evento.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Reporte de recaudación del evento con el detalle por sector
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReporteRecaudacionDTO'
+        '401': { $ref: '#/components/responses/Error' }
+        '403': { $ref: '#/components/responses/Error' }
+        '404': { $ref: '#/components/responses/Error' }
   /api/tickets/eventos/{eventoId}/accesos/validar:
     post:
       tags: [accesos]
       operationId: validarAcceso
       summary: Valida el ingreso de una entrada por QR
       description: |
-        Solo el rol PERSONAL_ACCESO puede validar accesos. Marca la entrada como USADA de forma
-        atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200. Responde
-        404 si el QR no existe y 409 si pertenece a otro evento, ya fue usado, fue devuelto o
-        no esta vendido.
+        Solo el rol PERSONAL_ACCESO puede validar accesos. El codigo QR se verifica con HMAC
+        (TICKETS_QR_SECRET) antes de consultar la base: una firma invalida responde 400 sin
+        acceder al repositorio. La verificacion alcanza a los QRs emitidos con firma; los
+        codigos anteriores a su incorporacion deben re-firmarse. Marca la entrada como USADA
+        de forma atomica: si dos escaneos del mismo QR llegan a la vez, solo uno responde 200.
+        Ante un rechazo devuelve un ProblemDetail con el campo codigo: NO_EXISTE (404),
+        OTRO_EVENTO, YA_USADA o DEVUELTA (409).
       parameters:
         - name: eventoId
           in: path
@@ -469,6 +545,36 @@ paths:
         '204': { description: Configuración actualizada }
         '400': { $ref: '#/components/responses/Error' }
         '404': { $ref: '#/components/responses/Error' }
+  /api/tickets/internal/eventos/{eventoId}/compradores:
+    get:
+      tags: [interno]
+      operationId: listarCompradoresEvento
+      summary: Lista los compradores de un evento
+      description: |
+        Endpoint interno servicio-a-servicio; el gateway bloquea /api/tickets/internal/**.
+        Devuelve los identificadores de usuario distintos que compraron al menos una
+        entrada para el evento. Se consideran compras los tickets en estado EMITIDO,
+        VENDIDO, USADO o DEVUELTO; se excluyen RESERVADO, CANCELADO, EXPIRADO y LIBERADO.
+        DEVUELTO se conserva a propósito: los avisos de cancelación y EDICION incluyen el
+        aviso de reintegro y deben llegar también a quien ya solicitó la devolución.
+
+        Un evento sin compras devuelve una lista vacia, no 404. No requiere headers de
+        usuario. Pensado para que otro microservicio arme avisos masivos a los compradores.
+      parameters:
+        - name: eventoId
+          in: path
+          required: true
+          schema: { type: integer, format: int64 }
+      responses:
+        '200':
+          description: Identificadores de usuario distintos, ordenados de menor a mayor
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: integer
+                  format: int64
 components:
   responses:
     Error:
@@ -672,6 +778,72 @@ components:
           description: Asientos reservados; solo se informa cuando la reserva fue de asientos especificos o en sectores numerados
           items:
             $ref: '#/components/schemas/AsientoDisponibilidadDTO'
+    ReporteEntradasVendidasDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, entradasVendidas, entradasDevueltas, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        entradasVendidas: { type: integer, format: int64 }
+        entradasDevueltas: { type: integer, format: int64 }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteSectorDTO'
+    ReporteSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, entradasVendidas, entradasDevueltas]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        entradasVendidas: { type: integer, format: int64 }
+        entradasDevueltas: { type: integer, format: int64 }
+    ReporteOcupacionDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, ocupacionTotal, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        ocupacionTotal: { type: number, format: double }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteOcupacionSectorDTO'
+    ReporteOcupacionSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, ocupacion]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        ocupacion: { type: number, format: double }
+    ReporteRecaudacionDTO:
+      type: object
+      required: [eventoId, eventoNombre, eventoFecha, eventoEstado, ventas, reintegros, recaudacionTotal, sectores]
+      properties:
+        eventoId: { type: integer, format: int64 }
+        eventoNombre: { type: string }
+        eventoFecha: { type: string, format: date-time }
+        eventoEstado: { type: string }
+        ventas: { type: number, format: double }
+        reintegros: { type: number, format: double }
+        recaudacionTotal: { type: number, format: double }
+        sectores:
+          type: array
+          items:
+            $ref: '#/components/schemas/ReporteRecaudacionSectorDTO'
+    ReporteRecaudacionSectorDTO:
+      type: object
+      required: [sectorId, sectorNombre, ventas, reintegros, recaudacion]
+      properties:
+        sectorId: { type: integer, format: int64 }
+        sectorNombre: { type: string }
+        ventas: { type: number, format: double }
+        reintegros: { type: number, format: double }
+        recaudacion: { type: number, format: double }
     EstadoPago:
       type: string
       enum: [PENDIENTE_PAGO, APROBADO, RECHAZADO, REINTEGRADO, REINTEGRO_PENDIENTE]
@@ -690,6 +862,15 @@ components:
         eventoId: { type: integer, format: int64 }
         estadoTicket:
           $ref: '#/components/schemas/EstadoTicket'
+        ticketId:
+          type: integer
+          format: int64
+          nullable: true
+          description: Id interno del ticket validado (nunca el código QR)
+    CodigoRechazoAcceso:
+      type: string
+      description: Motivo por el que se rechaza el acceso
+      enum: [NO_EXISTE, OTRO_EVENTO, YA_USADA, DEVUELTA]
     EstadoTicket:
       type: string
       enum: [RESERVADO, PENDIENTE_PAGO, EMITIDO, VENDIDO, USADO, DEVUELTO, CANCELADO, EXPIRADO, LIBERADO]
@@ -834,6 +1015,8 @@ components:
         status: { type: integer }
         detail: { type: string }
         correlationId: { type: string }
+        codigo:
+          $ref: '#/components/schemas/CodigoRechazoAcceso'
         errors:
           type: array
           items:

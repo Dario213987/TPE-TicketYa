@@ -3,3 +3,5 @@ databaseChangeLog:
       file: db/changelog/changes/00001-crear-tabla-notificacion.yaml
   - include:
       file: db/changelog/changes/00002-agregar-mensaje-id-notificacion.yaml
+  - include:
+      file: db/changelog/changes/00003-idempotencia-por-destinatario.yaml

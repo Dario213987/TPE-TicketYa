@@ -11,6 +11,7 @@ import org.mockito.Mock;
 import org.mockito.Spy;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.modelmapper.ModelMapper;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
@@ -33,6 +34,7 @@ import org.tudai.ticketya.contract.eventos.model.EventoUpdateRequest;
 import org.tudai.ticketya.contract.eventos.model.ParticipanteRequest;
 import org.tudai.ticketya.contract.eventos.model.PrecioEventoSectorResponse;
 import org.tudai.ticketya.contract.eventos.model.TipoEvento;
+import org.tudai.ticketya.contract.notificaciones.messaging.MotivoNotificacion;
 import org.tudai.ticketya.core.exception.RemoteServiceException;
 import org.tudai.ticketya.eventos.client.DevolucionesClient;
 import org.tudai.ticketya.eventos.client.TicketsClient;
@@ -52,6 +54,7 @@ import org.tudai.ticketya.eventos.domain.SectorNoNumerado;
 import org.tudai.ticketya.eventos.domain.SectorNumerado;
 import org.tudai.ticketya.eventos.exception.FechaEventoInvalidaException;
 import org.tudai.ticketya.eventos.exception.SectoresSinPrecioException;
+import org.tudai.ticketya.eventos.notificacion.AvisoEventoEvent;
 import org.tudai.ticketya.eventos.repository.EventoRepository;
 import org.tudai.ticketya.eventos.repository.LugarRepository;
 import org.tudai.ticketya.eventos.repository.ParticipanteRepository;
@@ -99,6 +102,9 @@ class EventoServiceTest {
 
     @Mock
     private NotificacionTicketsService notificacionTicketsService;
+
+    @Mock
+    private ApplicationEventPublisher applicationEventPublisher;
 
     @Spy
     private ModelMapper modelMapper = new ModelMapperConfig().modelMapper();
@@ -321,7 +327,8 @@ class EventoServiceTest {
         assertThat(response.getOrganizadorId()).isEqualTo(7L);
         assertThat(response.getLugar().getNombre()).isEqualTo("Estadio");
         assertThat(response.getLugar().getCiudad()).isEqualTo("Tandil");
-        assertThat(response.getParticipantes()).extracting("nombre").containsExactly("La Renga");
+        assertThat(response.getParticipantes()).extracting("id", "nombre")
+                .containsExactly(org.assertj.core.groups.Tuple.tuple(3L, "La Renga"));
         assertThat(response.getSectores()).hasSize(1);
         assertThat(response.getSectores().get(0).getPrecio()).isEqualTo(15000.0);
         assertThat(response.getPreciosSectores()).containsEntry("100", 15000.0);
@@ -673,6 +680,7 @@ class EventoServiceTest {
 
         assertThat(evento.getFecha()).isEqualTo(LocalDateTime.of(2026, 12, 15, 20, 0));
         assertThat(evento.getLugar()).isEqualTo(lugarNuevo);
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test
@@ -693,6 +701,63 @@ class EventoServiceTest {
                 .hasMessageContaining("No se puede modificar la fecha");
         assertThat(evento.getFecha()).isEqualTo(fechaOriginal);
         verify(eventoRepository, never()).save(any(Evento.class));
+        verifyNoInteractions(applicationEventPublisher);
+    }
+
+    @Test
+    void actualizarEvento_comoAdminConFechaDistinta_publicaAvisoDeEdicion() {
+        Evento evento = Evento.builder()
+                .id(1L)
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
+                .estado(EstadoEvento.PUBLICADO)
+                .organizadorId(7L)
+                .build();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        eventoService.actualizarEvento(1L,
+                new EventoUpdateRequest().fecha(LocalDateTime.of(2026, 12, 15, 20, 0)),
+                7L, true);
+
+        verificarAvisoPublicado(MotivoNotificacion.EDICION, 1L);
+    }
+
+    @Test
+    void actualizarEvento_comoAdminConLugarDistinto_publicaAvisoDeEdicion() {
+        Lugar lugarViejo = Lugar.builder().id(10L).nombre("Viejo").build();
+        Lugar lugarNuevo = Lugar.builder().id(20L).nombre("Nuevo").build();
+        Evento evento = Evento.builder()
+                .id(1L)
+                .lugar(lugarViejo)
+                .estado(EstadoEvento.AGOTADO)
+                .organizadorId(7L)
+                .build();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+        when(lugarRepository.findById(20L)).thenReturn(Optional.of(lugarNuevo));
+        when(eventoRepository.save(evento)).thenReturn(evento);
+
+        eventoService.actualizarEvento(1L, new EventoUpdateRequest().lugarId(20L), 7L, true);
+
+        assertThat(evento.getLugar()).isEqualTo(lugarNuevo);
+        verificarAvisoPublicado(MotivoNotificacion.EDICION, 1L);
+    }
+
+    @Test
+    void actualizarEvento_comoAdminEnEventoCancelado_rechazaCambioDeFecha() {
+        Evento evento = Evento.builder()
+                .id(1L)
+                .fecha(LocalDateTime.of(2026, 12, 1, 20, 0))
+                .estado(EstadoEvento.CANCELADO)
+                .organizadorId(7L)
+                .build();
+        when(eventoRepository.findById(1L)).thenReturn(Optional.of(evento));
+
+        assertThatThrownBy(() -> eventoService.actualizarEvento(1L,
+                new EventoUpdateRequest().fecha(LocalDateTime.of(2026, 12, 15, 20, 0)),
+                7L, true))
+                .isInstanceOf(ConflictException.class)
+                .hasMessageContaining("No se puede reprogramar un evento cancelado o finalizado");
+        verifyNoInteractions(applicationEventPublisher);
     }
 
     @Test
@@ -839,6 +904,7 @@ class EventoServiceTest {
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
         verify(ticketsClient).crearDisponibilidad(eq(1L), any(PublicarEventoRequest.class));
         verify(eventoRepository).save(evento);
+        verificarAvisoPublicado(MotivoNotificacion.PUBLICACION_ARTISTA, 1L);
     }
 
     @Test
@@ -931,7 +997,7 @@ class EventoServiceTest {
 
         assertThat(response.getId()).isEqualTo(1L);
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
-        verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(ticketsClient, applicationEventPublisher);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -988,7 +1054,7 @@ class EventoServiceTest {
                     .isInstanceOf(ConflictException.class)
                     .hasMessage("Solo se pueden publicar eventos en estado BORRADOR");
         }
-        verifyNoInteractions(ticketsClient);
+        verifyNoInteractions(ticketsClient, applicationEventPublisher);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1096,6 +1162,7 @@ class EventoServiceTest {
         orden.verify(ticketsClient).cancelarEvento(1L);
         orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
+        verificarAvisoPublicado(MotivoNotificacion.CANCELACION, 1L);
     }
 
     @Test
@@ -1107,6 +1174,7 @@ class EventoServiceTest {
                 .hasMessage("No se encontró el evento solicitado");
         verifyNoInteractions(ticketsClient);
         verifyNoInteractions(devolucionesClient);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1121,6 +1189,7 @@ class EventoServiceTest {
         assertThat(response.getEstado()).isEqualTo(EstadoEvento.CANCELADO);
         verifyNoInteractions(ticketsClient);
         verifyNoInteractions(devolucionesClient);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1138,6 +1207,7 @@ class EventoServiceTest {
         }
         verifyNoInteractions(ticketsClient);
         verifyNoInteractions(devolucionesClient);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1153,6 +1223,7 @@ class EventoServiceTest {
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1169,6 +1240,7 @@ class EventoServiceTest {
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1184,6 +1256,7 @@ class EventoServiceTest {
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1200,6 +1273,7 @@ class EventoServiceTest {
                 .satisfies(ex -> assertThat(((RemoteServiceException) ex).getRemoteStatus()).isEqualTo(502));
 
         assertThat(evento.getEstado()).isEqualTo(EstadoEvento.PUBLICADO);
+        verifyNoInteractions(notificacionTicketsService);
         verify(eventoRepository, never()).save(any(Evento.class));
     }
 
@@ -1220,6 +1294,7 @@ class EventoServiceTest {
         orden.verify(ticketsClient).cancelarEvento(1L);
         orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
+        verificarAvisoPublicado(MotivoNotificacion.CANCELACION, 1L);
     }
 
     @Test
@@ -1238,6 +1313,7 @@ class EventoServiceTest {
         orden.verify(ticketsClient).cancelarEvento(1L);
         orden.verify(devolucionesClient).reintegrarEvento(1L);
         orden.verify(eventoRepository).save(evento);
+        verificarAvisoPublicado(MotivoNotificacion.CANCELACION, 1L);
     }
 
     @Test
@@ -1554,5 +1630,18 @@ class EventoServiceTest {
                 .fila(fila)
                 .numero(numero)
                 .build();
+    }
+
+    private void verificarAvisoPublicado(MotivoNotificacion motivo, Long eventoId) {
+        ArgumentCaptor<AvisoEventoEvent> captor = ArgumentCaptor.forClass(AvisoEventoEvent.class);
+        verify(applicationEventPublisher).publishEvent(captor.capture());
+        AvisoEventoEvent aviso = captor.getValue();
+        assertThat(aviso.motivo()).isEqualTo(motivo);
+        assertThat(aviso.eventoId()).isEqualTo(eventoId);
+        if (motivo == MotivoNotificacion.CANCELACION || motivo == MotivoNotificacion.PUBLICACION_ARTISTA) {
+            assertThat(aviso.mensajeId()).isEqualTo("MSE-" + motivo.name() + "-" + eventoId);
+        } else {
+            assertThat(aviso.mensajeId()).startsWith("MSE-EDICION-");
+        }
     }
 }

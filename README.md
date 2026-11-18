@@ -78,6 +78,12 @@ Primero Eureka y después lo demás:
 
 Los `ms-*` necesitan `DB_PASSWORD` (la de `infra/.env` para ese servicio). Eureka queda en http://localhost:8761.
 
+`ms-tickets` firma los códigos QR con HMAC usando `TICKETS_QR_SECRET`. En desarrollo hay un valor por defecto (`dev-secret-cambiar`), pero en producción hay que definir un secreto propio y largo (también está en `infra/.env.example`):
+
+    env DB_PASSWORD=<...> TICKETS_QR_SECRET=<secreto-largo> mvn -pl ms-tickets spring-boot:run
+
+La firma se comprueba en `AccesoService.validar` antes de consultar la base de datos: un QR con firma inválida responde 400 sin acceder al repositorio. Esto aplica a los QRs emitidos con firma; los tickets anteriores tienen un `codigo_qr` sin firma y serán rechazados con 400, así que hay que re-firmarlos (`firmar(codigo_qr)`) antes de desplegar si existen datos previos.
+
 ### 4. Levantar dos instancias del mismo servicio
 
 Los `ms-*` usan puerto aleatorio (`server.port=0`) y un id de instancia único, así que alcanza con ejecutar el mismo comando en dos terminales:
@@ -112,6 +118,8 @@ En Grafana (http://localhost:3000, sin login) el datasource Loki ya está cargad
     {service="ms-eventos"}
 
 Si se cambia `ticketya.logging.dir` a una carpeta fuera del repo, Alloy no la ve.
+
+El dashboard **TicketYa - Logs** (carpeta TicketYa, http://localhost:3000/d/ticketya-logs) se carga solo desde `infra/grafana/provisioning/dashboards/`. Tiene filtros por servicio y por correlation ID (aplicados a todos los paneles), tasa de errores 5xx, latencia p95 por endpoint y los logs. Para cambiarlo, editar el JSON y reiniciar Grafana: desde la UI no se guarda.
 
 ## Correlation id
 

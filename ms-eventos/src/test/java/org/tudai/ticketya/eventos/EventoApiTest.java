@@ -358,7 +358,9 @@ class EventoApiTest {
 
     @Test
     void obtenerEvento_publicado_devuelveElDetalleSinAutenticacion() throws Exception {
-        Evento evento = guardarEvento(EstadoEvento.PUBLICADO, 7L);
+        Participante participante = Participante.builder().nombre("La Renga").build();
+        Evento evento = guardarEvento("Evento de integración", TipoEvento.RECITAL,
+                EstadoEvento.PUBLICADO, 7L, lugar, LocalDateTime.now().plusDays(10), participante);
 
         mvc.perform(get("/api/eventos/{id}", evento.getId()))
                 .andExpect(status().isOk())
@@ -367,6 +369,8 @@ class EventoApiTest {
                 .andExpect(jsonPath("$.estado").value("PUBLICADO"))
                 .andExpect(jsonPath("$.organizadorId").value(7))
                 .andExpect(jsonPath("$.lugar.ciudad").value("Tandil"))
+                .andExpect(jsonPath("$.participantes[0].id").value(participante.getId()))
+                .andExpect(jsonPath("$.participantes[0].nombre").value("La Renga"))
                 .andExpect(jsonPath("$.sectores").isEmpty());
     }
 
