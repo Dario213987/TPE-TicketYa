@@ -86,18 +86,26 @@ que agota sus intentos cuenta como una sola falla y un rechazo de la pasarela no
 
 | Propiedad (`ticketya.pasarela.circuito.*`) | Valor | Significado |
 |---|---|---|
-| `ventana` | 10 | Últimas llamadas que se miran |
+| `ventana` | 20 | Últimas llamadas que se miran |
 | `minimo-llamadas` | 5 | Llamadas mínimas antes de evaluar |
 | `porcentaje-fallas` | 50 | Si fallan al menos este %, el circuito se abre |
 | `espera-abierto-ms` | 30000 | Tiempo abierto sin llamar a la pasarela |
 | `llamadas-semiabierto` | 3 | Llamadas de prueba para decidir si se cierra |
 
 Con el circuito abierto la compra responde un error controlado y libera la reserva:
-ms-transacciones deja el débito `FALLIDA` con el motivo "La pasarela de pagos no está
+ms-transacciones deja el débito nuevo `FALLIDA` con el motivo "La pasarela de pagos no está
 disponible" (sin llamarla, así que no se cobró), y ms-tickets lo trata como cualquier rechazo:
-reintegra los débitos ya aprobados, libera la reserva (`RECHAZADO`) y responde 409 con ese
-motivo. Las compras que habían quedado `PENDIENTE_PAGO` antes de abrirse el circuito siguen así,
-porque un intento anterior pudo haber cobrado; las resuelve la reconciliación (TKY-87).
+responde 409 con ese motivo. Las compras que habían quedado `PENDIENTE_PAGO` antes de abrirse el
+circuito siguen así, porque un intento anterior pudo haber cobrado; las resuelve la reconciliación
+(TKY-87).
+
+Si el circuito se abre en medio de una compra con varios débitos, los débitos ya aprobados se
+intentan reintegrar, pero el crédito de compensación también pasa por el circuito y puede quedar
+`FALLIDA`. En ese caso la reserva se libera igual, pero queda `REINTEGRO_PENDIENTE` en vez de
+`RECHAZADO`; no se cobra dos veces y el reintegro se resuelve aparte. El estado `503` de
+`PasarelaNoDisponibleException` es interno: el handler global lo expone como `502` a quien llama
+directamente a ms-transacciones, y una transacción nueva con el circuito abierto responde `201`
+con estado `FALLIDA`.
 
 Los cambios de estado se registran como `WARN Circuito de la pasarela: CLOSED_TO_OPEN` (y
 `OPEN_TO_HALF_OPEN`, `HALF_OPEN_TO_CLOSED`).
