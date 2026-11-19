@@ -100,6 +100,102 @@
 
 La comunicación del sistema sigue un modelo híbrido que combina llamadas síncronas (REST/Feign) para operaciones transaccionales inmediatas y mensajería asíncrona (RabbitMQ y Redis Streams) para desacoplar procesos secundarios:
 
+**Comunicación síncrona y asíncrona.**
+
+```mermaid
+flowchart TB
+    WEB["frontTicketYa<br/>React + Vite · :5173"] -->|"REST /api/*"| GW["api-gateway<br/>:8080"]
+
+    GW --> PR["ms-preferencias"]
+    GW --> EV["ms-eventos"]
+    GW --> TK["ms-tickets"]
+    GW --> DV["ms-devoluciones"]
+    GW --> NT["ms-notificaciones"]
+
+    PR -->|"cartelera"| EV
+    TK -->|"evento y precios"| EV
+    TK -->|"débitos y créditos"| TR["ms-transacciones"]
+    DV -->|"valida y libera ticket"| TK
+    DV -->|"valida evento"| EV
+    DV -->|"crédito"| TR
+    EV -->|"disponibilidad y ciclo de vida"| TK
+    EV -->|"reintegro masivo"| DV
+
+    MQ[("RabbitMQ<br/>cola enviar")]
+    DLQ[("notificaciones.fallidas")]
+    RS[("Redis Streams<br/>ticket.utilizado")]
+
+    TK -.->|"compra confirmada"| MQ
+    EV -.->|"aviso de evento"| MQ
+    DV -.->|"reintegro"| MQ
+    MQ -.->|"consume"| NT
+    MQ -.->|"reintentos agotados"| DLQ
+    TK -.->|"XADD"| RS
+    RS -.->|"XREADGROUP"| PR
+```
+
+> **Leyenda:** línea sólida = HTTP síncrono (Gateway o Feign); línea punteada = mensajería asíncrona. El Gateway resuelve las instancias con `lb://` a través de Eureka. `ms-transacciones` no tiene ruta pública: solo se invoca por Feign desde `ms-tickets` y `ms-devoluciones`.
+
+> **Consultas de notificaciones:** para armar cada correo, `ms-notificaciones` consulta por Feign a `ms-eventos` (datos del evento), `ms-tickets` (compradores) y `ms-preferencias` (destinatarios).
+
+**Despliegue de la infraestructura.**
+
+```mermaid
+flowchart TB
+    subgraph LOCAL["Procesos locales · Vite y Maven"]
+        direction LR
+        WEB["frontTicketYa · :5173"]
+        GW["api-gateway · :8080"]
+        EU[("eureka-server · :8761")]
+    end
+
+    subgraph MS["Microservicios · server.port=0"]
+        direction LR
+        EV["ms-eventos"]
+        TK["ms-tickets"]
+        TR["ms-transacciones"]
+        DV["ms-devoluciones"]
+        NT["ms-notificaciones"]
+        PR["ms-preferencias"]
+    end
+
+    subgraph DB["Bases de datos · Docker"]
+        direction LR
+        DBE[("eventos<br/>PostgreSQL :5433")]
+        DBT[("tickets<br/>PostgreSQL :5434")]
+        DBR[("transacciones<br/>MySQL :5435")]
+        DBD[("devoluciones<br/>PostgreSQL :5436")]
+        DBN[("notificaciones<br/>PostgreSQL :5437")]
+        MGO[("preferencias<br/>MongoDB :5438")]
+    end
+
+    subgraph MEM["Redis y mensajería · Docker"]
+        direction LR
+        RDE[("redis-eventos<br/>:6382 · caché")]
+        RDT[("redis-tickets<br/>:6380 · fila y pases")]
+        RDP[("redis-preferencias<br/>:6381 · streams")]
+        MQ[("RabbitMQ<br/>:5672 · UI :15672")]
+        MAIL["MailHog<br/>SMTP :1025 · UI :8025"]
+    end
+
+    subgraph OBS["Observabilidad · Docker"]
+        direction LR
+        ALLOY["Alloy · :12345"]
+        LOKI[("Loki · :3100")]
+        GRAF["Grafana · :3000"]
+    end
+
+    WEB -->|"REST /api/*"| GW
+    GW -->|"lb://"| MS
+    MS -->|"persistencia"| DB
+    MS -->|"caché y mensajería"| MEM
+    MS -.->|"logs JSON"| OBS
+    EU -.->|"registro y descubrimiento"| GW
+    EU -.->|"registro"| MS
+```
+
+> Las bases, Redis, RabbitMQ, MailHog y la observabilidad corren en `infra/docker-compose.yml`; el front, el gateway, Eureka y los microservicios se ejecutan como procesos locales. Cada servicio tiene su propia base y no hay claves foráneas cruzadas (detalle en §8). Alloy recolecta los `logs/<servicio>/*.json.log` de todos los servicios y los envía a Loki; Grafana consulta Loki.
+
 * **Punto de entrada:** El frontend (`frontTicketYa` en `:5173`) redirige todas las peticiones `/api/*` al `api-gateway` (`:8080`), el cual enruta dinámicamente consultando a `eureka-server` (`:8761`).
 * **Servicios expuestos:** El Gateway enruta hacia `ms-eventos`, `ms-tickets`, `ms-devoluciones`, `ms-notificaciones` y `ms-preferencias`.
 * **Servicios internos:** `ms-transacciones` carece de ruta pública en el Gateway; opera exclusivamente como servicio interno consumido vía Feign por `ms-tickets` y `ms-devoluciones`.
